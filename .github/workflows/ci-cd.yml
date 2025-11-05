@@ -204,7 +204,7 @@ jobs:
         output: 'trivy-results.sarif'
     
     - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
       if: always()
       with:
         sarif_file: 'trivy-results.sarif'
@@ -226,10 +226,10 @@ jobs:
         include:
           - component: api
             context: ./api
-            image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}
+            image: ghcr.io/${{ github.repository }}/api
           - component: ui
             context: ./frontend
-            image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_UI }}
+            image: ghcr.io/${{ github.repository }}/ui
     
     steps:
     - uses: actions/checkout@v4
@@ -240,7 +240,7 @@ jobs:
     - name: Log in to Container Registry
       uses: docker/login-action@v3
       with:
-        registry: ${{ env.REGISTRY }}
+        registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     
