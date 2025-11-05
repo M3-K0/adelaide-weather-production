@@ -1,0 +1,206 @@
+# Multi-stage Production Dockerfile for Adelaide Weather Forecasting API
+# Optimized for CI/CD pipeline with build caching and security
+
+# =============================================================================
+# BUILD STAGE: Install dependencies and prepare application
+# =============================================================================
+FROM python:3.11-slim-bullseye AS builder
+
+# Build arguments for metadata
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION
+
+# Set build-time environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create application directory
+WORKDIR /app
+
+# Copy requirements first for better layer caching
+COPY requirements.txt .
+
+# Install Python dependencies in a virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Upgrade pip and install dependencies with optimizations
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt
+
+# =============================================================================
+# SECURITY SCAN STAGE: Scan dependencies for vulnerabilities
+# =============================================================================
+FROM builder AS security-scanner
+
+# Install security scanning tools
+RUN pip install safety bandit
+
+# Run security scans
+RUN safety check --json --output /tmp/safety-report.json || true
+RUN bandit -r /opt/venv/lib/python*/site-packages -f json -o /tmp/bandit-report.json || true
+
+# =============================================================================
+# RUNTIME STAGE: Minimal production image
+# =============================================================================
+FROM python:3.11-slim-bullseye AS runtime
+
+# Build arguments for metadata
+ARG BUILD_DATE
+ARG VCS_REF  
+ARG VERSION
+
+# Add metadata labels
+LABEL maintainer="Adelaide Weather Forecast Team" \
+      org.opencontainers.image.title="Adelaide Weather API" \
+      org.opencontainers.image.description="Production API for Adelaide Weather Forecasting" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.source="https://github.com/adelaide-weather/forecast-api"
+
+# Set runtime environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    ENVIRONMENT=production \
+    API_HOST=0.0.0.0 \
+    API_PORT=8000 \
+    API_WORKERS=4 \
+    LOG_LEVEL=INFO \
+    CORS_ORIGINS="" \
+    RATE_LIMIT_PER_MINUTE=60
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user for security
+RUN groupadd -r -g 1001 appuser && \
+    useradd -r -u 1001 -g appuser -d /app -s /bin/bash appuser
+
+# Copy virtual environment from builder stage
+COPY --from=builder /opt/venv /opt/venv
+
+# Create application directory structure
+WORKDIR /app
+
+# Copy application code with proper ownership
+COPY --chown=appuser:appuser main.py .
+COPY --chown=appuser:appuser performance_middleware.py .
+COPY --chown=appuser:appuser security_middleware.py .
+COPY --chown=appuser:appuser variables.py .
+COPY --chown=appuser:appuser logging_config.py .
+COPY --chown=appuser:appuser health_checks.py .
+
+# Copy API modules
+COPY --chown=appuser:appuser services/ ./services/
+COPY --chown=appuser:appuser pact/ ./pact/
+
+# Create directories for mounted volumes (read-only data)
+RUN mkdir -p /app/core /app/outcomes /app/indices /app/embeddings /app/models && \
+    chown -R appuser:appuser /app
+
+# Create directories for logs and temporary files
+RUN mkdir -p /app/logs /app/tmp && \
+    chown -R appuser:appuser /app/logs /app/tmp
+
+# Copy security scan results from scanner stage
+COPY --from=security-scanner /tmp/*-report.json /app/security-reports/
+
+# Set proper permissions
+RUN chown -R appuser:appuser /app && \
+    chmod -R 755 /app && \
+    chmod 700 /app/security-reports
+
+# Switch to non-root user
+USER appuser
+
+# Health check with timeout and proper error handling
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f -H "User-Agent: healthcheck" http://localhost:${API_PORT}/health || exit 1
+
+# Expose application port
+EXPOSE ${API_PORT}
+
+# Create startup script for better process management
+RUN cat > /app/start.sh << 'EOF'
+#!/bin/bash
+set -e
+
+echo "🚀 Starting Adelaide Weather API..."
+echo "Environment: ${ENVIRONMENT}"
+echo "Host: ${API_HOST}:${API_PORT}"
+echo "Workers: ${API_WORKERS}"
+echo "Log Level: ${LOG_LEVEL}"
+
+# Run database migrations or initialization if needed
+echo "🔍 Running startup validation..."
+
+# Start the application with proper signal handling
+exec uvicorn main:app \
+    --host "${API_HOST}" \
+    --port "${API_PORT}" \
+    --workers "${API_WORKERS}" \
+    --log-level "${LOG_LEVEL,,}" \
+    --access-log \
+    --no-server-header \
+    --date-header \
+    --proxy-headers \
+    --forwarded-allow-ips "*"
+EOF
+
+RUN chmod +x /app/start.sh
+
+# Use startup script as entrypoint
+CMD ["/app/start.sh"]
+
+# =============================================================================
+# DEVELOPMENT STAGE: Development build with additional tools
+# =============================================================================
+FROM runtime AS development
+
+USER root
+
+# Install development dependencies
+RUN pip install --no-cache-dir \
+    pytest \
+    pytest-cov \
+    pytest-asyncio \
+    black \
+    flake8 \
+    mypy \
+    debugpy
+
+# Install development system tools
+RUN apt-get update && apt-get install -y \
+    vim \
+    htop \
+    strace \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Switch back to appuser
+USER appuser
+
+# Override environment for development
+ENV ENVIRONMENT=development \
+    LOG_LEVEL=DEBUG \
+    API_WORKERS=1
+
+# Override command for development (with hot reload)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--log-level", "debug"]

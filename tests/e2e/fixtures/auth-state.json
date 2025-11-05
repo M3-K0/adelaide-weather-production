@@ -1,0 +1,18 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "weather-api-token",
+          "value": "test-token-12345"
+        },
+        {
+          "name": "user-preferences",
+          "value": "{\"defaultHorizon\":\"24h\",\"defaultVariables\":[\"t2m\",\"u10\",\"v10\",\"msl\"],\"tourCompleted\":true}"
+        }
+      ]
+    }
+  ]
+}

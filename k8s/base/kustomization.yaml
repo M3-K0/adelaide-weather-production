@@ -1,0 +1,67 @@
+# Kubernetes Base Configuration for Adelaide Weather Forecast
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: adelaide-weather-base
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+resources:
+  - namespace.yaml
+  - api-deployment.yaml
+  - api-service.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
+  - redis-deployment.yaml
+  - redis-service.yaml
+  - monitoring-config.yaml
+  - ingress.yaml
+  - networkpolicy.yaml
+  - rbac.yaml
+
+configMapGenerator:
+  - name: app-config
+    literals:
+      - ENVIRONMENT=base
+      - LOG_LEVEL=INFO
+      - RATE_LIMIT_PER_MINUTE=60
+      - PERFORMANCE_CACHE_TTL=300
+      - NODE_ENV=production
+      - API_BASE_URL=http://api-service:8000
+
+secretGenerator:
+  - name: app-secrets
+    literals:
+      - API_TOKEN=placeholder-token
+
+commonLabels:
+  app.kubernetes.io/name: adelaide-weather
+  app.kubernetes.io/component: forecasting-system
+  app.kubernetes.io/managed-by: kustomize
+
+commonAnnotations:
+  deployment.kubernetes.io/revision: "1"
+  app.kubernetes.io/version: "1.0.0"
+
+images:
+  - name: api-image
+    newName: ghcr.io/adelaide-weather/api
+    newTag: latest
+  - name: frontend-image
+    newName: ghcr.io/adelaide-weather/frontend
+    newTag: latest
+
+replicas:
+  - name: api-deployment
+    count: 2
+  - name: frontend-deployment
+    count: 2
+  - name: redis-deployment
+    count: 1
+
+patchesStrategicMerge: []
+
+patchesJson6902: []
+
+vars: []

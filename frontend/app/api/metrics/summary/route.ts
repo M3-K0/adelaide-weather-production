@@ -1,0 +1,321 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { ForecastHorizon, WeatherVariable } from '@/types/api';
+import { AccuracyMetric, PerformanceMetric, SystemHealthMetric, MetricsSummary, TimeRange } from '@/lib/metricsApi';
+
+/**
+ * Metrics Summary API Endpoint
+ * 
+ * Provides aggregated metrics data for the dashboard including
+ * accuracy metrics, performance indicators, and system health status.
+ */
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    
+    // Parse query parameters
+    const timeRange = (searchParams.get('timeRange') || '24h') as TimeRange;
+    const horizons = (searchParams.get('horizons') || '6h,12h,24h,48h').split(',') as ForecastHorizon[];
+    const variables = (searchParams.get('variables') || 't2m,u10,v10,msl,cape').split(',') as WeatherVariable[];
+    const includeConfidence = searchParams.get('includeConfidence') === 'true';
+
+    // Generate mock metrics data (in production, this would fetch from Prometheus/monitoring systems)
+    const metricsData = generateMetricsData(timeRange, horizons, variables, includeConfidence);
+
+    return NextResponse.json(metricsData, {
+      status: 200,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    });
+  } catch (error) {
+    console.error('Error generating metrics summary:', error);
+    
+    return NextResponse.json(
+      { error: 'Failed to generate metrics summary' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Generate mock metrics data for demonstration
+ * In production, this would integrate with Prometheus queries
+ */
+function generateMetricsData(
+  timeRange: TimeRange,
+  horizons: ForecastHorizon[],
+  variables: WeatherVariable[],
+  includeConfidence: boolean
+): MetricsSummary {
+  const now = new Date();
+  const nowISO = now.toISOString();
+
+  // Generate forecast accuracy metrics
+  const forecast_accuracy: AccuracyMetric[] = [];
+  horizons.forEach(horizon => {
+    variables.forEach(variable => {
+      // Simulate realistic accuracy based on horizon and variable
+      const baseAccuracy = getBaseAccuracy(variable);
+      const horizonMultiplier = getHorizonMultiplier(horizon);
+      const accuracy = baseAccuracy * horizonMultiplier;
+      
+      forecast_accuracy.push({
+        horizon,
+        variable,
+        mae: generateMAE(variable, horizon),
+        bias: generateBias(variable),
+        accuracy_percent: accuracy + (Math.random() - 0.5) * 5, // Add some variation
+        confidence_interval: generateConfidenceInterval(variable, horizon),
+        last_updated: nowISO,
+      });
+    });
+  });
+
+  // Generate performance metrics
+  const performance_metrics: PerformanceMetric[] = [
+    {
+      metric_name: 'API Response Time',
+      value: 120 + Math.random() * 80, // 120-200ms
+      unit: 'ms',
+      status: 'good',
+      threshold_warning: 500,
+      threshold_critical: 1000,
+      last_updated: nowISO,
+    },
+    {
+      metric_name: 'Model Inference Time',
+      value: 45 + Math.random() * 25, // 45-70ms
+      unit: 'ms',
+      status: 'good',
+      threshold_warning: 200,
+      threshold_critical: 500,
+      last_updated: nowISO,
+    },
+    {
+      metric_name: 'Data Freshness',
+      value: 2 + Math.random() * 8, // 2-10 minutes
+      unit: 'minutes',
+      status: 'good',
+      threshold_warning: 30,
+      threshold_critical: 60,
+      last_updated: nowISO,
+    },
+    {
+      metric_name: 'Cache Hit Rate',
+      value: 85 + Math.random() * 12, // 85-97%
+      unit: '%',
+      status: 'good',
+      threshold_warning: 70,
+      threshold_critical: 50,
+      last_updated: nowISO,
+    },
+    {
+      metric_name: 'Request Rate',
+      value: 25 + Math.random() * 15, // 25-40 req/s
+      unit: 'req/s',
+      status: 'good',
+      threshold_warning: 100,
+      threshold_critical: 200,
+      last_updated: nowISO,
+    },
+    {
+      metric_name: 'Error Rate',
+      value: Math.random() * 2, // 0-2%
+      unit: '%',
+      status: 'good',
+      threshold_warning: 5,
+      threshold_critical: 10,
+      last_updated: nowISO,
+    },
+  ];
+
+  // Update status based on thresholds
+  performance_metrics.forEach(metric => {
+    const isInverted = metric.unit === 'ms' || metric.unit === 'minutes';
+    if (isInverted) {
+      if (metric.value >= metric.threshold_critical) metric.status = 'critical';
+      else if (metric.value >= metric.threshold_warning) metric.status = 'warning';
+      else metric.status = 'good';
+    } else {
+      if (metric.value <= metric.threshold_critical) metric.status = 'critical';
+      else if (metric.value <= metric.threshold_warning) metric.status = 'warning';
+      else metric.status = 'good';
+    }
+  });
+
+  // Generate system health metrics
+  const system_health: SystemHealthMetric[] = [
+    {
+      component: 'API Server',
+      status: 'up',
+      uptime_percent: 99.5 + Math.random() * 0.5,
+      last_check: nowISO,
+      response_time_ms: 35 + Math.random() * 20,
+    },
+    {
+      component: 'Database',
+      status: 'up',
+      uptime_percent: 99.8 + Math.random() * 0.2,
+      last_check: nowISO,
+      response_time_ms: 12 + Math.random() * 8,
+    },
+    {
+      component: 'Redis Cache',
+      status: 'up',
+      uptime_percent: 99.9 + Math.random() * 0.1,
+      last_check: nowISO,
+      response_time_ms: 1 + Math.random() * 3,
+    },
+    {
+      component: 'ML Model',
+      status: 'up',
+      uptime_percent: 99.2 + Math.random() * 0.8,
+      last_check: nowISO,
+      response_time_ms: 65 + Math.random() * 30,
+    },
+  ];
+
+  // Generate trend data
+  const trends = generateTrendData(timeRange);
+
+  return {
+    forecast_accuracy,
+    performance_metrics,
+    system_health,
+    trends,
+    generated_at: nowISO,
+    time_range: timeRange,
+  };
+}
+
+/**
+ * Helper functions for generating realistic mock data
+ */
+function getBaseAccuracy(variable: WeatherVariable): number {
+  const accuracyMap: Record<WeatherVariable, number> = {
+    't2m': 92,    // Temperature is usually quite accurate
+    'u10': 85,    // Wind components have more uncertainty
+    'v10': 85,
+    'msl': 95,    // Pressure is very predictable
+    'r850': 88,   // Humidity moderate accuracy
+    'tp6h': 75,   // Precipitation is hardest to predict
+    'cape': 78,   // CAPE has high uncertainty
+    't850': 90,   // Upper air temperature
+    'z500': 93,   // Geopotential height
+  };
+  return accuracyMap[variable] || 85;
+}
+
+function getHorizonMultiplier(horizon: ForecastHorizon): number {
+  const multiplierMap: Record<ForecastHorizon, number> = {
+    '6h': 1.0,
+    '12h': 0.96,
+    '24h': 0.91,
+    '48h': 0.85,
+  };
+  return multiplierMap[horizon] || 0.8;
+}
+
+function generateMAE(variable: WeatherVariable, horizon: ForecastHorizon): number {
+  const baseMAE: Record<WeatherVariable, number> = {
+    't2m': 1.2,
+    'u10': 2.1,
+    'v10': 2.1,
+    'msl': 0.8,
+    'r850': 8.5,
+    'tp6h': 1.5,
+    'cape': 250,
+    't850': 1.5,
+    'z500': 15,
+  };
+  
+  const horizonMultiplier = horizon === '6h' ? 0.8 : horizon === '12h' ? 1.0 : horizon === '24h' ? 1.3 : 1.8;
+  return (baseMAE[variable] || 1.0) * horizonMultiplier * (0.8 + Math.random() * 0.4);
+}
+
+function generateBias(variable: WeatherVariable): number {
+  // Bias should be close to zero for good models
+  return (Math.random() - 0.5) * 0.6; // -0.3 to 0.3
+}
+
+function generateConfidenceInterval(variable: WeatherVariable, horizon: ForecastHorizon): number {
+  const baseCI: Record<WeatherVariable, number> = {
+    't2m': 3.5,
+    'u10': 5.2,
+    'v10': 5.2,
+    'msl': 2.1,
+    'r850': 15,
+    'tp6h': 8.5,
+    'cape': 350,
+    't850': 4.0,
+    'z500': 25,
+  };
+  
+  const horizonMultiplier = horizon === '6h' ? 0.9 : horizon === '12h' ? 1.1 : horizon === '24h' ? 1.4 : 1.9;
+  return (baseCI[variable] || 3.0) * horizonMultiplier * (0.9 + Math.random() * 0.2);
+}
+
+function generateTrendData(timeRange: TimeRange) {
+  const intervals = getTimeRangeIntervals(timeRange);
+  const now = new Date();
+  
+  const accuracy_trends = [];
+  const performance_trends = [];
+  const confidence_trends = [];
+  
+  for (let i = 0; i < intervals.count; i++) {
+    const timestamp = new Date(now.getTime() - (intervals.count - i - 1) * intervals.intervalMs);
+    
+    accuracy_trends.push({
+      timestamp: timestamp.toISOString(),
+      value: 88 + Math.sin(i / 5) * 4 + Math.random() * 3, // Oscillating around 88-95%
+    });
+    
+    performance_trends.push({
+      timestamp: timestamp.toISOString(),
+      value: 140 + Math.sin(i / 3) * 25 + Math.random() * 20, // Response time 115-185ms
+    });
+    
+    confidence_trends.push({
+      timestamp: timestamp.toISOString(),
+      value: 82 + Math.sin(i / 4) * 8 + Math.random() * 5, // Confidence 75-95%
+    });
+  }
+  
+  return {
+    accuracy_trends,
+    performance_trends,
+    confidence_trends,
+  };
+}
+
+function getTimeRangeIntervals(timeRange: TimeRange): { count: number; intervalMs: number } {
+  switch (timeRange) {
+    case '1h':
+      return { count: 12, intervalMs: 5 * 60 * 1000 }; // 5-minute intervals
+    case '6h':
+      return { count: 24, intervalMs: 15 * 60 * 1000 }; // 15-minute intervals
+    case '24h':
+      return { count: 24, intervalMs: 60 * 60 * 1000 }; // 1-hour intervals
+    case '7d':
+      return { count: 28, intervalMs: 6 * 60 * 60 * 1000 }; // 6-hour intervals
+    case '30d':
+      return { count: 30, intervalMs: 24 * 60 * 60 * 1000 }; // 1-day intervals
+    default:
+      return { count: 24, intervalMs: 60 * 60 * 1000 };
+  }
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
+}

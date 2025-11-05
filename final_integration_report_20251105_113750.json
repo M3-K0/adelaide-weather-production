@@ -1,0 +1,82 @@
+{
+  "test_summary": {
+    "total_tests": 9,
+    "passed_tests": 6,
+    "failed_tests": 3,
+    "success_rate_percent": 66.67,
+    "total_duration_seconds": 13.45
+  },
+  "production_readiness": {
+    "ready": false,
+    "critical_failures": 1,
+    "recommendation": "REQUIRES FIXES BEFORE PRODUCTION"
+  },
+  "test_results": [
+    {
+      "test": "environment_setup",
+      "status": "passed",
+      "duration_ms": 0
+    },
+    {
+      "test": "environment_config_manager",
+      "status": "passed",
+      "duration_ms": 58.65359306335449,
+      "environments_tested": 3
+    },
+    {
+      "test": "secure_credential_manager",
+      "status": "passed",
+      "duration_ms": 77.62026786804199,
+      "health_status": "healthy"
+    },
+    {
+      "test": "config_drift_detection",
+      "status": "passed",
+      "duration_ms": 11488.579511642456,
+      "drift_events": 1
+    },
+    {
+      "test": "api_components",
+      "status": "failed",
+      "duration_ms": 1536.6590023040771,
+      "error": "Invalid ForecastAdapter structure"
+    },
+    {
+      "test": "security_middleware",
+      "status": "failed",
+      "duration_ms": 263.1959915161133,
+      "error": "SecurityMiddleware.__init__() missing 1 required positional argument: 'app'"
+    },
+    {
+      "test": "faiss_monitoring",
+      "status": "failed",
+      "duration_ms": 0.20956993103027344,
+      "error": "'FAISSHealthMonitor' object has no attribute 'get_health_status'"
+    },
+    {
+      "test": "deployment_script",
+      "status": "passed",
+      "duration_ms": 0.07486343383789062,
+      "environments_configured": 3
+    },
+    {
+      "test": "system_integration",
+      "status": "passed",
+      "duration_ms": 25.658130645751953,
+      "critical_files_present": 8,
+      "total_critical_files": 8
+    }
+  ],
+  "quality_gates": {
+    "all_core_components_pass": true,
+    "api_components_integrated": false,
+    "security_components_working": false,
+    "deployment_ready": true
+  },
+  "generated_at": "2025-11-05T01:07:50.743526+00:00",
+  "test_environment": {
+    "python_version": "3.12.3 (main, Aug 14 2025, 17:47:21) [GCC 13.3.0]",
+    "platform": "linux",
+    "project_root": "/home/micha/adelaide-weather-final"
+  }
+}

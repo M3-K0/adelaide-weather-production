@@ -1,0 +1,97 @@
+# Staging Environment Overlay for Adelaide Weather Forecast
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: adelaide-weather-staging
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+namespace: adelaide-weather-staging
+
+resources:
+- ../../base
+
+namePrefix: staging-
+
+commonLabels:
+  environment: staging
+  tier: non-production
+
+commonAnnotations:
+  deployment.environment: staging
+  monitoring.enabled: "true"
+
+configMapGenerator:
+- name: staging-config
+  behavior: merge
+  literals:
+  - ENVIRONMENT=staging
+  - LOG_LEVEL=DEBUG
+  - RATE_LIMIT_PER_MINUTE=100
+  - PERFORMANCE_CACHE_TTL=60
+  - API_BASE_URL=http://staging-api-service:8000
+  - ENABLE_DEBUG_ENDPOINTS=true
+
+secretGenerator:
+- name: staging-secrets
+  behavior: merge
+  literals:
+  - API_TOKEN=staging-api-token-placeholder
+
+replicas:
+- name: api-deployment
+  count: 1
+- name: frontend-deployment
+  count: 1
+- name: redis-deployment
+  count: 1
+
+images:
+- name: api-image
+  newName: ghcr.io/adelaide-weather/api
+  newTag: staging-latest
+- name: frontend-image
+  newName: ghcr.io/adelaide-weather/frontend
+  newTag: staging-latest
+
+patchesStrategicMerge:
+- staging-patches.yaml
+
+patchesJson6902:
+- target:
+    group: networking.k8s.io
+    version: v1
+    kind: Ingress
+    name: adelaide-weather-ingress
+  patch: |-
+    - op: replace
+      path: /spec/rules/0/host
+      value: staging.adelaide-weather.example.com
+    - op: replace
+      path: /spec/tls/0/hosts/0
+      value: staging.adelaide-weather.example.com
+
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: api-deployment
+  patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: STAGING_MODE
+        value: "true"
+
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: frontend-deployment
+  patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: STAGING_MODE
+        value: "true"

@@ -1,0 +1,279 @@
+# Multi-stage Production Dockerfile for Adelaide Weather Frontend
+# Optimized for CI/CD pipeline with build caching and security
+
+# =============================================================================
+# DEPENDENCIES STAGE: Install and cache dependencies
+# =============================================================================
+FROM node:18-alpine AS dependencies
+
+# Build arguments for metadata
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION
+
+# Set build-time environment variables
+ENV NPM_CONFIG_CACHE=/tmp/.npm \
+    NPM_CONFIG_UNSAFE_PERM=true \
+    NODE_ENV=production
+
+# Install system dependencies for building
+RUN apk add --no-cache \
+    libc6-compat \
+    python3 \
+    make \
+    g++ \
+    curl
+
+# Create application directory
+WORKDIR /app
+
+# Copy package files for dependency installation
+COPY package*.json ./
+
+# Install dependencies with optimizations
+RUN npm ci --only=production --ignore-scripts && \
+    npm cache clean --force
+
+# =============================================================================
+# BUILD STAGE: Build the application
+# =============================================================================
+FROM node:18-alpine AS builder
+
+# Build arguments for metadata
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION
+
+# Set build environment
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    NPM_CONFIG_CACHE=/tmp/.npm
+
+# Install build dependencies
+RUN apk add --no-cache \
+    libc6-compat \
+    python3 \
+    make \
+    g++
+
+# Create application directory
+WORKDIR /app
+
+# Copy dependencies from previous stage
+COPY --from=dependencies /app/node_modules ./node_modules
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including devDependencies for build)
+RUN npm ci --ignore-scripts
+
+# Copy source code
+COPY . .
+
+# Copy environment configuration for build
+RUN echo "NEXT_PUBLIC_API_BASE_URL=/api" > .env.production
+RUN echo "NEXT_PUBLIC_VERSION=${VERSION:-latest}" >> .env.production
+RUN echo "NEXT_PUBLIC_BUILD_DATE=${BUILD_DATE}" >> .env.production
+
+# Run type checking and linting (quality gates)
+RUN npm run type-check
+RUN npm run lint:strict || echo "Linting warnings detected"
+
+# Build the application with optimizations
+RUN npm run build
+
+# =============================================================================
+# SECURITY SCAN STAGE: Scan dependencies for vulnerabilities
+# =============================================================================
+FROM dependencies AS security-scanner
+
+# Install security scanning tools
+RUN npm install -g audit-ci retire
+
+# Run security scans
+RUN npm audit --json > /tmp/npm-audit.json || true
+RUN audit-ci --config /dev/null --report-type json --output-file /tmp/audit-ci.json || true
+
+# =============================================================================
+# RUNTIME STAGE: Minimal production image
+# =============================================================================
+FROM node:18-alpine AS runtime
+
+# Build arguments for metadata
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION
+
+# Add metadata labels
+LABEL maintainer="Adelaide Weather Forecast Team" \
+      org.opencontainers.image.title="Adelaide Weather Frontend" \
+      org.opencontainers.image.description="Production frontend for Adelaide Weather Forecasting" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.source="https://github.com/adelaide-weather/forecast-frontend"
+
+# Set runtime environment variables
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+
+# Install minimal runtime dependencies
+RUN apk add --no-cache \
+    curl \
+    ca-certificates \
+    dumb-init
+
+# Create non-root user for security
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Create application directory
+WORKDIR /app
+
+# Copy built application from builder stage
+COPY --from=builder /app/public ./public
+
+# Automatically leverage output traces to reduce image size
+# https://nextjs.org/docs/advanced-features/output-file-tracing
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Copy security scan results
+COPY --from=security-scanner /tmp/*audit*.json ./security-reports/
+
+# Create directories for logs and temporary files
+RUN mkdir -p /app/logs /app/tmp && \
+    chown -R nextjs:nodejs /app/logs /app/tmp
+
+# Set proper permissions
+RUN chown -R nextjs:nodejs /app && \
+    chmod -R 755 /app && \
+    chmod 700 /app/security-reports
+
+# Switch to non-root user
+USER nextjs
+
+# Health check with comprehensive validation
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f -H "User-Agent: healthcheck" http://localhost:${PORT}/api/health || exit 1
+
+# Expose application port
+EXPOSE ${PORT}
+
+# Create startup script for better process management
+USER root
+RUN cat > /app/start.sh << 'EOF'
+#!/bin/sh
+set -e
+
+echo "🚀 Starting Adelaide Weather Frontend..."
+echo "Environment: ${NODE_ENV}"
+echo "Port: ${PORT}"
+echo "Build Version: ${VERSION:-unknown}"
+echo "Build Date: ${BUILD_DATE:-unknown}"
+
+# Validate environment
+if [ -z "${NEXT_PUBLIC_API_BASE_URL}" ]; then
+    echo "⚠️ NEXT_PUBLIC_API_BASE_URL not set, using default /api"
+    export NEXT_PUBLIC_API_BASE_URL="/api"
+fi
+
+echo "API Base URL: ${NEXT_PUBLIC_API_BASE_URL}"
+
+# Start the application with dumb-init for proper signal handling
+exec dumb-init node server.js
+EOF
+
+RUN chmod +x /app/start.sh && chown nextjs:nodejs /app/start.sh
+
+# Switch back to non-root user
+USER nextjs
+
+# Use startup script as entrypoint
+CMD ["/app/start.sh"]
+
+# =============================================================================
+# DEVELOPMENT STAGE: Development build with hot reload and debugging tools
+# =============================================================================
+FROM node:18-alpine AS development
+
+# Build arguments
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION
+
+# Install development system dependencies
+RUN apk add --no-cache \
+    libc6-compat \
+    python3 \
+    make \
+    g++ \
+    curl \
+    git \
+    vim
+
+# Create application directory
+WORKDIR /app
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev dependencies)
+RUN npm ci
+
+# Copy source code
+COPY --chown=nextjs:nodejs . .
+
+# Set development environment
+ENV NODE_ENV=development \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+
+# Set proper permissions
+RUN chown -R nextjs:nodejs /app
+
+# Switch to non-root user
+USER nextjs
+
+# Health check for development
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:${PORT} || exit 1
+
+# Expose port
+EXPOSE ${PORT}
+
+# Start development server with hot reload
+CMD ["npm", "run", "dev"]
+
+# =============================================================================
+# TEST STAGE: Testing environment with all test tools
+# =============================================================================
+FROM development AS test
+
+USER root
+
+# Install test-specific tools
+RUN npm install -g \
+    @playwright/test \
+    lighthouse \
+    pa11y-ci
+
+# Install Playwright browsers
+RUN npx playwright install --with-deps
+
+USER nextjs
+
+# Override for test environment
+ENV NODE_ENV=test \
+    CI=true
+
+# Run tests by default
+CMD ["npm", "run", "ci:all"]

@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adelaide Weather API - Testing Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .panel h2 {
+            color: #2c5aa0;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #555;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #2c5aa0;
+            box-shadow: 0 0 0 2px rgba(44, 90, 160, 0.1);
+        }
+
+        .btn {
+            background: #2c5aa0;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+
+        .btn:hover {
+            background: #1e3d6f;
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+
+        .response-panel {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .response-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .status-success { background: #d4edda; color: #155724; }
+        .status-error { background: #f8d7da; color: #721c24; }
+        .status-warning { background: #fff3cd; color: #856404; }
+
+        .response-body {
+            background: #fff;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 1rem;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #dee2e6;
+            margin-bottom: 1rem;
+        }
+
+        .tab {
+            padding: 0.75rem 1rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            border-bottom-color: #2c5aa0;
+            color: #2c5aa0;
+            font-weight: 500;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .variable-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .variable-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        .variable-checkbox input[type="checkbox"] {
+            width: auto;
+        }
+
+        .history-item {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .history-item:hover {
+            background: #e9ecef;
+        }
+
+        .history-item .method {
+            display: inline-block;
+            padding: 0.125rem 0.5rem;
+            background: #28a745;
+            color: white;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+
+        .history-item .status {
+            float: right;
+            font-weight: bold;
+        }
+
+        .history-item .status.success { color: #28a745; }
+        .history-item .status.error { color: #dc3545; }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Adelaide Weather API Testing Interface</h1>
+        <p>Interactive tool for testing and exploring the weather forecasting API</p>
+    </div>
+
+    <div class="container">
+        <!-- Configuration Panel -->
+        <div class="panel">
+            <h2>🔧 Configuration</h2>
+            
+            <div class="form-group">
+                <label for="api-token">API Token</label>
+                <input type="password" id="api-token" placeholder="Enter your API token">
+            </div>
+            
+            <div class="form-group">
+                <label for="base-url">Base URL</label>
+                <input type="url" id="base-url" value="https://api.adelaideweather.example.com" placeholder="API base URL">
+            </div>
+            
+            <button class="btn btn-success" onclick="testConnection()">Test Connection</button>
+            <button class="btn btn-secondary btn-small" onclick="loadFromStorage()">Load Saved</button>
+            <button class="btn btn-secondary btn-small" onclick="saveToStorage()">Save Config</button>
+        </div>
+
+        <!-- Request Builder -->
+        <div class="panel">
+            <h2>🔨 Request Builder</h2>
+            
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('forecast')">Forecast</button>
+                <button class="tab" onclick="switchTab('health')">Health</button>
+                <button class="tab" onclick="switchTab('analogs')">Analogs</button>
+                <button class="tab" onclick="switchTab('metrics')">Metrics</button>
+            </div>
+
+            <!-- Forecast Tab -->
+            <div id="forecast-tab" class="tab-content active">
+                <div class="form-group">
+                    <label for="forecast-horizon">Horizon</label>
+                    <select id="forecast-horizon">
+                        <option value="6h">6 hours</option>
+                        <option value="12h">12 hours</option>
+                        <option value="24h" selected>24 hours</option>
+                        <option value="48h">48 hours</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Variables</label>
+                    <div class="variable-grid">
+                        <label class="variable-checkbox">
+                            <input type="checkbox" value="t2m" checked> t2m (Temperature)
+                        </label>
+                        <label class="variable-checkbox">
+                            <input type="checkbox" value="u10" checked> u10 (U Wind)
+                        </label>
+                        <label class="variable-checkbox">
+                            <input type="checkbox" value="v10" checked> v10 (V Wind)
+                        </label>
+                        <label class="variable-checkbox">
+                            <input type="checkbox" value="msl" checked> msl (Pressure)
+                        </label>
+                        <label class="variable-checkbox">
+                            <input type="checkbox" value="r850"> r850 (Humidity)
+                        </label>
+                        <label class="variable-checkbox">
+                            <input type="checkbox" value="tp6h"> tp6h (Precipitation)
+                        </label>
+                        <label class="variable-checkbox">
+                            <input type="checkbox" value="cape"> cape (CAPE)
+                        </label>
+                        <label class="variable-checkbox">
+                            <input type="checkbox" value="t850"> t850 (850hPa Temp)
+                        </label>
+                        <label class="variable-checkbox">
+                            <input type="checkbox" value="z500"> z500 (500hPa Height)
+                        </label>
+                    </div>
+                </div>
+                
+                <button class="btn" onclick="makeForecastRequest()">Get Forecast</button>
+            </div>
+
+            <!-- Health Tab -->
+            <div id="health-tab" class="tab-content">
+                <p>Check the system health and readiness status.</p>
+                <button class="btn" onclick="makeHealthRequest()">Check Health</button>
+            </div>
+
+            <!-- Analogs Tab -->
+            <div id="analogs-tab" class="tab-content">
+                <div class="form-group">
+                    <label for="analogs-horizon">Horizon</label>
+                    <select id="analogs-horizon">
+                        <option value="6h">6 hours</option>
+                        <option value="12h">12 hours</option>
+                        <option value="24h" selected>24 hours</option>
+                        <option value="48h">48 hours</option>
+                    </select>
+                </div>
+                <button class="btn" onclick="makeAnalogsRequest()">Get Analogs</button>
+            </div>
+
+            <!-- Metrics Tab -->
+            <div id="metrics-tab" class="tab-content">
+                <p>Retrieve Prometheus metrics for monitoring.</p>
+                <button class="btn" onclick="makeMetricsRequest()">Get Metrics</button>
+            </div>
+        </div>
+
+        <!-- Response Panel -->
+        <div class="panel full-width">
+            <h2>📊 Response</h2>
+            <div id="response-container">
+                <p style="text-align: center; color: #666; padding: 2rem;">
+                    Make a request to see the response here
+                </p>
+            </div>
+        </div>
+
+        <!-- Request History -->
+        <div class="panel">
+            <h2>📜 Request History</h2>
+            <div id="history-container">
+                <p style="text-align: center; color: #666;">No requests made yet</p>
+            </div>
+            <button class="btn btn-secondary btn-small" onclick="clearHistory()">Clear History</button>
+        </div>
+
+        <!-- Quick Tests -->
+        <div class="panel">
+            <h2>⚡ Quick Tests</h2>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <button class="btn btn-small" onclick="runQuickTest('basic')">Basic Forecast Test</button>
+                <button class="btn btn-small" onclick="runQuickTest('auth')">Authentication Test</button>
+                <button class="btn btn-small" onclick="runQuickTest('health')">Health Check Test</button>
+                <button class="btn btn-small" onclick="runQuickTest('rate-limit')">Rate Limit Test</button>
+                <button class="btn btn-small" onclick="runQuickTest('all')">Run All Tests</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let requestHistory = [];
+        let currentRequestId = 0;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadFromStorage();
+        });
+
+        // Tab switching
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(tabName + '-tab').classList.add('active');
+        }
+
+        // Configuration functions
+        function testConnection() {
+            const baseUrl = document.getElementById('base-url').value;
+            const button = event.target;
+            
+            button.disabled = true;
+            button.textContent = 'Testing...';
+
+            fetch(baseUrl + '/health')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.ready) {
+                        showNotification('✅ Connection successful! API is ready.', 'success');
+                    } else {
+                        showNotification('⚠️ Connected but API is not ready.', 'warning');
+                    }
+                })
+                .catch(error => {
+                    showNotification('❌ Connection failed: ' + error.message, 'error');
+                })
+                .finally(() => {
+                    button.disabled = false;
+                    button.textContent = 'Test Connection';
+                });
+        }
+
+        function saveToStorage() {
+            const config = {
+                apiToken: document.getElementById('api-token').value,
+                baseUrl: document.getElementById('base-url').value
+            };
+            localStorage.setItem('weather-api-config', JSON.stringify(config));
+            showNotification('✅ Configuration saved', 'success');
+        }
+
+        function loadFromStorage() {
+            const saved = localStorage.getItem('weather-api-config');
+            if (saved) {
+                const config = JSON.parse(saved);
+                document.getElementById('api-token').value = config.apiToken || '';
+                document.getElementById('base-url').value = config.baseUrl || 'https://api.adelaideweather.example.com';
+                showNotification('📋 Configuration loaded', 'success');
+            }
+        }
+
+        // Request functions
+        async function makeForecastRequest() {
+            const horizon = document.getElementById('forecast-horizon').value;
+            const variables = Array.from(document.querySelectorAll('.variable-checkbox input:checked'))
+                .map(cb => cb.value);
+
+            if (variables.length === 0) {
+                showNotification('❌ Please select at least one variable', 'error');
+                return;
+            }
+
+            const params = new URLSearchParams({
+                horizon: horizon,
+                vars: variables.join(',')
+            });
+
+            await makeRequest('GET', '/forecast?' + params.toString(), true);
+        }
+
+        async function makeHealthRequest() {
+            await makeRequest('GET', '/health', false);
+        }
+
+        async function makeAnalogsRequest() {
+            const horizon = document.getElementById('analogs-horizon').value;
+            const params = new URLSearchParams({ horizon });
+            await makeRequest('GET', '/analogs?' + params.toString(), true);
+        }
+
+        async function makeMetricsRequest() {
+            await makeRequest('GET', '/metrics', true, { 'Accept': 'text/plain' });
+        }
+
+        async function makeRequest(method, endpoint, requiresAuth = false, extraHeaders = {}) {
+            const baseUrl = document.getElementById('base-url').value;
+            const apiToken = document.getElementById('api-token').value;
+
+            if (requiresAuth && !apiToken) {
+                showNotification('❌ API token required for this endpoint', 'error');
+                return;
+            }
+
+            const headers = {
+                'Accept': 'application/json',
+                ...extraHeaders
+            };
+
+            if (requiresAuth) {
+                headers['Authorization'] = `Bearer ${apiToken}`;
+            }
+
+            const requestId = ++currentRequestId;
+            const startTime = Date.now();
+
+            try {
+                showLoading();
+                
+                const response = await fetch(baseUrl + endpoint, {
+                    method: method,
+                    headers: headers
+                });
+
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+
+                let responseData;
+                const contentType = response.headers.get('content-type');
+                
+                if (contentType && contentType.includes('application/json')) {
+                    responseData = await response.json();
+                } else {
+                    responseData = await response.text();
+                }
+
+                // Add to history
+                addToHistory({
+                    id: requestId,
+                    method: method,
+                    endpoint: endpoint,
+                    status: response.status,
+                    statusText: response.statusText,
+                    duration: duration,
+                    timestamp: new Date().toISOString()
+                });
+
+                // Display response
+                displayResponse(response, responseData, duration);
+
+            } catch (error) {
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+
+                addToHistory({
+                    id: requestId,
+                    method: method,
+                    endpoint: endpoint,
+                    status: 0,
+                    statusText: 'Network Error',
+                    duration: duration,
+                    timestamp: new Date().toISOString(),
+                    error: error.message
+                });
+
+                displayError(error);
+            }
+        }
+
+        // Display functions
+        function showLoading() {
+            const container = document.getElementById('response-container');
+            container.innerHTML = `
+                <div style="text-align: center; padding: 2rem; color: #666;">
+                    <div style="border: 4px solid #f3f3f3; border-top: 4px solid #2c5aa0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 1rem;"></div>
+                    <p>Making request...</p>
+                </div>
+                <style>
+                    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                </style>
+            `;
+        }
+
+        function displayResponse(response, data, duration) {
+            const container = document.getElementById('response-container');
+            const statusClass = response.ok ? 'success' : 'error';
+            
+            let formattedData;
+            if (typeof data === 'string') {
+                formattedData = data;
+            } else {
+                formattedData = JSON.stringify(data, null, 2);
+            }
+
+            container.innerHTML = `
+                <div class="response-panel">
+                    <div class="response-header">
+                        <span class="status-badge status-${statusClass}">
+                            ${response.status} ${response.statusText}
+                        </span>
+                        <span style="font-size: 0.9rem; color: #666;">
+                            ${duration}ms
+                        </span>
+                    </div>
+                    <div class="response-body">${formattedData}</div>
+                </div>
+            `;
+        }
+
+        function displayError(error) {
+            const container = document.getElementById('response-container');
+            container.innerHTML = `
+                <div class="response-panel">
+                    <div class="response-header">
+                        <span class="status-badge status-error">Network Error</span>
+                    </div>
+                    <div class="response-body">${error.message}</div>
+                </div>
+            `;
+        }
+
+        // History functions
+        function addToHistory(request) {
+            requestHistory.unshift(request);
+            if (requestHistory.length > 20) {
+                requestHistory.pop();
+            }
+            updateHistoryDisplay();
+        }
+
+        function updateHistoryDisplay() {
+            const container = document.getElementById('history-container');
+            
+            if (requestHistory.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666;">No requests made yet</p>';
+                return;
+            }
+
+            container.innerHTML = requestHistory.map(req => {
+                const statusClass = req.status >= 200 && req.status < 300 ? 'success' : 'error';
+                return `
+                    <div class="history-item" onclick="repeatRequest(${req.id})">
+                        <span class="method">${req.method}</span>
+                        ${req.endpoint}
+                        <span class="status ${statusClass}">${req.status || 'ERR'}</span>
+                        <div style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">
+                            ${new Date(req.timestamp).toLocaleTimeString()} • ${req.duration}ms
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function clearHistory() {
+            requestHistory = [];
+            updateHistoryDisplay();
+            showNotification('📜 History cleared', 'success');
+        }
+
+        function repeatRequest(requestId) {
+            const request = requestHistory.find(r => r.id === requestId);
+            if (request) {
+                // Parse endpoint to set form values
+                const [path, query] = request.endpoint.split('?');
+                
+                if (path === '/forecast') {
+                    switchTab('forecast');
+                    if (query) {
+                        const params = new URLSearchParams(query);
+                        if (params.get('horizon')) {
+                            document.getElementById('forecast-horizon').value = params.get('horizon');
+                        }
+                        if (params.get('vars')) {
+                            const vars = params.get('vars').split(',');
+                            document.querySelectorAll('.variable-checkbox input').forEach(cb => {
+                                cb.checked = vars.includes(cb.value);
+                            });
+                        }
+                    }
+                    makeForecastRequest();
+                } else if (path === '/health') {
+                    switchTab('health');
+                    makeHealthRequest();
+                } else if (path === '/analogs') {
+                    switchTab('analogs');
+                    if (query) {
+                        const params = new URLSearchParams(query);
+                        if (params.get('horizon')) {
+                            document.getElementById('analogs-horizon').value = params.get('horizon');
+                        }
+                    }
+                    makeAnalogsRequest();
+                } else if (path === '/metrics') {
+                    switchTab('metrics');
+                    makeMetricsRequest();
+                }
+            }
+        }
+
+        // Quick tests
+        async function runQuickTest(testType) {
+            const apiToken = document.getElementById('api-token').value;
+            
+            if (!apiToken && testType !== 'health') {
+                showNotification('❌ API token required for this test', 'error');
+                return;
+            }
+
+            switch (testType) {
+                case 'basic':
+                    await makeRequest('GET', '/forecast?horizon=24h&vars=t2m', true);
+                    break;
+                case 'auth':
+                    await makeRequest('GET', '/forecast?horizon=6h&vars=t2m', true);
+                    break;
+                case 'health':
+                    await makeRequest('GET', '/health', false);
+                    break;
+                case 'rate-limit':
+                    showNotification('🚀 Running rate limit test...', 'success');
+                    for (let i = 0; i < 5; i++) {
+                        await makeRequest('GET', '/forecast?horizon=6h&vars=t2m', true);
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    break;
+                case 'all':
+                    showNotification('🚀 Running all tests...', 'success');
+                    await runQuickTest('health');
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await runQuickTest('auth');
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await runQuickTest('basic');
+                    showNotification('✅ All tests completed', 'success');
+                    break;
+            }
+        }
+
+        // Utility functions
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 1rem 1.5rem;
+                border-radius: 4px;
+                color: white;
+                font-weight: 500;
+                z-index: 10000;
+                animation: slideIn 0.3s ease-out;
+                max-width: 400px;
+            `;
+
+            const colors = {
+                success: '#28a745',
+                error: '#dc3545',
+                warning: '#ffc107'
+            };
+
+            notification.style.background = colors[type] || colors.success;
+            notification.textContent = message;
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // Add CSS animations
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

@@ -1,0 +1,615 @@
+/**
+ * Metrics Dashboard Specific Styles
+ * 
+ * Custom CSS for the metrics dashboard components including
+ * animations, responsive layouts, and accessibility enhancements.
+ */
+
+/* ============================================================================
+   Dashboard Layout
+   ============================================================================ */
+
+.metrics-dashboard {
+  --dashboard-bg: rgb(31, 41, 55);
+  --dashboard-border: rgb(75, 85, 99);
+  --dashboard-card-bg: rgb(17, 24, 39);
+  --dashboard-text: rgb(209, 213, 219);
+  --dashboard-accent: rgb(59, 130, 246);
+  --dashboard-success: rgb(16, 185, 129);
+  --dashboard-warning: rgb(245, 158, 11);
+  --dashboard-error: rgb(239, 68, 68);
+}
+
+.metrics-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.metrics-card {
+  background: var(--dashboard-card-bg);
+  border: 1px solid var(--dashboard-border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  transition: all 0.2s ease-in-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.metrics-card:hover {
+  border-color: var(--dashboard-accent);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.metrics-card.critical {
+  border-color: var(--dashboard-error);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.1);
+}
+
+.metrics-card.warning {
+  border-color: var(--dashboard-warning);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.1);
+}
+
+.metrics-card.good {
+  border-color: var(--dashboard-success);
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.1);
+}
+
+/* ============================================================================
+   Metric Value Display
+   ============================================================================ */
+
+.metric-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  margin: 0.5rem 0;
+}
+
+.metric-value.large {
+  font-size: 2.5rem;
+}
+
+.metric-value.small {
+  font-size: 1.5rem;
+}
+
+.metric-unit {
+  font-size: 0.875rem;
+  opacity: 0.8;
+  margin-left: 0.25rem;
+}
+
+.metric-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+}
+
+.metric-trend.up {
+  color: var(--dashboard-success);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.metric-trend.down {
+  color: var(--dashboard-error);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.metric-trend.stable {
+  color: var(--dashboard-text);
+  background: rgba(75, 85, 99, 0.2);
+}
+
+/* ============================================================================
+   Status Indicators
+   ============================================================================ */
+
+.status-dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 0.5rem;
+  position: relative;
+}
+
+.status-dot.animated {
+  animation: pulse 2s infinite;
+}
+
+.status-dot.success {
+  background: var(--dashboard-success);
+}
+
+.status-dot.warning {
+  background: var(--dashboard-warning);
+}
+
+.status-dot.error {
+  background: var(--dashboard-error);
+}
+
+.status-bar {
+  height: 0.25rem;
+  background: rgba(75, 85, 99, 0.3);
+  border-radius: 0.125rem;
+  overflow: hidden;
+  margin-top: 0.75rem;
+}
+
+.status-bar-fill {
+  height: 100%;
+  transition: width 1s ease-in-out;
+  border-radius: 0.125rem;
+}
+
+.status-bar-fill.success {
+  background: linear-gradient(90deg, var(--dashboard-success), rgba(16, 185, 129, 0.8));
+}
+
+.status-bar-fill.warning {
+  background: linear-gradient(90deg, var(--dashboard-warning), rgba(245, 158, 11, 0.8));
+}
+
+.status-bar-fill.error {
+  background: linear-gradient(90deg, var(--dashboard-error), rgba(239, 68, 68, 0.8));
+}
+
+/* ============================================================================
+   Chart Containers
+   ============================================================================ */
+
+.chart-container {
+  background: var(--dashboard-card-bg);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  border: 1px solid var(--dashboard-border);
+  min-height: 300px;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--dashboard-border);
+}
+
+.chart-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+}
+
+.chart-subtitle {
+  font-size: 0.875rem;
+  color: var(--dashboard-text);
+  opacity: 0.8;
+  margin: 0.25rem 0 0 0;
+}
+
+.chart-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.chart-toggle {
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid var(--dashboard-border);
+  background: transparent;
+  color: var(--dashboard-text);
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.chart-toggle:hover {
+  background: rgba(75, 85, 99, 0.2);
+  border-color: var(--dashboard-accent);
+}
+
+.chart-toggle.active {
+  background: var(--dashboard-accent);
+  border-color: var(--dashboard-accent);
+  color: white;
+}
+
+/* ============================================================================
+   Filter Panel
+   ============================================================================ */
+
+.filter-panel {
+  background: var(--dashboard-card-bg);
+  border: 1px solid var(--dashboard-border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.filter-group {
+  margin-bottom: 1.25rem;
+}
+
+.filter-group:last-child {
+  margin-bottom: 0;
+}
+
+.filter-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--dashboard-text);
+  margin-bottom: 0.5rem;
+}
+
+.filter-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.filter-button {
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid var(--dashboard-border);
+  background: transparent;
+  color: var(--dashboard-text);
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.filter-button:hover {
+  background: rgba(75, 85, 99, 0.2);
+  border-color: var(--dashboard-accent);
+}
+
+.filter-button.active {
+  background: var(--dashboard-accent);
+  border-color: var(--dashboard-accent);
+  color: white;
+}
+
+.filter-button.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Loading States
+   ============================================================================ */
+
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(17, 24, 39, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  z-index: 10;
+}
+
+.loading-spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid var(--dashboard-border);
+  border-top: 2px solid var(--dashboard-accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, 
+    rgba(75, 85, 99, 0.2) 25%, 
+    rgba(75, 85, 99, 0.4) 50%, 
+    rgba(75, 85, 99, 0.2) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: 0.25rem;
+}
+
+.skeleton.text {
+  height: 1rem;
+  margin: 0.25rem 0;
+}
+
+.skeleton.title {
+  height: 1.5rem;
+  width: 60%;
+  margin: 0.5rem 0;
+}
+
+.skeleton.metric {
+  height: 2rem;
+  width: 40%;
+  margin: 0.75rem 0;
+}
+
+/* ============================================================================
+   Export Controls
+   ============================================================================ */
+
+.export-controls {
+  background: var(--dashboard-card-bg);
+  border: 1px solid var(--dashboard-border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+}
+
+.export-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid var(--dashboard-border);
+  background: var(--dashboard-accent);
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  margin-right: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.export-button:hover {
+  background: rgba(59, 130, 246, 0.8);
+  transform: translateY(-1px);
+}
+
+.export-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.export-button.success {
+  background: var(--dashboard-success);
+}
+
+.export-button.warning {
+  background: var(--dashboard-warning);
+}
+
+/* ============================================================================
+   Responsive Design
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .metrics-card {
+    padding: 1rem;
+  }
+
+  .chart-container {
+    padding: 1rem;
+    min-height: 250px;
+  }
+
+  .chart-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .chart-controls {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .filter-buttons {
+    justify-content: center;
+  }
+
+  .metric-value {
+    font-size: 1.75rem;
+  }
+
+  .metric-value.large {
+    font-size: 2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .metrics-dashboard {
+    padding: 0.5rem;
+  }
+
+  .metrics-card {
+    padding: 0.75rem;
+  }
+
+  .chart-container {
+    padding: 0.75rem;
+    min-height: 200px;
+  }
+
+  .filter-panel {
+    padding: 1rem;
+  }
+
+  .export-controls {
+    padding: 1rem;
+  }
+
+  .metric-value {
+    font-size: 1.5rem;
+  }
+
+  .chart-toggle,
+  .filter-button,
+  .export-button {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.75rem;
+  }
+}
+
+/* ============================================================================
+   Accessibility Enhancements
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .metrics-card,
+  .chart-toggle,
+  .filter-button,
+  .export-button,
+  .status-bar-fill {
+    transition: none;
+  }
+
+  .loading-spinner,
+  .status-dot.animated {
+    animation: none;
+  }
+
+  .skeleton {
+    animation: none;
+    background: rgba(75, 85, 99, 0.3);
+  }
+}
+
+@media (prefers-contrast: high) {
+  .metrics-card {
+    border-width: 2px;
+  }
+
+  .status-dot {
+    border: 2px solid white;
+  }
+
+  .chart-toggle.active,
+  .filter-button.active,
+  .export-button {
+    border-width: 2px;
+  }
+}
+
+/* Focus styles for keyboard navigation */
+.metrics-card:focus-within,
+.chart-toggle:focus,
+.filter-button:focus,
+.export-button:focus {
+  outline: 2px solid var(--dashboard-accent);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+   Animations
+   ============================================================================ */
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* ============================================================================
+   Print Styles
+   ============================================================================ */
+
+@media print {
+  .metrics-dashboard {
+    background: white;
+    color: black;
+  }
+
+  .metrics-card,
+  .chart-container,
+  .filter-panel,
+  .export-controls {
+    background: white;
+    border: 1px solid #ccc;
+    box-shadow: none;
+  }
+
+  .chart-controls,
+  .export-controls {
+    display: none;
+  }
+
+  .loading-overlay {
+    display: none;
+  }
+}
+
+/* ============================================================================
+   Tooltip Styles
+   ============================================================================ */
+
+.tooltip {
+  background: rgba(17, 24, 39, 0.95);
+  border: 1px solid var(--dashboard-border);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--dashboard-text);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(8px);
+  z-index: 50;
+}
+
+.tooltip-arrow {
+  border-color: var(--dashboard-border) transparent transparent transparent;
+}

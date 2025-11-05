@@ -1,0 +1,123 @@
+# Enhanced Prometheus configuration for Adelaide Weather Forecasting System
+# Includes SLO monitoring, synthetic checks, and comprehensive alerting
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'adelaide-weather'
+    environment: 'production'
+
+rule_files:
+  - "alerts.yml"
+  - "config_drift_alerts.yml"
+  - "slo_alerts.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Adelaide Weather API monitoring
+  - job_name: 'adelaide-weather-api'
+    static_configs:
+      - targets: ['api:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    
+  # Frontend application monitoring with enhanced metrics
+  - job_name: 'adelaide-weather-frontend'
+    static_configs:
+      - targets: ['frontend:3000']
+    metrics_path: '/api/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    
+  # Synthetic monitoring system - critical for SLO tracking
+  - job_name: 'synthetic-monitor'
+    static_configs:
+      - targets: ['synthetic-monitor:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    
+  # Node Exporter for system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    
+  # cAdvisor for container metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    
+  # Redis monitoring
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+    scrape_timeout: 5s
+    
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 15s
+    
+  # Blackbox Exporter - HTTP endpoint monitoring
+  - job_name: 'blackbox-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - http://api:8000/health/status
+        - http://frontend:3000
+        - http://api:8000/health/live
+        - http://api:8000/health/ready
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+        
+  # Blackbox Exporter - API endpoint with auth
+  - job_name: 'blackbox-api-auth'
+    metrics_path: /probe
+    params:
+      module: [http_auth_check]
+    static_configs:
+      - targets:
+        - http://api:8000/metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+        
+  # Blackbox Exporter - Performance checks
+  - job_name: 'blackbox-performance'
+    metrics_path: /probe
+    params:
+      module: [http_performance]
+    static_configs:
+      - targets:
+        - http://api:8000/forecast?horizon=24h&vars=t2m
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

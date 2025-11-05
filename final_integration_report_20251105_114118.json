@@ -1,0 +1,82 @@
+{
+  "test_summary": {
+    "total_tests": 9,
+    "passed_tests": 9,
+    "failed_tests": 0,
+    "success_rate_percent": 100.0,
+    "total_duration_seconds": 13.37
+  },
+  "production_readiness": {
+    "ready": true,
+    "critical_failures": 0,
+    "recommendation": "APPROVED FOR PRODUCTION"
+  },
+  "test_results": [
+    {
+      "test": "environment_setup",
+      "status": "passed",
+      "duration_ms": 0
+    },
+    {
+      "test": "environment_config_manager",
+      "status": "passed",
+      "duration_ms": 54.28481101989746,
+      "environments_tested": 3
+    },
+    {
+      "test": "secure_credential_manager",
+      "status": "passed",
+      "duration_ms": 73.44722747802734,
+      "health_status": "healthy"
+    },
+    {
+      "test": "config_drift_detection",
+      "status": "passed",
+      "duration_ms": 11923.740148544312,
+      "drift_events": 1
+    },
+    {
+      "test": "api_components",
+      "status": "passed",
+      "duration_ms": 972.0048904418945,
+      "variables_count": 9,
+      "horizons_count": 4
+    },
+    {
+      "test": "security_middleware",
+      "status": "passed",
+      "duration_ms": 285.9170436859131
+    },
+    {
+      "test": "faiss_monitoring",
+      "status": "passed",
+      "duration_ms": 26.175975799560547,
+      "health_status": "monitoring_disabled"
+    },
+    {
+      "test": "deployment_script",
+      "status": "passed",
+      "duration_ms": 0.2276897430419922,
+      "environments_configured": 3
+    },
+    {
+      "test": "system_integration",
+      "status": "passed",
+      "duration_ms": 29.321908950805664,
+      "critical_files_present": 8,
+      "total_critical_files": 8
+    }
+  ],
+  "quality_gates": {
+    "all_core_components_pass": true,
+    "api_components_integrated": true,
+    "security_components_working": true,
+    "deployment_ready": true
+  },
+  "generated_at": "2025-11-05T01:11:18.384752+00:00",
+  "test_environment": {
+    "python_version": "3.12.3 (main, Aug 14 2025, 17:47:21) [GCC 13.3.0]",
+    "platform": "linux",
+    "project_root": "/home/micha/adelaide-weather-final"
+  }
+}

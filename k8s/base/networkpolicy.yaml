@@ -1,0 +1,73 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: adelaide-weather-network-policy
+  namespace: adelaide-weather
+  labels:
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: adelaide-weather
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: adelaide-weather
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from ALB/ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 3000
+  # Allow inter-service communication
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: adelaide-weather
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 3000
+    - protocol: TCP
+      port: 6379
+  # Allow monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  # Allow DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow inter-service communication
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: adelaide-weather
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 3000
+    - protocol: TCP
+      port: 6379
+  # Allow HTTPS outbound (for external APIs if needed)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80

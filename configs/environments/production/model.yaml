@@ -1,0 +1,27 @@
+# Production Model Configuration Overrides
+# Optimized for production performance and reliability
+
+# Full production encoder configuration
+encoder:
+  embedding_dim: 256
+  
+# Production training settings
+training:
+  batch_size: 128
+  max_epochs: 100
+  
+# Optimized FAISS configuration for production
+faiss:
+  num_analogs: 30
+  gpu_index: 0
+  
+# Production hardware optimization
+device:
+  use_gpu: true
+  mixed_precision: true
+  
+# Production logging configuration
+logging:
+  use_wandb: true  # Enable experiment tracking in production
+  use_tensorboard: true
+  log_every_n_steps: 100

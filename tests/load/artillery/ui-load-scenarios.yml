@@ -1,0 +1,225 @@
+config:
+  target: 'http://localhost:3000'
+  # Frontend-focused load testing phases
+  phases:
+    # Phase 1: Light browsing load
+    - duration: 300  # 5 minutes
+      arrivalRate: 3
+      name: "light_browsing"
+    # Phase 2: Normal user traffic
+    - duration: 600  # 10 minutes
+      arrivalRate: 10
+      name: "normal_traffic"
+    # Phase 3: Peak user activity
+    - duration: 300  # 5 minutes
+      arrivalRate: 20
+      name: "peak_activity"
+    # Phase 4: Severe weather event spike
+    - duration: 180  # 3 minutes
+      arrivalRate: 40
+      name: "weather_event_spike"
+
+  http:
+    timeout: 60000  # Longer timeout for frontend rendering
+    pool: 100
+    maxSockets: 200
+
+  # Frontend-specific metrics
+  metrics:
+    - name: "page_load_time"
+      value: "response.timings.response"
+    - name: "static_asset_time"
+      value: "response.timings.response"
+    - name: "api_proxy_time"
+      value: "response.timings.response"
+
+# Frontend Load Test Scenarios
+scenarios:
+  # UI-Heavy Workload (70% UI interactions, 30% API calls)
+  - name: "ui_heavy_workload"
+    weight: 70
+    flow:
+      # Load main dashboard page
+      - get:
+          url: "/"
+          capture:
+            - header: "content-length"
+              as: "page_size"
+          expect:
+            - statusCode: 200
+            - contentType: html
+
+      # Think time for page rendering and user reading
+      - think: 3
+
+      # Load CSS and JavaScript assets
+      - get:
+          url: "/_next/static/css/app.css"
+          expect:
+            - statusCode: 200
+
+      - get:
+          url: "/_next/static/chunks/main.js"
+          expect:
+            - statusCode: 200
+
+      # API call through Next.js proxy
+      - get:
+          url: "/api/forecast"
+          qs:
+            horizon: "24h"
+            vars: "t2m,u10,v10"
+          expect:
+            - statusCode: 200
+            - contentType: json
+
+      # Navigate to different demo pages
+      - get:
+          url: "/cape-demo"
+          expect:
+            - statusCode: 200
+
+      - think: 5
+
+      - get:
+          url: "/analog-demo"
+          expect:
+            - statusCode: 200
+
+      - think: 3
+
+      - get:
+          url: "/metrics-demo"
+          expect:
+            - statusCode: 200
+
+      # Interactive elements simulation
+      - think: 8
+
+  # Mobile User Simulation
+  - name: "mobile_user_simulation"
+    weight: 15
+    flow:
+      # Mobile-optimized requests with smaller payloads
+      - get:
+          url: "/"
+          headers:
+            User-Agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15"
+          expect:
+            - statusCode: 200
+
+      # Mobile API requests (smaller data sets)
+      - get:
+          url: "/api/forecast"
+          headers:
+            User-Agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15"
+          qs:
+            horizon: "6h"
+            vars: "t2m,u10,v10"
+          expect:
+            - statusCode: 200
+
+      - think: 10  # Longer think time on mobile
+
+  # Analytics and Monitoring Simulation
+  - name: "analytics_workload"
+    weight: 10
+    flow:
+      # Health check requests (monitoring systems)
+      - get:
+          url: "/api/health"
+          expect:
+            - statusCode: 200
+
+      # Metrics requests (Grafana dashboards)
+      - get:
+          url: "/metrics-demo"
+          expect:
+            - statusCode: 200
+
+      - think: 30  # Monitoring interval
+
+  # Search Engine Crawler Simulation
+  - name: "seo_crawler_simulation"
+    weight: 5
+    flow:
+      # Crawler requests for SEO
+      - get:
+          url: "/"
+          headers:
+            User-Agent: "Googlebot/2.1 (+http://www.google.com/bot.html)"
+          expect:
+            - statusCode: 200
+
+      - get:
+          url: "/cape-demo"
+          headers:
+            User-Agent: "Googlebot/2.1 (+http://www.google.com/bot.html)"
+          expect:
+            - statusCode: 200
+
+      - get:
+          url: "/analog-demo"
+          headers:
+            User-Agent: "Googlebot/2.1 (+http://www.google.com/bot.html)"
+          expect:
+            - statusCode: 200
+
+      - get:
+          url: "/metrics-demo"
+          headers:
+            User-Agent: "Googlebot/2.1 (+http://www.google.com/bot.html)"
+          expect:
+            - statusCode: 200
+
+# Frontend-specific configuration
+before:
+  flow:
+    - function: "setupFrontendTest"
+
+after:
+  flow:
+    - function: "analyzeFrontendPerformance"
+
+functions:
+  setupFrontendTest: |
+    function setupFrontendTest(context, events, done) {
+      // Setup frontend-specific test data
+      context.vars.user_session = Math.random().toString(36).substring(7);
+      context.vars.viewport_width = Math.random() < 0.3 ? 375 : 1920; // 30% mobile
+      context.vars.viewport_height = Math.random() < 0.3 ? 667 : 1080;
+      
+      return done();
+    }
+
+  analyzeFrontendPerformance: |
+    function analyzeFrontendPerformance(context, events, done) {
+      // Analyze frontend performance metrics
+      console.log('Frontend load test completed');
+      console.log('User session:', context.vars.user_session);
+      console.log('Viewport:', context.vars.viewport_width + 'x' + context.vars.viewport_height);
+      
+      return done();
+    }
+
+# Frontend performance thresholds
+reporting:
+  metrics:
+    - name: "page_load_sla"
+      expression: "response.timings.response < 3000"  # 3s page load
+      threshold: 90
+    - name: "api_proxy_sla"
+      expression: "response.timings.response < 5000"  # 5s API proxy
+      threshold: 95
+    - name: "asset_load_sla"
+      expression: "response.timings.response < 1000"  # 1s static assets
+      threshold: 98
+
+plugins:
+  expect: {}
+  metrics-by-endpoint:
+    stripQuery: true
+  statsd:
+    host: localhost
+    port: 8125
+    prefix: 'weather_frontend.load_test'

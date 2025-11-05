@@ -1,0 +1,40 @@
+# Adelaide Weather Forecasting API Dependencies
+# Core FastAPI stack
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+
+# Security and middleware
+python-multipart==0.0.6
+slowapi==0.1.9
+python-jose[cryptography]==3.3.0
+
+# Monitoring and metrics
+prometheus-client==0.19.0
+structlog==23.2.0
+
+# Data processing (matching existing system)
+numpy==1.24.3
+pandas==2.0.3
+torch==2.0.1
+faiss-cpu==1.7.4
+
+# HTTP client for external APIs
+httpx==0.25.2
+aiofiles==23.2.1
+
+# Development and testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2
+pact-python==2.2.1
+
+# Performance monitoring
+psutil==5.9.6
+prometheus-client==0.19.0
+
+# Calibration monitoring and statistics
+scipy==1.10.1
+
+# Production deployment
+gunicorn==21.2.0

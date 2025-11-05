@@ -1,0 +1,270 @@
+config:
+  target: 'http://localhost:8000'
+  # Progressive Load Testing Phases
+  phases:
+    # Phase 1: Baseline Load (10 concurrent users)
+    - duration: 300  # 5 minutes
+      arrivalRate: 2
+      name: "baseline_load"
+    # Phase 2: Target Load (50 concurrent users) 
+    - duration: 600  # 10 minutes
+      arrivalRate: 8
+      name: "target_load"
+    # Phase 3: Stress Load (100 concurrent users)
+    - duration: 300  # 5 minutes
+      arrivalRate: 16
+      name: "stress_load"
+    # Phase 4: Spike Load (200 concurrent users)
+    - duration: 180  # 3 minutes
+      arrivalRate: 33
+      name: "spike_load"
+    # Phase 5: Break Point Testing
+    - duration: 120  # 2 minutes
+      arrivalRate: 50
+      name: "break_point"
+    # Phase 6: Recovery Testing
+    - duration: 300  # 5 minutes
+      arrivalRate: 8
+      name: "recovery"
+
+  # Payload configuration for realistic testing
+  payload:
+    - path: "./test-data/variables.csv"
+      fields:
+        - "horizon"
+        - "variables"
+    - path: "./test-data/tokens.csv"
+      fields:
+        - "token"
+
+  # Performance and monitoring settings
+  http:
+    timeout: 30000
+    pool: 50
+    maxSockets: 100
+  
+  # Enhanced metrics collection
+  metrics:
+    - name: "response_time_p95"
+      value: "response.timings.response"
+    - name: "response_time_p99" 
+      value: "response.timings.response"
+    - name: "errors_per_minute"
+      value: "response.statusCode"
+
+  # Environment variables for different test environments
+  environments:
+    development:
+      target: 'http://localhost:8000'
+      phases:
+        - duration: 60
+          arrivalRate: 2
+    staging:
+      target: 'http://staging-api:8000'
+      phases:
+        - duration: 300
+          arrivalRate: 5
+    production:
+      target: 'https://api.weather.example.com'
+      phases:
+        - duration: 900
+          arrivalRate: 10
+
+# Load Test Scenarios covering all major API operations
+scenarios:
+  # API-Heavy Workload (80% API calls, 20% UI interactions)
+  - name: "api_heavy_workload"
+    weight: 80
+    flow:
+      # Authenticate and get forecast data
+      - get:
+          url: "/forecast"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          qs:
+            horizon: "{{ horizon }}"
+            vars: "{{ variables }}"
+          capture:
+            - json: "$.latency_ms"
+              as: "forecast_latency"
+            - json: "$.variables"
+              as: "forecast_variables"
+          expect:
+            - statusCode: 200
+            - hasProperty: "variables"
+            - contentType: json
+
+      # Health check validation
+      - get:
+          url: "/health"
+          expect:
+            - statusCode: 200
+            - hasProperty: "ready"
+
+      # Performance metrics check (authenticated)
+      - get:
+          url: "/metrics"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          expect:
+            - statusCode: 200
+            - contentType: text/plain
+
+      # Complex forecast request with multiple variables
+      - get:
+          url: "/forecast"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          qs:
+            horizon: "48h"
+            vars: "t2m,u10,v10,msl,z500,t850,q850,u850,v850,cape"
+          capture:
+            - json: "$.narrative"
+              as: "forecast_narrative"
+          expect:
+            - statusCode: 200
+
+      # Think time between requests (realistic user behavior)
+      - think: 2
+
+  # Real-time Workload (WebSocket-like polling for live updates)
+  - name: "realtime_workload"
+    weight: 15
+    flow:
+      # Rapid polling for real-time updates
+      - loop:
+          - get:
+              url: "/forecast"
+              headers:
+                Authorization: "Bearer {{ token }}"
+              qs:
+                horizon: "6h"
+                vars: "t2m,u10,v10"
+              expect:
+                - statusCode: 200
+          - think: 5  # 5-second polling interval
+        count: 12  # 1 minute of polling
+
+  # Data Export Workload (Large dataset requests)
+  - name: "data_export_workload"
+    weight: 5
+    flow:
+      # Request comprehensive forecast data
+      - get:
+          url: "/forecast"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          qs:
+            horizon: "48h"
+            vars: "t2m,u10,v10,msl,z500,t850,q850,u850,v850,cape"
+          capture:
+            - json: "$.variables"
+              as: "full_variables"
+            - json: "$.risk_assessment"
+              as: "risk_data"
+            - json: "$.analogs_summary"
+              as: "analogs_data"
+          expect:
+            - statusCode: 200
+            - hasProperty: "variables"
+            - hasProperty: "risk_assessment"
+            - hasProperty: "analogs_summary"
+
+      # Multiple horizon requests for comparison
+      - get:
+          url: "/forecast"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          qs:
+            horizon: "6h"
+            vars: "t2m,u10,v10,msl,cape"
+          expect:
+            - statusCode: 200
+
+      - get:
+          url: "/forecast"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          qs:
+            horizon: "12h"
+            vars: "t2m,u10,v10,msl,cape"
+          expect:
+            - statusCode: 200
+
+      - get:
+          url: "/forecast"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          qs:
+            horizon: "24h"
+            vars: "t2m,u10,v10,msl,cape"
+          expect:
+            - statusCode: 200
+
+# Error and Edge Case Testing
+before:
+  flow:
+    # Create test data files if they don't exist
+    - function: "createTestData"
+
+after:
+  flow:
+    # Cleanup and report generation
+    - function: "generateLoadTestReport"
+
+# Custom functions for advanced testing
+functions:
+  createTestData: |
+    function createTestData(context, events, done) {
+      // Create realistic test data for variables and tokens
+      const horizons = ['6h', '12h', '24h', '48h'];
+      const variableSets = [
+        't2m',
+        't2m,u10,v10',
+        't2m,u10,v10,msl',
+        't2m,u10,v10,msl,cape',
+        't2m,u10,v10,msl,z500,t850,q850,u850,v850,cape'
+      ];
+      
+      context.vars.horizon = horizons[Math.floor(Math.random() * horizons.length)];
+      context.vars.variables = variableSets[Math.floor(Math.random() * variableSets.length)];
+      context.vars.token = process.env.API_TOKEN || 'dev-token-change-in-production';
+      
+      return done();
+    }
+
+  generateLoadTestReport: |
+    function generateLoadTestReport(context, events, done) {
+      // Log final statistics for analysis
+      console.log('Load test completed');
+      console.log('Context variables:', JSON.stringify(context.vars, null, 2));
+      return done();
+    }
+
+# Advanced monitoring and alerting
+reporting:
+  # Custom metrics for performance analysis
+  metrics:
+    - name: "api_response_time_sla"
+      expression: "response.timings.response < 2000"
+      threshold: 95  # 95% of requests must be under 2s
+    - name: "error_rate_sla"
+      expression: "response.statusCode >= 400"
+      threshold: 1   # Less than 1% error rate
+    - name: "throughput_target"
+      expression: "response.statusCode == 200"
+      threshold: 100 # Target throughput
+
+  # Real-time reporting
+  console:
+    enabled: true
+    interval: 30
+
+# Plugin configuration for enhanced functionality
+plugins:
+  expect: {}
+  metrics-by-endpoint: {}
+  statsd:
+    host: localhost
+    port: 8125
+    prefix: 'weather_api.load_test'

@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: adelaide-weather-service-account
+  namespace: adelaide-weather
+  labels:
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: adelaide-weather
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT:role/adelaide-weather-pod-role
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: adelaide-weather-role
+  namespace: adelaide-weather
+  labels:
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: adelaide-weather
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: adelaide-weather-role-binding
+  namespace: adelaide-weather
+  labels:
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: adelaide-weather
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: adelaide-weather-role
+subjects:
+- kind: ServiceAccount
+  name: adelaide-weather-service-account
+  namespace: adelaide-weather

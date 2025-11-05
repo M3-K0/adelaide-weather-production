@@ -1,0 +1,328 @@
+# Security Baseline Configuration for Adelaide Weather Forecast
+# This file defines security policies, thresholds, and automation rules
+
+version: "1.0"
+project: "adelaide-weather-forecast"
+last_updated: "2024-10-29"
+
+# Security scanning configuration
+security_scanning:
+  # SAST Configuration
+  sast:
+    enabled: true
+    tools:
+      bandit:
+        enabled: true
+        config_file: ".bandit"
+        severity_threshold: "medium"
+        confidence_threshold: "medium"
+        exclude_paths:
+          - "tests/"
+          - "test/"
+          - "__pycache__/"
+          - ".git/"
+          - "venv/"
+          - "node_modules/"
+        
+      codeql:
+        enabled: true
+        languages: ["javascript", "python"]
+        queries: ["security-extended", "security-and-quality"]
+        severity_threshold: "medium"
+        
+    # SAST security gates
+    gates:
+      fail_on_critical: true
+      fail_on_high: true
+      fail_on_medium: false  # Warning only for medium
+      max_critical_issues: 0
+      max_high_issues: 5
+      max_medium_issues: 20
+
+  # DAST Configuration  
+  dast:
+    enabled: true
+    tools:
+      owasp_zap:
+        enabled: true
+        config_file: ".zap/rules.tsv"
+        baseline_scan: true
+        full_scan: true
+        auth_required: true
+        target_url: "http://localhost:8000"
+        timeout_minutes: 60
+        
+    # DAST security gates
+    gates:
+      fail_on_critical: true
+      fail_on_high: true
+      fail_on_medium: false
+      max_critical_issues: 0
+      max_high_issues: 3
+
+  # Dependency scanning configuration
+  dependency_scanning:
+    enabled: true
+    tools:
+      safety:  # Python dependencies
+        enabled: true
+        severity_threshold: "moderate"
+        database: "pyup"
+        
+      npm_audit:  # Node.js dependencies
+        enabled: true
+        severity_threshold: "moderate"
+        audit_level: "moderate"
+        
+      audit_ci:  # Enhanced npm auditing
+        enabled: true
+        severity_threshold: "moderate"
+        
+    # Dependency security gates
+    gates:
+      fail_on_critical: true
+      fail_on_high: true
+      fail_on_moderate: false
+      max_critical_vulnerabilities: 0
+      max_high_vulnerabilities: 5
+
+  # Container scanning configuration
+  container_scanning:
+    enabled: true
+    tools:
+      trivy:
+        enabled: true
+        images:
+          - "weather-api:security-scan"
+          - "weather-frontend:security-scan"
+        severity_threshold: "medium"
+        vulnerability_types:
+          - "os"
+          - "library"
+        
+    # Container security gates
+    gates:
+      fail_on_critical: true
+      fail_on_high: true
+      max_critical_cves: 0
+      max_high_cves: 10
+
+  # Infrastructure scanning configuration
+  infrastructure_scanning:
+    enabled: true
+    tools:
+      tfsec:
+        enabled: true
+        severity_threshold: "medium"
+        exclude_checks: []
+        
+      checkov:
+        enabled: true
+        framework: "terraform"
+        severity_threshold: "medium"
+        
+    # Infrastructure security gates
+    gates:
+      fail_on_critical: true
+      fail_on_high: true
+      max_critical_issues: 0
+      max_high_issues: 5
+
+  # Secrets scanning configuration
+  secrets_scanning:
+    enabled: true
+    tools:
+      gitleaks:
+        enabled: true
+        config_file: ".gitleaks.toml"
+        scan_history: true
+        
+    # Secrets security gates
+    gates:
+      fail_on_secrets: true
+      max_secrets: 0
+
+# Environment-specific configurations
+environments:
+  development:
+    security_level: "standard"
+    scan_frequency: "on_commit"
+    enforcement_level: "advisory"
+    gates:
+      block_deployment: false
+      require_approval: false
+      
+  staging:
+    security_level: "high"
+    scan_frequency: "on_deployment"
+    enforcement_level: "blocking"
+    gates:
+      block_deployment: true
+      require_approval: true
+      security_review_required: true
+      
+  production:
+    security_level: "critical"
+    scan_frequency: "daily"
+    enforcement_level: "strict"
+    gates:
+      block_deployment: true
+      require_approval: true
+      security_review_required: true
+      emergency_override: true
+
+# Security baseline thresholds
+security_baselines:
+  # Vulnerability severity scoring
+  severity_levels:
+    critical:
+      score: 10.0
+      description: "Immediate threat requiring emergency response"
+      sla_hours: 24
+      
+    high:
+      score: 7.0-9.9
+      description: "Significant security risk requiring urgent attention"
+      sla_hours: 72
+      
+    medium:
+      score: 4.0-6.9
+      description: "Moderate security concern requiring planned remediation"
+      sla_days: 14
+      
+    low:
+      score: 0.1-3.9
+      description: "Minor security improvement opportunity"
+      sla_days: 90
+
+  # Risk tolerance levels
+  risk_tolerance:
+    development:
+      critical: 2
+      high: 10
+      medium: 50
+      low: 200
+      
+    staging:
+      critical: 0
+      high: 5
+      medium: 20
+      low: 100
+      
+    production:
+      critical: 0
+      high: 0
+      medium: 5
+      low: 20
+
+# Notification and alerting configuration
+notifications:
+  channels:
+    slack:
+      enabled: true
+      webhook_url: "${SLACK_WEBHOOK_URL}"
+      channels:
+        critical: "#security-alerts"
+        high: "#security-alerts"
+        medium: "#security-notifications"
+        
+    email:
+      enabled: true
+      recipients:
+        critical: ["security-team@weather-forecast.dev"]
+        high: ["security-team@weather-forecast.dev", "devops-team@weather-forecast.dev"]
+        medium: ["devops-team@weather-forecast.dev"]
+        
+    github:
+      enabled: true
+      security_advisories: true
+      issue_creation: true
+      pr_comments: true
+
+# Compliance and standards
+compliance:
+  standards:
+    - "OWASP Top 10"
+    - "NIST Cybersecurity Framework"
+    - "ISO 27001"
+    - "CIS Controls"
+    
+  requirements:
+    encryption_in_transit: true
+    encryption_at_rest: true
+    access_logging: true
+    vulnerability_management: true
+    incident_response: true
+    
+  auditing:
+    retention_period_days: 365
+    audit_logs_encrypted: true
+    immutable_logs: true
+
+# Remediation workflows
+remediation:
+  automation:
+    dependency_updates:
+      enabled: true
+      auto_merge_patch: true
+      auto_merge_minor: false
+      auto_merge_major: false
+      
+    vulnerability_fixes:
+      enabled: true
+      auto_create_issues: true
+      assign_security_team: true
+      
+  sla_enforcement:
+    enabled: true
+    escalation_enabled: true
+    management_notification: true
+    
+  tracking:
+    metrics_collection: true
+    dashboard_enabled: true
+    reporting_enabled: true
+
+# Security tool configurations
+tools:
+  bandit:
+    version: "latest"
+    custom_rules: true
+    baseline_file: ".bandit-baseline"
+    
+  owasp_zap:
+    version: "stable"
+    custom_rules: true
+    authentication_script: "zap-auth.js"
+    
+  trivy:
+    version: "latest"
+    cache_enabled: true
+    timeout_minutes: 30
+    
+  codeql:
+    version: "latest"
+    custom_queries: false
+    query_packs: ["security-extended"]
+
+# Security metrics and KPIs
+metrics:
+  collection:
+    enabled: true
+    retention_days: 365
+    
+  kpis:
+    vulnerability_detection_rate: true
+    mean_time_to_remediation: true
+    security_debt_tracking: true
+    compliance_score: true
+    
+  dashboards:
+    grafana_enabled: true
+    cloudwatch_enabled: true
+    security_posture_dashboard: true
+    
+  reporting:
+    frequency: "weekly"
+    recipients: ["security-team@weather-forecast.dev"]
+    format: ["pdf", "json"]

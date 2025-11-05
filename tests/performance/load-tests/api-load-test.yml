@@ -1,0 +1,272 @@
+# Artillery.js Load Testing Configuration for Adelaide Weather Forecasting API
+# Advanced performance testing with realistic user scenarios and comprehensive metrics
+# Target: API response times < 500ms (P95), 100+ concurrent users
+
+config:
+  target: 'http://localhost:8000'
+  phases:
+    # Warmup Phase - Gradual ramp-up to prime caches
+    - duration: 60
+      arrivalRate: 5
+      name: "Warmup Phase"
+    
+    # Normal Operation - 50 concurrent users for 2 hours
+    - duration: 7200
+      arrivalRate: 50
+      name: "Normal Operation Load"
+    
+    # Peak Weather Event - 200 concurrent users for 30 minutes  
+    - duration: 1800
+      arrivalRate: 200
+      name: "Peak Weather Event"
+    
+    # Stress Test - 500 concurrent users until failure
+    - duration: 600
+      arrivalRate: 500
+      name: "Stress Test"
+    
+    # Soak Test - 24 hour continuous operation (disabled by default)
+    # - duration: 86400
+    #   arrivalRate: 25
+    #   name: "24-Hour Soak Test"
+
+  # Request timeout and connection settings
+  timeout: 30
+  pool: 50
+  
+  # Custom HTTP settings for weather API
+  http:
+    timeout: 30000
+    pool: 50
+    keepalive: true
+    headers:
+      'User-Agent': 'Artillery-LoadTest/1.0'
+      'Accept': 'application/json'
+      'Authorization': 'Bearer {{ $env.API_TOKEN }}'
+    
+  # Performance monitoring plugins
+  plugins:
+    metrics-by-endpoint: {}
+    expect: {}
+    apdex:
+      threshold: 500  # 500ms threshold for satisfactory response
+    hdrhistogram: {}
+    
+  # Real-time metrics collection
+  processor: './utils/performance-processor.js'
+  
+  # Custom variables for realistic testing
+  variables:
+    horizons:
+      - "6h"
+      - "12h" 
+      - "24h"
+      - "48h"
+    
+    variable_sets:
+      - "t2m"
+      - "t2m,u10,v10"
+      - "t2m,u10,v10,z500"
+      - "t2m,u10,v10,z500,t850,q850"
+      - "t2m,u10,v10,z500,t850,q850,cape"
+      - "cape,t2m,u10,v10"  # CAPE-focused requests
+    
+    request_weights:
+      # Realistic usage distribution
+      - weight: 40
+        horizon: "24h"
+        vars: "t2m,u10,v10"
+      - weight: 25  
+        horizon: "6h"
+        vars: "t2m"
+      - weight: 15
+        horizon: "12h"
+        vars: "t2m,u10,v10,cape"
+      - weight: 10
+        horizon: "48h" 
+        vars: "t2m,u10,v10,z500,t850"
+      - weight: 10
+        horizon: "24h"
+        vars: "cape"
+
+scenarios:
+  # Primary API Load Testing Scenarios
+  - name: "Standard Forecast Requests"
+    weight: 70
+    flow:
+      - loop:
+        - get:
+            url: "/forecast"
+            qs:
+              horizon: "{{ horizons[$randomInt(0, 4)] }}"
+              vars: "{{ variable_sets[$randomInt(0, 6)] }}"
+            expect:
+              - statusCode: 200
+              - hasHeader: 'x-response-time'
+              - contentType: 'application/json'
+              - property: 'forecast.horizon'
+                exists: true
+              - property: 'forecast.variables'
+                exists: true
+            capture:
+              - json: "$.response_time_ms"
+                as: "api_response_time"
+              - json: "$.forecast.analogs_count"
+                as: "analogs_found"
+        count: 10
+        
+  - name: "Health Check Monitoring"
+    weight: 10
+    flow:
+      - get:
+          url: "/health"
+          expect:
+            - statusCode: 200
+            - property: 'status'
+              equals: 'healthy'
+            - property: 'checks.api'
+              equals: 'operational'
+            - property: 'checks.model'
+              equals: 'loaded'
+          capture:
+            - json: "$.response_time_ms"
+              as: "health_response_time"
+      - think: 5  # 5 second pause between health checks
+
+  - name: "Performance Metrics Collection"
+    weight: 5
+    flow:
+      - get:
+          url: "/performance"
+          expect:
+            - statusCode: 200
+            - property: 'cache.hit_rate_percent'
+              exists: true
+            - property: 'optimization.performance_target_ms'
+              equals: 100
+          capture:
+            - json: "$.cache.hit_rate_percent"
+              as: "cache_hit_rate"
+            - json: "$.optimization.performance_target_ms"
+              as: "performance_target"
+      - think: 10
+
+  - name: "Prometheus Metrics Scraping"
+    weight: 10
+    flow:
+      - get:
+          url: "/metrics"
+          expect:
+            - statusCode: 200
+            - contentType: 'text/plain'
+          capture:
+            - regexp: 'forecast_requests_total ([0-9]+)'
+              as: "total_requests"
+      - think: 15
+
+  - name: "Error Handling & Edge Cases"
+    weight: 5
+    flow:
+      # Test invalid horizon
+      - get:
+          url: "/forecast"
+          qs:
+            horizon: "invalid"
+            vars: "t2m"
+          expect:
+            - statusCode: 422  # Validation error
+            - property: 'detail'
+              exists: true
+      
+      # Test too many variables (performance stress)
+      - get:
+          url: "/forecast"
+          qs:
+            horizon: "24h"
+            vars: "t2m,u10,v10,z500,t850,q850,u850,v850,cape,invalid_var"
+          expect:
+            - statusCode: [200, 422]  # Either success or validation error
+      
+      # Test missing authorization (if enabled)
+      - get:
+          url: "/forecast"
+          headers:
+            Authorization: ""
+          qs:
+            horizon: "24h"
+            vars: "t2m"
+          expect:
+            - statusCode: [200, 401, 403]  # Depends on auth setup
+
+# Advanced load testing scenarios for specific use cases
+before:
+  # Setup phase - verify API is available
+  flow:
+    - log: "Starting Adelaide Weather API Load Test"
+    - get:
+        url: "/health"
+        expect:
+          - statusCode: 200
+    - log: "API health check passed, beginning load test"
+
+after:
+  # Cleanup and summary phase
+  flow:
+    - log: "Load test completed, collecting final metrics"
+    - get:
+        url: "/performance"
+        capture:
+          - json: "$"
+            as: "final_performance_stats"
+    - log: "Final performance stats: {{ final_performance_stats }}"
+
+# Performance expectations and SLA validation
+expect:
+  # API Response Time SLA
+  - property: 'response.time'
+    maxValue: 500  # 500ms P95 target
+    
+  # Error Rate SLA  
+  - property: 'errors.rate'
+    maxValue: 0.01  # < 1% error rate
+    
+  # Cache Performance
+  - property: 'cache.hit_rate'
+    minValue: 0.6  # > 60% cache hit rate
+
+# Custom metrics collection for detailed analysis
+metrics:
+  - name: "forecast_response_time"
+    type: "histogram"
+    buckets: [10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+    
+  - name: "analogs_count_distribution"
+    type: "histogram" 
+    buckets: [1, 5, 10, 25, 50, 100, 500, 1000]
+    
+  - name: "cache_performance"
+    type: "gauge"
+    
+  - name: "api_availability"
+    type: "counter"
+
+# Environment-specific configurations
+environments:
+  development:
+    target: 'http://localhost:8000'
+    phases:
+      - duration: 300
+        arrivalRate: 10
+        
+  staging:
+    target: 'https://staging-weather-api.domain.com'
+    phases:
+      - duration: 600  
+        arrivalRate: 25
+        
+  production:
+    target: 'https://weather-api.domain.com'
+    # Production load testing should be carefully planned
+    phases:
+      - duration: 300
+        arrivalRate: 5  # Conservative production testing

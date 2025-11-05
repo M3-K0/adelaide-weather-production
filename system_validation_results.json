@@ -1,0 +1,98 @@
+{
+  "timestamp": "2025-10-24T07:34:18.061207",
+  "tests": {
+    "directory_structure": {
+      "status": "passed"
+    },
+    "model_files": {
+      "status": "passed",
+      "model_info": {
+        "path": "/home/micha/weather-forecast-final/outputs/training_production_20251021_162407/best_model.pt",
+        "size_mb": 34.3
+      }
+    },
+    "embeddings": {
+      "status": "passed",
+      "embedding_info": {
+        "6h": {
+          "file": "/home/micha/weather-forecast-final/embeddings/embeddings_6h.npy",
+          "size_mb": 14.0
+        },
+        "12h": {
+          "file": "/home/micha/weather-forecast-final/embeddings/embeddings_12h.npy",
+          "size_mb": 14.0
+        },
+        "24h": {
+          "file": "/home/micha/weather-forecast-final/embeddings/embeddings_24h.npy",
+          "size_mb": 14.0
+        },
+        "48h": {
+          "file": "/home/micha/weather-forecast-final/embeddings/embeddings_48h.npy",
+          "size_mb": 14.0
+        }
+      },
+      "total_size_mb": 56.0
+    },
+    "faiss_indices": {
+      "status": "passed",
+      "index_info": {
+        "6h": {
+          "flatip": {
+            "file": "/home/micha/weather-forecast-final/indices/faiss_6h_flatip.faiss",
+            "size_mb": 12.8
+          },
+          "ivfpq": {
+            "file": "/home/micha/weather-forecast-final/indices/faiss_6h_ivfpq.faiss",
+            "size_mb": 1.3
+          }
+        },
+        "12h": {
+          "flatip": {
+            "file": "/home/micha/weather-forecast-final/indices/faiss_12h_flatip.faiss",
+            "size_mb": 12.8
+          },
+          "ivfpq": {
+            "file": "/home/micha/weather-forecast-final/indices/faiss_12h_ivfpq.faiss",
+            "size_mb": 1.3
+          }
+        },
+        "24h": {
+          "flatip": {
+            "file": "/home/micha/weather-forecast-final/indices/faiss_24h_flatip.faiss",
+            "size_mb": 12.8
+          },
+          "ivfpq": {
+            "file": "/home/micha/weather-forecast-final/indices/faiss_24h_ivfpq.faiss",
+            "size_mb": 1.3
+          }
+        },
+        "48h": {
+          "flatip": {
+            "file": "/home/micha/weather-forecast-final/indices/faiss_48h_flatip.faiss",
+            "size_mb": 12.8
+          },
+          "ivfpq": {
+            "file": "/home/micha/weather-forecast-final/indices/faiss_48h_ivfpq.faiss",
+            "size_mb": 1.3
+          }
+        }
+      }
+    },
+    "scripts": {
+      "status": "passed"
+    },
+    "faiss_fix": {
+      "status": "passed",
+      "fix_indicators": [
+        "build_indices_fixed",
+        "analog_forecaster_fixed"
+      ]
+    },
+    "data_availability": {
+      "status": "passed",
+      "era5_files_count": 26,
+      "total_size_gb": 0.0
+    }
+  },
+  "overall_status": "ready"
+}

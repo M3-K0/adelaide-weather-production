@@ -1,0 +1,26 @@
+# Staging Model Configuration Overrides
+# Production-like settings for integration testing
+
+# Full encoder configuration for staging validation
+encoder:
+  embedding_dim: 256  # Full embedding dimension
+  
+# Production-like training settings
+training:
+  batch_size: 64
+  max_epochs: 50
+  
+# Production-like FAISS configuration
+faiss:
+  num_analogs: 30
+  
+# GPU acceleration enabled for performance testing
+device:
+  use_gpu: true
+  mixed_precision: true
+
+# Enhanced logging for staging validation
+logging:
+  use_wandb: false
+  use_tensorboard: true
+  log_every_n_steps: 50

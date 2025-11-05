@@ -1,0 +1,561 @@
+{
+  "test_summary": {
+    "total_tests": 14,
+    "passed_tests": 11,
+    "failed_tests": 3,
+    "success_rate_percent": 78.57,
+    "total_duration_seconds": 24.05
+  },
+  "test_results": [
+    {
+      "test_name": "Environment Setup",
+      "status": "passed",
+      "duration_ms": 0.58,
+      "details": {
+        "environment": "development",
+        "api_token_set": true,
+        "directories_created": 5
+      },
+      "errors": [],
+      "warnings": [],
+      "performance_metrics": {}
+    },
+    {
+      "test_name": "Environment Config Manager",
+      "status": "passed",
+      "duration_ms": 58.65,
+      "details": {
+        "environments_tested": [
+          "development",
+          "staging",
+          "production"
+        ],
+        "config_sections_validated": [
+          "data",
+          "model"
+        ],
+        "environment_switching": "successful"
+      },
+      "errors": [],
+      "warnings": [],
+      "performance_metrics": {
+        "development_config_load_time": {
+          "value": 11.822700500488281,
+          "unit": "ms"
+        },
+        "staging_config_load_time": {
+          "value": 12.031078338623047,
+          "unit": "ms"
+        },
+        "production_config_load_time": {
+          "value": 11.767387390136719,
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "test_name": "Secure Credential Manager",
+      "status": "failed",
+      "duration_ms": 1.41,
+      "details": {},
+      "errors": [
+        "Secure Credential Manager test failed: Master key not found in environment variable: CREDENTIAL_MASTER_KEY"
+      ],
+      "warnings": [],
+      "performance_metrics": {}
+    },
+    {
+      "test_name": "Config Drift Detection",
+      "status": "passed",
+      "duration_ms": 10456.82,
+      "details": {
+        "monitoring_started": true,
+        "drift_events_count": 1,
+        "drift_report_generated": true,
+        "baseline_updated": true
+      },
+      "errors": [],
+      "warnings": [],
+      "performance_metrics": {
+        "monitoring_startup_time": {
+          "value": 3482.900619506836,
+          "unit": "ms"
+        },
+        "drift_detection_time": {
+          "value": 3484.6253395080566,
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "test_name": "Deployment Script",
+      "status": "passed",
+      "duration_ms": 24.29,
+      "details": {
+        "script_exists": true,
+        "help_command": true,
+        "environments_configured": 3
+      },
+      "errors": [],
+      "warnings": [],
+      "performance_metrics": {
+        "help_command_time": {
+          "value": 12.439250946044922,
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "test_name": "API Startup Integration",
+      "status": "failed",
+      "duration_ms": 3236.09,
+      "details": {},
+      "errors": [
+        "Failed to start API services"
+      ],
+      "warnings": [],
+      "performance_metrics": {}
+    },
+    {
+      "test_name": "FAISS Health Monitoring",
+      "status": "passed",
+      "duration_ms": 6.22,
+      "details": {
+        "faiss_health_endpoint": 404,
+        "metrics_endpoint": 404,
+        "faiss_metrics_present": false
+      },
+      "errors": [
+        "FAISS health endpoint failed: 404",
+        "Metrics endpoint failed: 404"
+      ],
+      "warnings": [],
+      "performance_metrics": {
+        "faiss_health_endpoint_time": {
+          "value": 3.7567615509033203,
+          "unit": "ms"
+        },
+        "metrics_endpoint_time": {
+          "value": 2.3021697998046875,
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "test_name": "API Endpoints Integration",
+      "status": "passed",
+      "duration_ms": 6.75,
+      "details": {
+        "forecast_endpoint": 404,
+        "authentication_required": false,
+        "parameter_validation": false
+      },
+      "errors": [
+        "Forecast endpoint failed: 404",
+        "Forecast endpoint should require authentication"
+      ],
+      "warnings": [
+        "Expected 400 for invalid parameters"
+      ],
+      "performance_metrics": {
+        "forecast_endpoint_time": {
+          "value": 2.4023056030273438,
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "test_name": "Frontend API Connection",
+      "status": "passed",
+      "duration_ms": 10016.23,
+      "details": {
+        "frontend_available": false,
+        "api_connectivity": {
+          "/health": {
+            "status_code": 404,
+            "response_time_ms": 2.666950225830078
+          },
+          "/forecast?horizon=24h&vars=t2m": {
+            "status_code": 404,
+            "response_time_ms": 2.3012161254882812
+          }
+        },
+        "cors_configured": true
+      },
+      "errors": [],
+      "warnings": [
+        "Frontend not available - testing API connectivity only"
+      ],
+      "performance_metrics": {
+        "api_connectivity__health": {
+          "value": 2.666950225830078,
+          "unit": "ms"
+        },
+        "api_connectivity__forecast?horizon=24h&vars=t2m": {
+          "value": 2.3012161254882812,
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "test_name": "Complete Forecast Workflow",
+      "status": "failed",
+      "duration_ms": 4.24,
+      "details": {},
+      "errors": [
+        "Health check failed in workflow",
+        "Forecast request failed in workflow"
+      ],
+      "warnings": [],
+      "performance_metrics": {}
+    },
+    {
+      "test_name": "Multi-Environment Switching",
+      "status": "passed",
+      "duration_ms": 35.31,
+      "details": {
+        "environments_tested": 3,
+        "unique_configurations": 3,
+        "environment_results": {
+          "development": {
+            "config_load_time_ms": 11.876821517944336,
+            "config_loaded": true,
+            "config_hash": "4dae38d3b6974ad8",
+            "missing_sections": []
+          },
+          "staging": {
+            "config_load_time_ms": 11.811494827270508,
+            "config_loaded": true,
+            "config_hash": "1dfda55ce430922c",
+            "missing_sections": []
+          },
+          "production": {
+            "config_load_time_ms": 11.588573455810547,
+            "config_loaded": true,
+            "config_hash": "0601d9c9f7ab1fe1",
+            "missing_sections": []
+          }
+        }
+      },
+      "errors": [],
+      "warnings": [],
+      "performance_metrics": {}
+    },
+    {
+      "test_name": "Performance Integration",
+      "status": "passed",
+      "duration_ms": 49.22,
+      "details": {
+        "scenarios_tested": 3,
+        "performance_results": {
+          "single_forecast": {
+            "requests": 1,
+            "avg_response_time_ms": 2.4170875549316406,
+            "max_response_time_ms": 2.4170875549316406,
+            "min_response_time_ms": 2.4170875549316406,
+            "success_rate": 0.0
+          },
+          "burst_forecast": {
+            "requests": 10,
+            "avg_response_time_ms": 6.1179399490356445,
+            "max_response_time_ms": 8.643388748168945,
+            "min_response_time_ms": 4.644155502319336,
+            "success_rate": 0.0
+          },
+          "health_checks": {
+            "requests": 20,
+            "avg_response_time_ms": 9.577453136444092,
+            "max_response_time_ms": 12.247085571289062,
+            "min_response_time_ms": 4.397392272949219,
+            "success_rate": 0.0
+          }
+        }
+      },
+      "errors": [],
+      "warnings": [],
+      "performance_metrics": {
+        "single_forecast_avg_time": {
+          "value": 2.4170875549316406,
+          "unit": "ms"
+        },
+        "single_forecast_max_time": {
+          "value": 2.4170875549316406,
+          "unit": "ms"
+        },
+        "burst_forecast_avg_time": {
+          "value": 6.1179399490356445,
+          "unit": "ms"
+        },
+        "burst_forecast_max_time": {
+          "value": 8.643388748168945,
+          "unit": "ms"
+        },
+        "health_checks_avg_time": {
+          "value": 9.577453136444092,
+          "unit": "ms"
+        },
+        "health_checks_max_time": {
+          "value": 12.247085571289062,
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "test_name": "Error Handling Scenarios",
+      "status": "passed",
+      "duration_ms": 136.4,
+      "details": {
+        "scenarios_tested": 5,
+        "error_handling_score": 0.25,
+        "scenarios": [
+          {
+            "scenario": "invalid_authentication",
+            "expected_status": [
+              401,
+              403
+            ],
+            "actual_status": 404,
+            "passed": false
+          },
+          {
+            "scenario": "invalid_parameters",
+            "expected_status": [
+              400
+            ],
+            "actual_status": 404,
+            "passed": false
+          },
+          {
+            "scenario": "missing_parameters",
+            "expected_status": [
+              200,
+              400
+            ],
+            "actual_status": 404,
+            "passed": false
+          },
+          {
+            "scenario": "rate_limiting",
+            "rate_limited": false,
+            "requests_made": 70
+          },
+          {
+            "scenario": "malformed_json",
+            "status_code": 405,
+            "handled_gracefully": true
+          }
+        ]
+      },
+      "errors": [],
+      "warnings": [
+        "Rate limiting may not be enabled or threshold is very high"
+      ],
+      "performance_metrics": {}
+    },
+    {
+      "test_name": "Security Integration",
+      "status": "passed",
+      "duration_ms": 16.59,
+      "details": {
+        "security_tests": 8,
+        "security_score": 0.0,
+        "test_results": [
+          {
+            "test": "authentication_required__forecast",
+            "passed": false,
+            "status_code": 404
+          },
+          {
+            "test": "authentication_required__metrics",
+            "passed": false,
+            "status_code": 404
+          },
+          {
+            "test": "authentication_required__health_faiss",
+            "passed": false,
+            "status_code": 404
+          },
+          {
+            "test": "credential_manager",
+            "passed": false,
+            "error": "Master key not found in environment variable: CREDENTIAL_MASTER_KEY"
+          },
+          {
+            "test": "input_validation_0",
+            "passed": false,
+            "status_code": 404,
+            "input": "{'horizon': \"<script>alert('xss')</script>\", 'vars': 't2m'}"
+          },
+          {
+            "test": "input_validation_1",
+            "passed": false,
+            "status_code": 404,
+            "input": "{'horizon': \"'; DROP TABLE users; --\", 'vars': 't2m'}"
+          },
+          {
+            "test": "input_validation_2",
+            "passed": false,
+            "status_code": 404,
+            "input": "{'horizon': '24h', 'vars': '../../../etc/passwd'}"
+          },
+          {
+            "test": "input_validation_3",
+            "passed": false,
+            "status_code": 404,
+            "input": "{'horizon': '24h24h24h24h24h24h24h24h24h24h24h24h24h24h24h24h24h24h24h24h24h24h24h24h24h24h24h24h24h"
+          }
+        ]
+      },
+      "errors": [],
+      "warnings": [
+        "Authentication may not be required for /forecast",
+        "Authentication may not be required for /metrics",
+        "Authentication may not be required for /health/faiss"
+      ],
+      "performance_metrics": {}
+    }
+  ],
+  "performance_summary": {
+    "development_config_load_time": {
+      "avg": 11.822700500488281,
+      "min": 11.822700500488281,
+      "max": 11.822700500488281,
+      "count": 1,
+      "unit": "ms"
+    },
+    "staging_config_load_time": {
+      "avg": 12.031078338623047,
+      "min": 12.031078338623047,
+      "max": 12.031078338623047,
+      "count": 1,
+      "unit": "ms"
+    },
+    "production_config_load_time": {
+      "avg": 11.767387390136719,
+      "min": 11.767387390136719,
+      "max": 11.767387390136719,
+      "count": 1,
+      "unit": "ms"
+    },
+    "monitoring_startup_time": {
+      "avg": 3482.900619506836,
+      "min": 3482.900619506836,
+      "max": 3482.900619506836,
+      "count": 1,
+      "unit": "ms"
+    },
+    "drift_detection_time": {
+      "avg": 3484.6253395080566,
+      "min": 3484.6253395080566,
+      "max": 3484.6253395080566,
+      "count": 1,
+      "unit": "ms"
+    },
+    "help_command_time": {
+      "avg": 12.439250946044922,
+      "min": 12.439250946044922,
+      "max": 12.439250946044922,
+      "count": 1,
+      "unit": "ms"
+    },
+    "faiss_health_endpoint_time": {
+      "avg": 3.7567615509033203,
+      "min": 3.7567615509033203,
+      "max": 3.7567615509033203,
+      "count": 1,
+      "unit": "ms"
+    },
+    "metrics_endpoint_time": {
+      "avg": 2.3021697998046875,
+      "min": 2.3021697998046875,
+      "max": 2.3021697998046875,
+      "count": 1,
+      "unit": "ms"
+    },
+    "forecast_endpoint_time": {
+      "avg": 2.4023056030273438,
+      "min": 2.4023056030273438,
+      "max": 2.4023056030273438,
+      "count": 1,
+      "unit": "ms"
+    },
+    "api_connectivity__health": {
+      "avg": 2.666950225830078,
+      "min": 2.666950225830078,
+      "max": 2.666950225830078,
+      "count": 1,
+      "unit": "ms"
+    },
+    "api_connectivity__forecast?horizon=24h&vars=t2m": {
+      "avg": 2.3012161254882812,
+      "min": 2.3012161254882812,
+      "max": 2.3012161254882812,
+      "count": 1,
+      "unit": "ms"
+    },
+    "single_forecast_avg_time": {
+      "avg": 2.4170875549316406,
+      "min": 2.4170875549316406,
+      "max": 2.4170875549316406,
+      "count": 1,
+      "unit": "ms"
+    },
+    "single_forecast_max_time": {
+      "avg": 2.4170875549316406,
+      "min": 2.4170875549316406,
+      "max": 2.4170875549316406,
+      "count": 1,
+      "unit": "ms"
+    },
+    "burst_forecast_avg_time": {
+      "avg": 6.1179399490356445,
+      "min": 6.1179399490356445,
+      "max": 6.1179399490356445,
+      "count": 1,
+      "unit": "ms"
+    },
+    "burst_forecast_max_time": {
+      "avg": 8.643388748168945,
+      "min": 8.643388748168945,
+      "max": 8.643388748168945,
+      "count": 1,
+      "unit": "ms"
+    },
+    "health_checks_avg_time": {
+      "avg": 9.577453136444092,
+      "min": 9.577453136444092,
+      "max": 9.577453136444092,
+      "count": 1,
+      "unit": "ms"
+    },
+    "health_checks_max_time": {
+      "avg": 12.247085571289062,
+      "min": 12.247085571289062,
+      "max": 12.247085571289062,
+      "count": 1,
+      "unit": "ms"
+    }
+  },
+  "overall_assessment": {
+    "system_ready": false,
+    "critical_issues": 1,
+    "total_errors": 8,
+    "total_warnings": 6
+  },
+  "component_status": {
+    "environment_config_manager": "passed",
+    "secure_credential_manager": "failed",
+    "config_drift_detection": "passed",
+    "deployment_script": "passed",
+    "faiss_health_monitoring": "passed",
+    "api_integration": "passed",
+    "frontend_connection": "passed"
+  },
+  "recommendations": [
+    "Verify credential storage security and encryption settings",
+    "Check API service startup and dependency initialization",
+    "Investigate performance bottlenecks in slow-responding components",
+    "Address security configuration warnings"
+  ],
+  "generated_at": "2025-11-02T12:51:08.836316+00:00"
+}

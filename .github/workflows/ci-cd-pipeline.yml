@@ -1,0 +1,575 @@
+name: 'CI/CD Pipeline - Adelaide Weather Forecast'
+
+on:
+  push:
+    branches: [main, develop, 'feature/**']
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      deployment_type:
+        description: 'Deployment strategy'
+        required: true
+        default: 'rolling'
+        type: choice
+        options:
+          - rolling
+          - blue-green
+          - canary
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_API: adelaide-weather/api
+  IMAGE_NAME_FRONTEND: adelaide-weather/frontend
+  TERRAFORM_VERSION: '1.6.0'
+  KUBECTL_VERSION: 'v1.28.4'
+  HELM_VERSION: 'v3.13.2'
+
+jobs:
+  # =============================================================================
+  # BUILD STAGE: Code Quality, Security Scanning, Build Validation
+  # =============================================================================
+  code-quality:
+    name: 'Code Quality & Security Checks'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component: [api, frontend]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Set up Python (API)
+        if: matrix.component == 'api'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          
+      - name: Set up Node.js (Frontend)
+        if: matrix.component == 'frontend'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+          
+      # API Quality Checks
+      - name: Install API dependencies
+        if: matrix.component == 'api'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install black isort flake8 mypy bandit safety pytest-cov
+          
+      - name: API Code Formatting (Black)
+        if: matrix.component == 'api'
+        run: black --check --diff .
+        
+      - name: API Import Sorting (isort)
+        if: matrix.component == 'api'
+        run: isort --check-only --diff .
+        
+      - name: API Linting (flake8)
+        if: matrix.component == 'api'
+        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        
+      - name: API Type Checking (mypy)
+        if: matrix.component == 'api'
+        run: mypy . --ignore-missing-imports
+        
+      - name: API Security Scan (bandit)
+        if: matrix.component == 'api'
+        run: bandit -r . -f json -o bandit-report.json || true
+        
+      - name: API Dependency Security (safety)
+        if: matrix.component == 'api'
+        run: safety check --json --output safety-report.json || true
+        
+      # Frontend Quality Checks
+      - name: Install Frontend dependencies
+        if: matrix.component == 'frontend'
+        run: |
+          cd frontend
+          npm ci
+          
+      - name: Frontend Linting (ESLint)
+        if: matrix.component == 'frontend'
+        run: |
+          cd frontend
+          npm run lint
+          
+      - name: Frontend Type Checking
+        if: matrix.component == 'frontend'
+        run: |
+          cd frontend
+          npm run type-check
+          
+      - name: Frontend Security Audit
+        if: matrix.component == 'frontend'
+        run: |
+          cd frontend
+          npm audit --audit-level=critical
+          
+      - name: Upload Security Reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-reports-${{ matrix.component }}
+          path: |
+            *-report.json
+            frontend/audit-report.json
+          retention-days: 30
+
+  # =============================================================================
+  # TEST STAGE: Comprehensive Testing Suite
+  # =============================================================================
+  testing:
+    name: 'Automated Testing Suite'
+    runs-on: ubuntu-latest
+    needs: code-quality
+    strategy:
+      matrix:
+        test-type: [unit, integration, security]
+        
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest-cov pytest-xdist
+          cd frontend && npm ci
+          
+      # Unit Tests
+      - name: API Unit Tests
+        if: matrix.test-type == 'unit'
+        run: |
+          pytest api/test_*.py -v --cov=api --cov-report=xml --cov-report=html
+          
+      - name: Frontend Unit Tests
+        if: matrix.test-type == 'unit'
+        run: |
+          cd frontend
+          npm run test:coverage
+          
+      # Integration Tests
+      - name: API Integration Tests
+        if: matrix.test-type == 'integration'
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+        run: |
+          pytest tests/integration/ -v --maxfail=1
+          
+      - name: Frontend Integration Tests
+        if: matrix.test-type == 'integration'
+        run: |
+          cd frontend
+          npm run test:integration
+          
+      # Security Tests
+      - name: API Security Tests
+        if: matrix.test-type == 'security'
+        run: |
+          pytest api/security_test.py -v
+          
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results-${{ matrix.test-type }}
+          path: |
+            coverage.xml
+            htmlcov/
+            frontend/coverage/
+          retention-days: 30
+
+  # =============================================================================
+  # BUILD STAGE: Container Image Building and Security Scanning
+  # =============================================================================
+  build-images:
+    name: 'Build & Scan Container Images'
+    runs-on: ubuntu-latest
+    needs: [code-quality, testing]
+    if: github.event_name != 'pull_request'
+    
+    strategy:
+      matrix:
+        component: [api, frontend]
+        
+    outputs:
+      api-digest: ${{ steps.build-api.outputs.digest }}
+      frontend-digest: ${{ steps.build-frontend.outputs.digest }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ matrix.component == 'api' && env.IMAGE_NAME_API || env.IMAGE_NAME_FRONTEND }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+            
+      - name: Build and push API image
+        if: matrix.component == 'api'
+        id: build-api
+        uses: docker/build-push-action@v5
+        with:
+          context: ./api
+          file: ./api/Dockerfile.production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+          
+      - name: Build and push Frontend image
+        if: matrix.component == 'frontend'
+        id: build-frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile.production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+          
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ matrix.component == 'api' && env.IMAGE_NAME_API || env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # =============================================================================
+  # DEPLOYMENT STAGE: Environment-based Deployment Strategy
+  # =============================================================================
+  deploy-staging:
+    name: 'Deploy to Staging'
+    runs-on: ubuntu-latest
+    needs: build-images
+    if: github.ref == 'refs/heads/develop' || github.event.inputs.environment == 'staging'
+    environment: staging
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+          
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+          
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: ${{ env.HELM_VERSION }}
+          
+      - name: Terraform Init & Plan (Staging)
+        run: |
+          cd terraform/environments/staging
+          terraform init
+          terraform plan -var="deployment_id=${{ github.run_id }}" -out=tfplan
+          
+      - name: Terraform Apply (Staging)
+        run: |
+          cd terraform/environments/staging
+          terraform apply -auto-approve tfplan
+          
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --region us-east-1 --name adelaide-weather-staging-cluster
+          
+      - name: Deploy with Helm (Rolling Update)
+        run: |
+          helm upgrade --install adelaide-weather ./helm/adelaide-weather-forecast \
+            --namespace adelaide-weather-staging \
+            --create-namespace \
+            --set image.api.tag=${{ github.sha }} \
+            --set image.frontend.tag=${{ github.sha }} \
+            --set environment=staging \
+            --set replicaCount.api=2 \
+            --set replicaCount.frontend=2 \
+            --wait --timeout=10m
+            
+      - name: Run Staging Integration Tests
+        run: |
+          kubectl wait --for=condition=available --timeout=300s deployment/adelaide-weather-api -n adelaide-weather-staging
+          kubectl wait --for=condition=available --timeout=300s deployment/adelaide-weather-frontend -n adelaide-weather-staging
+          python scripts/validate_system_readiness.py --environment=staging
+          
+      - name: Run Smoke Tests
+        run: |
+          export STAGING_URL=$(kubectl get ingress adelaide-weather-ingress -n adelaide-weather-staging -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          python tests/integration/staging_tests.py --url=https://$STAGING_URL
+
+  deploy-production:
+    name: 'Deploy to Production'
+    runs-on: ubuntu-latest
+    needs: [build-images, deploy-staging]
+    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'production'
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
+          aws-region: us-east-1
+          
+      - name: Setup Tools
+        run: |
+          # Install Terraform
+          wget https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+          unzip terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+          sudo mv terraform /usr/local/bin/
+          
+          # Install kubectl
+          curl -LO "https://dl.k8s.io/release/${{ env.KUBECTL_VERSION }}/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+          
+          # Install Helm
+          curl https://get.helm.sh/helm-${{ env.HELM_VERSION }}-linux-amd64.tar.gz | tar xz
+          sudo mv linux-amd64/helm /usr/local/bin/
+          
+      - name: Terraform Infrastructure (Production)
+        run: |
+          cd terraform/environments/production
+          terraform init
+          terraform plan -var="deployment_id=${{ github.run_id }}" -out=tfplan
+          terraform apply -auto-approve tfplan
+          
+      - name: Configure kubectl for Production
+        run: |
+          aws eks update-kubeconfig --region us-east-1 --name adelaide-weather-production-cluster
+          
+      - name: Blue-Green Deployment (Production)
+        run: |
+          # Determine current active environment
+          CURRENT_ENV=$(kubectl get service adelaide-weather-active -n adelaide-weather-production -o jsonpath='{.spec.selector.deployment}' || echo "blue")
+          if [ "$CURRENT_ENV" = "blue" ]; then
+            DEPLOY_ENV="green"
+          else
+            DEPLOY_ENV="blue"
+          fi
+          
+          echo "Deploying to $DEPLOY_ENV environment"
+          
+          # Deploy to inactive environment
+          helm upgrade --install adelaide-weather-$DEPLOY_ENV ./helm/adelaide-weather-forecast \
+            --namespace adelaide-weather-production \
+            --create-namespace \
+            --set image.api.tag=${{ github.sha }} \
+            --set image.frontend.tag=${{ github.sha }} \
+            --set environment=production \
+            --set deployment.suffix=$DEPLOY_ENV \
+            --set replicaCount.api=3 \
+            --set replicaCount.frontend=3 \
+            --wait --timeout=15m
+            
+      - name: Production Health Checks
+        run: |
+          # Wait for deployment to be ready
+          kubectl wait --for=condition=available --timeout=600s deployment/adelaide-weather-api-$DEPLOY_ENV -n adelaide-weather-production
+          kubectl wait --for=condition=available --timeout=600s deployment/adelaide-weather-frontend-$DEPLOY_ENV -n adelaide-weather-production
+          
+          # Run comprehensive health checks
+          python production_health_suite.py --deployment=$DEPLOY_ENV
+          
+      - name: Switch Traffic (Blue-Green)
+        run: |
+          # Update service selector to point to new deployment
+          kubectl patch service adelaide-weather-active -n adelaide-weather-production -p '{"spec":{"selector":{"deployment":"'$DEPLOY_ENV'"}}}'
+          
+          # Wait for traffic switch confirmation
+          sleep 30
+          
+          # Final validation
+          python scripts/validate_system_readiness.py --environment=production
+          
+      - name: Cleanup Previous Deployment
+        run: |
+          # Keep previous deployment for 5 minutes for immediate rollback capability
+          sleep 300
+          
+          # Remove old deployment
+          if [ "$DEPLOY_ENV" = "blue" ]; then
+            helm uninstall adelaide-weather-green -n adelaide-weather-production || true
+          else
+            helm uninstall adelaide-weather-blue -n adelaide-weather-production || true
+          fi
+
+  # =============================================================================
+  # POST-DEPLOYMENT: Monitoring, Notifications, and Rollback Capability
+  # =============================================================================
+  post-deployment:
+    name: 'Post-Deployment Validation'
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Deployment Monitoring
+        run: |
+          python scripts/setup_deployment_monitoring.py \
+            --deployment-id=${{ github.run_id }} \
+            --git-sha=${{ github.sha }} \
+            --environment=${{ github.event.inputs.environment || 'auto' }}
+            
+      - name: Performance Baseline Validation
+        run: |
+          python scripts/performance-monitor.py --validate-baseline
+          
+      - name: Send Deployment Notification
+        uses: 8398a7/action-slack@v3
+        if: always()
+        with:
+          status: ${{ job.status }}
+          channel: '#deployments'
+          text: |
+            Adelaide Weather Forecast Deployment ${{ job.status }}
+            Environment: ${{ github.event.inputs.environment || 'Auto' }}
+            Commit: ${{ github.sha }}
+            Actor: ${{ github.actor }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # =============================================================================
+  # SECURITY: Additional Security Scanning and Compliance
+  # =============================================================================
+  security-scan:
+    name: 'Advanced Security Scanning'
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: python, javascript
+          
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+        
+      - name: Run Gitleaks (Secrets Detection)
+        uses: zricethezav/gitleaks-action@master
+        with:
+          config-path: .gitleaks.toml
+          
+      - name: OWASP Dependency Check
+        run: |
+          wget https://github.com/jeremylong/DependencyCheck/releases/download/v8.4.3/dependency-check-8.4.3-release.zip
+          unzip dependency-check-8.4.3-release.zip
+          ./dependency-check/bin/dependency-check.sh --scan . --format JSON --out dependency-check-report.json
+          
+      - name: Upload Security Artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-scan-results
+          path: |
+            dependency-check-report.json
+            gitleaks-report.json
+          retention-days: 90

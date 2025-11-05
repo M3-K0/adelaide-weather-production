@@ -1,0 +1,237 @@
+# Configuration Drift Monitoring - Prometheus Alert Rules
+# Comprehensive alerting for Adelaide Weather Forecasting configuration drift
+
+groups:
+  - name: config_drift_monitoring
+    rules:
+      # Critical configuration drift events
+      - alert: CriticalConfigurationDriftDetected
+        expr: increase(config_drift_events_total{severity="critical"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: adelaide-weather-api
+          component: config-drift-monitor
+          team: infrastructure
+        annotations:
+          summary: "Critical configuration drift detected"
+          description: "{{ $value }} critical configuration drift events detected in the last 5 minutes. This requires immediate attention."
+          runbook_url: "https://docs.your-org.com/runbooks/critical-config-drift"
+          impact: "System stability and security may be compromised"
+          action_required: "Investigate configuration changes immediately"
+
+      # High severity configuration drift
+      - alert: HighSeverityConfigurationDrift
+        expr: increase(config_drift_events_total{severity="high"}[10m]) > 2
+        for: 2m
+        labels:
+          severity: warning
+          service: adelaide-weather-api
+          component: config-drift-monitor
+          team: infrastructure
+        annotations:
+          summary: "Multiple high-severity configuration drift events"
+          description: "{{ $value }} high-severity configuration drift events detected in the last 10 minutes."
+          runbook_url: "https://docs.your-org.com/runbooks/high-config-drift"
+          impact: "System performance and reliability may be affected"
+          action_required: "Review and validate recent configuration changes"
+
+      # Unresolved drift events accumulating
+      - alert: UnresolvedConfigurationDriftAccumulating
+        expr: config_drift_unresolved_events{severity="critical"} > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: adelaide-weather-api
+          component: config-drift-monitor
+          team: infrastructure
+        annotations:
+          summary: "Critical configuration drift events accumulating"
+          description: "{{ $value }} unresolved critical configuration drift events. Manual intervention may be required."
+          runbook_url: "https://docs.your-org.com/runbooks/unresolved-config-drift"
+          impact: "System reliability degrading over time"
+          action_required: "Review and resolve pending drift events"
+
+      # Configuration drift monitoring system down
+      - alert: ConfigurationDriftMonitoringDown
+        expr: config_drift_monitoring_active == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: adelaide-weather-api
+          component: config-drift-monitor
+          team: infrastructure
+        annotations:
+          summary: "Configuration drift monitoring is inactive"
+          description: "Configuration drift monitoring system is not active. Configuration changes are not being monitored."
+          runbook_url: "https://docs.your-org.com/runbooks/config-drift-monitor-down"
+          impact: "No visibility into configuration changes"
+          action_required: "Restart configuration drift monitoring immediately"
+
+      # Drift detection taking too long
+      - alert: ConfigurationDriftDetectionSlow
+        expr: histogram_quantile(0.95, rate(config_drift_detection_duration_seconds_bucket[5m])) > 30
+        for: 3m
+        labels:
+          severity: warning
+          service: adelaide-weather-api
+          component: config-drift-monitor
+          team: infrastructure
+        annotations:
+          summary: "Configuration drift detection is slow"
+          description: "95th percentile drift detection duration is {{ $value | humanizeDuration }}, which exceeds the 30s threshold."
+          runbook_url: "https://docs.your-org.com/runbooks/slow-config-drift-detection"
+          impact: "Delayed detection of configuration changes"
+          action_required: "Investigate performance issues in drift detection"
+
+      # No drift detection runs
+      - alert: ConfigurationDriftDetectionStalled
+        expr: increase(config_drift_detection_duration_seconds_count[15m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: adelaide-weather-api
+          component: config-drift-monitor
+          team: infrastructure
+        annotations:
+          summary: "Configuration drift detection has stalled"
+          description: "No drift detection runs completed in the last 15 minutes."
+          runbook_url: "https://docs.your-org.com/runbooks/stalled-config-drift-detection"
+          impact: "No recent checks for configuration changes"
+          action_required: "Check drift detection system health"
+
+      # Schema validation failures
+      - alert: ConfigurationSchemaValidationFailures
+        expr: increase(config_drift_schema_validation_failures_total[10m]) > 1
+        for: 2m
+        labels:
+          severity: warning
+          service: adelaide-weather-api
+          component: config-drift-monitor
+          team: infrastructure
+        annotations:
+          summary: "Configuration schema validation failures detected"
+          description: "{{ $value }} schema validation failures in the last 10 minutes. Configuration files may be corrupted or malformed."
+          runbook_url: "https://docs.your-org.com/runbooks/config-schema-validation-failures"
+          impact: "Configuration integrity compromised"
+          action_required: "Validate configuration file formats and schemas"
+
+      # Security-related drift events
+      - alert: SecurityRelatedConfigurationDrift
+        expr: increase(config_drift_events_total{drift_type="security_drift"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: adelaide-weather-api
+          component: config-drift-monitor
+          team: security
+        annotations:
+          summary: "Security-related configuration drift detected"
+          description: "{{ $value }} security-related configuration changes detected. This may indicate a security incident."
+          runbook_url: "https://docs.your-org.com/runbooks/security-config-drift"
+          impact: "Potential security vulnerability"
+          action_required: "Immediate security review required"
+
+      # Environment variable drift
+      - alert: EnvironmentVariableDriftDetected
+        expr: increase(config_drift_events_total{source_type="environment_variable"}[5m]) > 3
+        for: 1m
+        labels:
+          severity: warning
+          service: adelaide-weather-api
+          component: config-drift-monitor
+          team: infrastructure
+        annotations:
+          summary: "Multiple environment variable changes detected"
+          description: "{{ $value }} environment variable changes detected in the last 5 minutes."
+          runbook_url: "https://docs.your-org.com/runbooks/env-var-drift"
+          impact: "Application behavior may have changed"
+          action_required: "Review environment variable changes"
+
+      # Webhook notification failures
+      - alert: ConfigurationDriftWebhookFailures
+        expr: increase(config_drift_webhook_notifications_total{status="failed"}[10m]) > 2
+        for: 2m
+        labels:
+          severity: warning
+          service: adelaide-weather-api
+          component: config-drift-monitor
+          team: infrastructure
+        annotations:
+          summary: "Configuration drift webhook notifications failing"
+          description: "{{ $value }} webhook notification failures in the last 10 minutes. Critical alerts may not be reaching external systems."
+          runbook_url: "https://docs.your-org.com/runbooks/config-drift-webhook-failures"
+          impact: "Critical drift events may not trigger external notifications"
+          action_required: "Check webhook configuration and connectivity"
+
+  - name: config_drift_operational
+    rules:
+      # Too many files being monitored (performance concern)
+      - alert: ConfigurationDriftTooManyFiles
+        expr: config_drift_files_monitored > 1000
+        for: 5m
+        labels:
+          severity: info
+          service: adelaide-weather-api
+          component: config-drift-monitor
+          team: infrastructure
+        annotations:
+          summary: "Large number of files being monitored for drift"
+          description: "{{ $value }} files are being monitored for configuration drift. This may impact performance."
+          runbook_url: "https://docs.your-org.com/runbooks/config-drift-too-many-files"
+          impact: "Potential performance degradation"
+          action_required: "Review file monitoring scope"
+
+      # Frequent drift events (may indicate unstable configuration)
+      - alert: FrequentConfigurationDriftEvents
+        expr: rate(config_drift_events_total[1h]) > 0.1
+        for: 10m
+        labels:
+          severity: info
+          service: adelaide-weather-api
+          component: config-drift-monitor
+          team: infrastructure
+        annotations:
+          summary: "Frequent configuration drift events detected"
+          description: "Configuration drift events occurring at {{ $value }} per second over the last hour. This may indicate configuration instability."
+          runbook_url: "https://docs.your-org.com/runbooks/frequent-config-drift"
+          impact: "Potential configuration instability"
+          action_required: "Review configuration change patterns"
+
+      # Dockerfile/Docker Compose changes (infrastructure changes)
+      - alert: InfrastructureConfigurationDrift
+        expr: increase(config_drift_events_total{source_type=~"dockerfile|docker_compose"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: adelaide-weather-api
+          component: config-drift-monitor
+          team: infrastructure
+        annotations:
+          summary: "Infrastructure configuration changes detected"
+          description: "{{ $value }} infrastructure configuration changes (Docker/Docker Compose) detected in the last 5 minutes."
+          runbook_url: "https://docs.your-org.com/runbooks/infrastructure-config-drift"
+          impact: "Application deployment configuration changed"
+          action_required: "Review infrastructure changes for consistency"
+
+  - name: config_drift_trends
+    rules:
+      # Trend analysis: increasing drift events over time
+      - alert: ConfigurationDriftTrendIncreasing
+        expr: |
+          (
+            rate(config_drift_events_total[24h]) > 
+            rate(config_drift_events_total[24h] offset 24h) * 1.5
+          )
+        for: 30m
+        labels:
+          severity: info
+          service: adelaide-weather-api
+          component: config-drift-monitor
+          team: infrastructure
+        annotations:
+          summary: "Configuration drift events trending upward"
+          description: "Configuration drift events have increased by 50% compared to the previous 24-hour period."
+          runbook_url: "https://docs.your-org.com/runbooks/config-drift-trend-increasing"
+          impact: "Increasing configuration instability"
+          action_required: "Investigate causes of increasing configuration changes"

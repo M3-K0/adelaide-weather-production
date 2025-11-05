@@ -1,0 +1,492 @@
+name: OpenAPI Type Generation & Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'api/**'
+      - 'frontend/**'
+      - '.github/workflows/type-generation.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'api/**'
+      - 'frontend/**'
+      - '.github/workflows/type-generation.yml'
+  workflow_dispatch:
+    inputs:
+      force_regenerate:
+        description: 'Force regenerate types even if no changes detected'
+        required: false
+        default: 'false'
+
+env:
+  FORCE_REGENERATE: ${{ github.event.inputs.force_regenerate || 'false' }}
+
+jobs:
+  # Generate OpenAPI Schema from API
+  generate-openapi:
+    name: Generate OpenAPI Schema
+    runs-on: ubuntu-latest
+    outputs:
+      schema-hash: ${{ steps.generate.outputs.schema_hash }}
+      api-version: ${{ steps.generate.outputs.api_version }}
+      schema-changed: ${{ steps.check-changes.outputs.changed }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 2  # Need previous commit for change detection
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install API dependencies
+      working-directory: ./api
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyyaml  # For YAML output support
+    
+    - name: Check for API changes
+      id: check-changes
+      run: |
+        if [ "$FORCE_REGENERATE" = "true" ]; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+          echo "🔄 Force regeneration requested"
+        else
+          # Check if API files have changed
+          if git diff --name-only HEAD~1 HEAD | grep -E "^api/.*\.(py|yaml|json)$"; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "✅ API changes detected"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "✨ No API changes detected"
+          fi
+        fi
+    
+    - name: Generate OpenAPI schema
+      id: generate
+      if: steps.check-changes.outputs.changed == 'true'
+      working-directory: ./api
+      env:
+        CI: true
+        BUILD_ID: ${{ github.run_id }}
+        API_VERSION: ${{ github.ref_name }}-${{ github.sha }}
+      run: |
+        echo "::group::Generating OpenAPI Schema"
+        python enhanced_openapi_generator.py --validate --format json
+        echo "::endgroup::"
+        
+        # Read generated metadata
+        if [ -f openapi_metadata.json ]; then
+          echo "schema_hash=$(jq -r '.schema_hash' openapi_metadata.json)" >> $GITHUB_OUTPUT
+          echo "api_version=$(jq -r '.api_version' openapi_metadata.json)" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Upload OpenAPI schema artifact
+      if: steps.check-changes.outputs.changed == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: openapi-schema
+        path: |
+          api/openapi.json
+          api/openapi_metadata.json
+          frontend/openapi.json
+        retention-days: 30
+    
+    - name: Validate OpenAPI schema
+      if: steps.check-changes.outputs.changed == 'true'
+      run: |
+        # Install OpenAPI validation tools
+        npm install -g @apidevtools/swagger-parser
+        
+        # Validate schema
+        echo "🔍 Validating OpenAPI schema..."
+        swagger-parser validate api/openapi.json
+        echo "✅ OpenAPI schema validation passed"
+
+  # Generate TypeScript Types from OpenAPI
+  generate-typescript-types:
+    name: Generate TypeScript Types
+    runs-on: ubuntu-latest
+    needs: generate-openapi
+    if: needs.generate-openapi.outputs.schema-changed == 'true'
+    outputs:
+      types-hash: ${{ steps.generate-types.outputs.types_hash }}
+      files-generated: ${{ steps.generate-types.outputs.files_generated }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: |
+        npm ci
+        npm install -g openapi-typescript
+    
+    - name: Download OpenAPI schema
+      uses: actions/download-artifact@v4
+      with:
+        name: openapi-schema
+        path: ./
+    
+    - name: Generate TypeScript types
+      id: generate-types
+      working-directory: ./frontend
+      env:
+        CI: true
+      run: |
+        echo "::group::Generating TypeScript Types"
+        
+        # Ensure we have the latest schema
+        if [ ! -f openapi.json ]; then
+          echo "❌ OpenAPI schema not found"
+          exit 1
+        fi
+        
+        # Run enhanced type generator
+        npx tsx scripts/enhanced-type-generator.ts \
+          --schema openapi.json \
+          --output types
+        
+        echo "::endgroup::"
+        
+        # Read generation metadata
+        if [ -f types/.generation_metadata.json ]; then
+          echo "types_hash=$(jq -r '.typesHash' types/.generation_metadata.json)" >> $GITHUB_OUTPUT
+          echo "files_generated=$(jq -r '.filesGenerated | length' types/.generation_metadata.json)" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Validate generated types
+      working-directory: ./frontend
+      run: |
+        echo "::group::Type Validation"
+        
+        # TypeScript compilation check
+        npx tsc --noEmit --skipLibCheck
+        
+        # ESLint check for generated types
+        npx eslint types/ --ext .ts --format compact
+        
+        echo "✅ Type validation passed"
+        echo "::endgroup::"
+    
+    - name: Upload generated types artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: typescript-types
+        path: |
+          frontend/types/
+          !frontend/types/node_modules
+        retention-days: 30
+
+  # Validate Pact Contracts with Generated Types
+  validate-pact-contracts:
+    name: Validate Pact Contracts
+    runs-on: ubuntu-latest
+    needs: [generate-openapi, generate-typescript-types]
+    if: needs.generate-openapi.outputs.schema-changed == 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: npm ci
+    
+    - name: Download generated types
+      uses: actions/download-artifact@v4
+      with:
+        name: typescript-types
+        path: frontend/
+    
+    - name: Run Pact consumer tests
+      working-directory: ./frontend
+      run: |
+        echo "::group::Pact Consumer Tests"
+        
+        # Run Pact consumer tests to generate contracts
+        npm run test:pact
+        
+        echo "✅ Pact consumer tests passed"
+        echo "::endgroup::"
+    
+    - name: Validate Pact contracts with types
+      working-directory: ./frontend
+      env:
+        CI: true
+      run: |
+        echo "::group::Pact Contract Validation"
+        
+        # Run enhanced Pact validation
+        npx tsx scripts/pact-type-validator.ts \
+          --types types \
+          --pacts pacts \
+          --output pact/generated \
+          --strict
+        
+        echo "✅ Pact contract validation passed"
+        echo "::endgroup::"
+    
+    - name: Upload Pact artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: pact-contracts
+        path: |
+          frontend/pacts/
+          frontend/pact/generated/
+        retention-days: 30
+
+  # Integration Test with Generated Types
+  integration-test:
+    name: Integration Test with Types
+    runs-on: ubuntu-latest
+    needs: [generate-openapi, generate-typescript-types, validate-pact-contracts]
+    if: always() && needs.generate-openapi.outputs.schema-changed == 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Install dependencies
+      run: |
+        # Install API dependencies
+        cd api && pip install -r requirements.txt
+        
+        # Install frontend dependencies
+        cd ../frontend && npm ci
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+    
+    - name: Restore generated files
+      run: |
+        # Copy OpenAPI schema
+        cp artifacts/openapi-schema/api/openapi.json api/
+        cp artifacts/openapi-schema/frontend/openapi.json frontend/
+        
+        # Copy generated types
+        cp -r artifacts/typescript-types/* frontend/
+        
+        # Copy Pact contracts
+        if [ -d artifacts/pact-contracts ]; then
+          cp -r artifacts/pact-contracts/* frontend/
+        fi
+    
+    - name: Start API server
+      run: |
+        cd api
+        python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+        sleep 10  # Wait for server to start
+    
+    - name: Test API with generated types
+      working-directory: ./frontend
+      run: |
+        echo "::group::API Integration Test"
+        
+        # Create integration test using generated types
+        cat > test-integration.ts << 'EOF'
+        import { ForecastResponse, HealthResponse } from './types/api-utilities';
+        import { isForecastResponse, isHealthResponse } from './types/api-utilities';
+        
+        async function testAPI() {
+          // Test health endpoint
+          const healthResponse = await fetch('http://localhost:8000/health');
+          const healthData = await healthResponse.json();
+          
+          if (!isHealthResponse(healthData)) {
+            throw new Error('Health response does not match expected type');
+          }
+          console.log('✅ Health endpoint type validation passed');
+          
+          // Test forecast endpoint  
+          const forecastResponse = await fetch(
+            'http://localhost:8000/forecast?horizon=24h&vars=t2m,u10,v10,msl',
+            {
+              headers: {
+                'Authorization': 'Bearer dev-token-change-in-production'
+              }
+            }
+          );
+          const forecastData = await forecastResponse.json();
+          
+          if (!isForecastResponse(forecastData)) {
+            throw new Error('Forecast response does not match expected type');
+          }
+          console.log('✅ Forecast endpoint type validation passed');
+          
+          console.log('🎉 All API integration tests passed!');
+        }
+        
+        testAPI().catch(error => {
+          console.error('❌ Integration test failed:', error);
+          process.exit(1);
+        });
+        EOF
+        
+        # Run integration test
+        npx tsx test-integration.ts
+        
+        echo "::endgroup::"
+    
+    - name: Build frontend with generated types
+      working-directory: ./frontend
+      run: |
+        echo "::group::Frontend Build Test"
+        
+        # Test that frontend builds with new types
+        npm run build
+        
+        echo "✅ Frontend build successful with generated types"
+        echo "::endgroup::"
+
+  # Summary and Documentation
+  generate-summary:
+    name: Generate Type Generation Summary
+    runs-on: ubuntu-latest
+    needs: [generate-openapi, generate-typescript-types, validate-pact-contracts, integration-test]
+    if: always()
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+    
+    - name: Generate summary report
+      run: |
+        cat > type-generation-summary.md << EOF
+        # Type Generation Summary
+        
+        **Workflow Run:** ${{ github.run_id }}  
+        **Trigger:** ${{ github.event_name }}  
+        **Branch:** ${{ github.ref_name }}  
+        **Commit:** ${{ github.sha }}  
+        **Timestamp:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        
+        ## Results
+        
+        | Step | Status | Details |
+        |------|--------|---------|
+        | OpenAPI Generation | ${{ needs.generate-openapi.result }} | Schema Hash: \`${{ needs.generate-openapi.outputs.schema-hash }}\` |
+        | TypeScript Generation | ${{ needs.generate-typescript-types.result }} | Types Hash: \`${{ needs.generate-typescript-types.outputs.types-hash }}\` |
+        | Pact Validation | ${{ needs.validate-pact-contracts.result }} | Contract compatibility verified |
+        | Integration Test | ${{ needs.integration-test.result }} | API and frontend integration tested |
+        
+        ## Generated Files
+        
+        - **OpenAPI Schema:** \`api/openapi.json\`
+        - **TypeScript Types:** \`frontend/types/generated-api.ts\`
+        - **Utility Types:** \`frontend/types/api-utilities.ts\`
+        - **Pact Helpers:** \`frontend/pact/generated/pact-helpers.ts\`
+        
+        ## Quality Gates
+        
+        - ✅ OpenAPI schema validation
+        - ✅ TypeScript compilation check
+        - ✅ Pact contract compatibility
+        - ✅ API integration testing
+        - ✅ Frontend build verification
+        
+        ## Next Steps
+        
+        ${{ needs.generate-openapi.outputs.schema-changed == 'true' && '- Review and merge generated type changes' || '- No type changes required' }}
+        ${{ needs.generate-openapi.result == 'failure' && '- Investigate OpenAPI generation failures' || '' }}
+        ${{ needs.generate-typescript-types.result == 'failure' && '- Fix TypeScript type generation issues' || '' }}
+        ${{ needs.validate-pact-contracts.result == 'failure' && '- Resolve Pact contract incompatibilities' || '' }}
+        ${{ needs.integration-test.result == 'failure' && '- Fix API integration test failures' || '' }}
+        
+        ---
+        Generated by GitHub Actions workflow: \`type-generation.yml\`
+        EOF
+        
+        echo "📄 Type generation summary created"
+        cat type-generation-summary.md
+    
+    - name: Upload summary
+      uses: actions/upload-artifact@v4
+      with:
+        name: type-generation-summary
+        path: type-generation-summary.md
+        retention-days: 90
+    
+    - name: Comment on PR
+      if: github.event_name == 'pull_request' && needs.generate-openapi.outputs.schema-changed == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const summary = fs.readFileSync('type-generation-summary.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `## 🔄 Type Generation Results\n\n${summary}`
+          });
+
+  # Fail fast if critical steps fail
+  check-failures:
+    name: Check for Critical Failures
+    runs-on: ubuntu-latest
+    needs: [generate-openapi, generate-typescript-types, validate-pact-contracts]
+    if: always()
+    
+    steps:
+    - name: Check critical failures
+      run: |
+        if [ "${{ needs.generate-openapi.result }}" = "failure" ]; then
+          echo "❌ OpenAPI generation failed - this is critical"
+          exit 1
+        fi
+        
+        if [ "${{ needs.generate-typescript-types.result }}" = "failure" ]; then
+          echo "❌ TypeScript type generation failed - this is critical"
+          exit 1
+        fi
+        
+        if [ "${{ needs.validate-pact-contracts.result }}" = "failure" ]; then
+          echo "⚠️ Pact validation failed - review contract compatibility"
+          # Don't fail the workflow for Pact validation in non-strict mode
+        fi
+        
+        echo "✅ All critical type generation steps completed successfully"

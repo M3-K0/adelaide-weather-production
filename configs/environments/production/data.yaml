@@ -1,0 +1,18 @@
+# Production Data Configuration Overrides
+# Full dataset configuration for production forecasting
+
+era5:
+  # Extended temporal range for production
+  years: [2000, 2023]  # Full historical dataset
+  
+  # Full spatial domain for comprehensive analysis
+  area: [-32.4, 136.1, -37.4, 141.1]  # Full 25°×25° domain
+  
+preprocessing:
+  # Production-grade preprocessing
+  normalize_method: 'zscore'  # More robust normalization
+  fill_method: 'interpolate'  # High-quality interpolation
+
+gfs:
+  # Full lead time range for production
+  lead_times: [6, 12, 24, 48, 72]  # Complete forecast horizons

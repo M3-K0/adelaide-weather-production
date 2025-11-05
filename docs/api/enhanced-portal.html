@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adelaide Weather API - Enhanced Developer Portal</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+            --code-bg: #1e293b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header */
+        .header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--success-color);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.offline {
+            background: var(--error-color);
+        }
+
+        .status-dot.warning {
+            background: var(--warning-color);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Navigation */
+        .nav-tabs {
+            display: flex;
+            gap: 0.5rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            padding: 0 20px;
+        }
+
+        .nav-tab {
+            padding: 1rem 1.5rem;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .nav-tab.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+        }
+
+        .nav-tab:hover:not(.active) {
+            color: var(--text-primary);
+        }
+
+        /* Main Content */
+        .main-content {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 2rem;
+            padding: 2rem 0;
+        }
+
+        .sidebar {
+            background: var(--surface);
+            border-radius: 8px;
+            padding: 1.5rem;
+            height: fit-content;
+            position: sticky;
+            top: 100px;
+        }
+
+        .content-area {
+            background: var(--surface);
+            border-radius: 8px;
+            padding: 2rem;
+            min-height: 600px;
+        }
+
+        /* API Explorer */
+        .endpoint-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+
+        .endpoint-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--background);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .method-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .method-get { background: #dbeafe; color: #1d4ed8; }
+        .method-post { background: #dcfce7; color: #16a34a; }
+        .method-put { background: #fef3c7; color: #d97706; }
+        .method-delete { background: #fee2e2; color: #dc2626; }
+
+        .endpoint-path {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+        }
+
+        .endpoint-content {
+            padding: 1rem;
+            display: none;
+        }
+
+        .endpoint-content.active {
+            display: block;
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-secondary {
+            background: var(--background);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        /* Response Display */
+        .response-container {
+            margin-top: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .response-header {
+            background: var(--background);
+            padding: 0.75rem 1rem;
+            font-weight: 500;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .response-status {
+            padding: 0.25rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-200 { background: #dcfce7; color: #16a34a; }
+        .status-400 { background: #fee2e2; color: #dc2626; }
+        .status-500 { background: #fee2e2; color: #dc2626; }
+
+        .response-body {
+            background: var(--code-bg);
+            color: #e2e8f0;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            overflow-x: auto;
+        }
+
+        /* Code Examples */
+        .code-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1rem;
+        }
+
+        .code-tab {
+            padding: 0.75rem 1rem;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+
+        .code-tab.active {
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--primary-color);
+        }
+
+        .code-example {
+            display: none;
+        }
+
+        .code-example.active {
+            display: block;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .action-card {
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .action-card:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+        }
+
+        .action-icon {
+            font-size: 2rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+
+        /* Utilities */
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                position: static;
+            }
+        }
+
+        /* Health Status Styles */
+        .health-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .health-metric {
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        .health-metric.healthy {
+            background: #f0fdf4;
+            border-color: var(--success-color);
+        }
+
+        .health-metric.warning {
+            background: #fffbeb;
+            border-color: var(--warning-color);
+        }
+
+        .health-metric.error {
+            background: #fef2f2;
+            border-color: var(--error-color);
+        }
+
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .metric-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-cloud-sun"></i>
+                    Adelaide Weather API
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText">Checking...</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="nav-tabs">
+        <div class="container">
+            <button class="nav-tab active" data-tab="overview">Overview</button>
+            <button class="nav-tab" data-tab="explorer">API Explorer</button>
+            <button class="nav-tab" data-tab="playground">Live Testing</button>
+            <button class="nav-tab" data-tab="examples">Code Examples</button>
+            <button class="nav-tab" data-tab="monitoring">Health & Monitoring</button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container">
+        <div class="main-content">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <h3>Quick Navigation</h3>
+                <div id="sidebarContent">
+                    <!-- Dynamic sidebar content -->
+                </div>
+            </aside>
+
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Overview Tab -->
+                <div id="overview" class="tab-content active">
+                    <h1>Adelaide Weather Forecasting API</h1>
+                    <p class="lead">Production-ready analog ensemble weather forecasting system with real-time predictions and uncertainty quantification.</p>
+
+                    <div class="quick-actions">
+                        <div class="action-card" onclick="switchTab('explorer')">
+                            <div class="action-icon">
+                                <i class="fas fa-search"></i>
+                            </div>
+                            <h3>Explore Endpoints</h3>
+                            <p>Interactive API exploration with live testing capabilities</p>
+                        </div>
+                        <div class="action-card" onclick="switchTab('playground')">
+                            <div class="action-icon">
+                                <i class="fas fa-play"></i>
+                            </div>
+                            <h3>Try It Live</h3>
+                            <p>Test API endpoints with real data and responses</p>
+                        </div>
+                        <div class="action-card" onclick="switchTab('examples')">
+                            <div class="action-icon">
+                                <i class="fas fa-code"></i>
+                            </div>
+                            <h3>Code Examples</h3>
+                            <p>Ready-to-use code samples in multiple languages</p>
+                        </div>
+                        <div class="action-card" onclick="switchTab('monitoring')">
+                            <div class="action-icon">
+                                <i class="fas fa-heartbeat"></i>
+                            </div>
+                            <h3>System Health</h3>
+                            <p>Real-time monitoring and performance metrics</p>
+                        </div>
+                    </div>
+
+                    <h2>Key Features</h2>
+                    <ul>
+                        <li><strong>Multi-horizon forecasting:</strong> 6h, 12h, 24h, and 48h forecasts</li>
+                        <li><strong>Uncertainty quantification:</strong> Confidence intervals and risk assessment</li>
+                        <li><strong>Historical analog analysis:</strong> Similar past weather patterns</li>
+                        <li><strong>High performance:</strong> Sub-150ms response times</li>
+                        <li><strong>Production monitoring:</strong> Comprehensive health checks and metrics</li>
+                    </ul>
+
+                    <h2>Quick Start</h2>
+                    <div class="code-example active">
+                        <pre><code class="language-bash"># Get a 24-hour forecast
+curl -X GET "https://api.adelaideweather.example.com/forecast?horizon=24h&vars=t2m,u10,v10,msl" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Check system health
+curl -X GET "https://api.adelaideweather.example.com/health"</code></pre>
+                    </div>
+                </div>
+
+                <!-- API Explorer Tab -->
+                <div id="explorer" class="tab-content">
+                    <h1>API Explorer</h1>
+                    <div id="endpointsList">
+                        <!-- Endpoints will be dynamically loaded -->
+                    </div>
+                </div>
+
+                <!-- Live Testing Tab -->
+                <div id="playground" class="tab-content">
+                    <h1>Live API Testing</h1>
+                    <div class="form-group">
+                        <label class="form-label">API Token</label>
+                        <input type="password" id="apiToken" class="form-input" placeholder="Enter your API token">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Base URL</label>
+                        <input type="text" id="baseUrl" class="form-input" value="https://api.adelaideweather.example.com">
+                    </div>
+                    <div id="testingInterface">
+                        <!-- Testing interface will be dynamically populated -->
+                    </div>
+                </div>
+
+                <!-- Code Examples Tab -->
+                <div id="examples" class="tab-content">
+                    <h1>Code Examples</h1>
+                    <div class="code-tabs">
+                        <button class="code-tab active" data-lang="javascript">JavaScript</button>
+                        <button class="code-tab" data-lang="python">Python</button>
+                        <button class="code-tab" data-lang="curl">cURL</button>
+                        <button class="code-tab" data-lang="php">PHP</button>
+                    </div>
+                    <div id="codeExamples">
+                        <!-- Code examples will be populated -->
+                    </div>
+                </div>
+
+                <!-- Monitoring Tab -->
+                <div id="monitoring" class="tab-content">
+                    <h1>System Health & Monitoring</h1>
+                    <div class="health-overview" id="healthOverview">
+                        <!-- Health metrics will be populated -->
+                    </div>
+                    <div id="detailedHealth">
+                        <!-- Detailed health information -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-php.min.js"></script>
+
+    <script>
+        // Application State
+        const state = {
+            currentTab: 'overview',
+            apiToken: '',
+            baseUrl: 'https://api.adelaideweather.example.com',
+            healthStatus: null,
+            endpoints: []
+        };
+
+        // API Configuration
+        const API_ENDPOINTS = [
+            {
+                method: 'GET',
+                path: '/forecast',
+                summary: 'Get weather forecast',
+                description: 'Generate weather forecast for specified horizon and variables using analog ensemble methods.',
+                auth: true,
+                parameters: [
+                    { name: 'horizon', type: 'string', enum: ['6h', '12h', '24h', '48h'], default: '24h', description: 'Forecast time horizon' },
+                    { name: 'vars', type: 'string', default: 't2m,u10,v10,msl', description: 'Comma-separated list of weather variables' }
+                ]
+            },
+            {
+                method: 'GET',
+                path: '/health',
+                summary: 'Basic health check',
+                description: 'Get basic system health status and readiness information.',
+                auth: false,
+                parameters: []
+            },
+            {
+                method: 'GET',
+                path: '/health/detailed',
+                summary: 'Detailed health report',
+                description: 'Comprehensive health report with all system components.',
+                auth: false,
+                parameters: []
+            },
+            {
+                method: 'GET',
+                path: '/health/faiss',
+                summary: 'FAISS health monitoring',
+                description: 'FAISS-specific health monitoring with performance metrics.',
+                auth: true,
+                parameters: []
+            },
+            {
+                method: 'GET',
+                path: '/metrics',
+                summary: 'Prometheus metrics',
+                description: 'Get Prometheus metrics including FAISS monitoring data.',
+                auth: true,
+                parameters: []
+            },
+            {
+                method: 'GET',
+                path: '/analogs',
+                summary: 'Historical analog analysis',
+                description: 'Get historical analog patterns for current weather conditions.',
+                auth: true,
+                parameters: []
+            }
+        ];
+
+        // Code Examples
+        const CODE_EXAMPLES = {
+            javascript: `// Adelaide Weather API Client
+class AdelaideWeatherClient {
+    constructor(token, baseUrl = 'https://api.adelaideweather.example.com') {
+        this.token = token;
+        this.baseUrl = baseUrl;
+    }
+
+    async request(endpoint, options = {}) {
+        const url = \`\${this.baseUrl}\${endpoint}\`;
+        const headers = {
+            'Content-Type': 'application/json',
+            ...(this.token && { 'Authorization': \`Bearer \${this.token}\` }),
+            ...options.headers
+        };
+
+        try {
+            const response = await fetch(url, { ...options, headers });
+            
+            if (!response.ok) {
+                throw new Error(\`HTTP \${response.status}: \${response.statusText}\`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error('API Request failed:', error);
+            throw error;
+        }
+    }
+
+    // Get weather forecast
+    async getForecast(params = {}) {
+        const query = new URLSearchParams({
+            horizon: '24h',
+            vars: 't2m,u10,v10,msl',
+            ...params
+        });
+        
+        return this.request(\`/forecast?\${query}\`);
+    }
+
+    // Check system health
+    async getHealth() {
+        return this.request('/health');
+    }
+
+    // Get detailed health report
+    async getDetailedHealth() {
+        return this.request('/health/detailed');
+    }
+}
+
+// Usage Example
+const client = new AdelaideWeatherClient('your-api-token');
+
+// Get forecast
+client.getForecast({ horizon: '24h' })
+    .then(forecast => {
+        console.log('Temperature:', forecast.variables.t2m.value, '°C');
+        console.log('Risk Level:', forecast.risk_assessment.thunderstorm);
+    })
+    .catch(error => console.error('Error:', error));
+
+// Check health
+client.getHealth()
+    .then(health => console.log('API Status:', health.ready ? 'Ready' : 'Not Ready'))
+    .catch(error => console.error('Health check failed:', error));`,
+
+            python: `#!/usr/bin/env python3
+"""
+Adelaide Weather API Client
+Production-ready Python client with async support
+"""
+
+import aiohttp
+import asyncio
+from typing import Dict, Any, Optional
+from urllib.parse import urlencode
+
+class AdelaideWeatherClient:
+    def __init__(self, token: str, base_url: str = "https://api.adelaideweather.example.com"):
+        self.token = token
+        self.base_url = base_url
+        self.session: Optional[aiohttp.ClientSession] = None
+
+    async def __aenter__(self):
+        self.session = aiohttp.ClientSession()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.session:
+            await self.session.close()
+
+    async def request(self, endpoint: str, **kwargs) -> Dict[str, Any]:
+        """Make authenticated request to API endpoint"""
+        if not self.session:
+            raise RuntimeError("Client not properly initialized. Use async context manager.")
+        
+        url = f"{self.base_url}{endpoint}"
+        headers = kwargs.pop('headers', {})
+        
+        if self.token:
+            headers['Authorization'] = f"Bearer {self.token}"
+        
+        try:
+            async with self.session.get(url, headers=headers, **kwargs) as response:
+                response.raise_for_status()
+                return await response.json()
+        except aiohttp.ClientError as e:
+            raise Exception(f"API request failed: {e}")
+
+    async def get_forecast(self, horizon: str = "24h", vars: str = "t2m,u10,v10,msl") -> Dict[str, Any]:
+        """Get weather forecast with specified parameters"""
+        params = {"horizon": horizon, "vars": vars}
+        return await self.request(f"/forecast?{urlencode(params)}")
+
+    async def get_health(self) -> Dict[str, Any]:
+        """Get basic system health status"""
+        return await self.request("/health")
+
+    async def get_detailed_health(self) -> Dict[str, Any]:
+        """Get comprehensive health report"""
+        return await self.request("/health/detailed")
+
+    async def get_faiss_health(self) -> Dict[str, Any]:
+        """Get FAISS-specific health monitoring"""
+        return await self.request("/health/faiss")
+
+    async def get_metrics(self) -> str:
+        """Get Prometheus metrics"""
+        # Note: metrics endpoint returns text/plain
+        if not self.session:
+            raise RuntimeError("Client not properly initialized")
+        
+        url = f"{self.base_url}/metrics"
+        headers = {'Authorization': f"Bearer {self.token}"}
+        
+        async with self.session.get(url, headers=headers) as response:
+            response.raise_for_status()
+            return await response.text()
+
+# Usage Example
+async def main():
+    async with AdelaideWeatherClient('your-api-token') as client:
+        # Get forecast
+        forecast = await client.get_forecast(horizon='24h')
+        print(f"Temperature: {forecast['variables']['t2m']['value']}°C")
+        print(f"Risk Level: {forecast['risk_assessment']['thunderstorm']}")
+        
+        # Check health
+        health = await client.get_health()
+        print(f"API Status: {'Ready' if health['ready'] else 'Not Ready'}")
+        
+        # Get detailed health
+        detailed = await client.get_detailed_health()
+        print(f"FAISS Status: {detailed['index']['status']}")
+
+if __name__ == "__main__":
+    asyncio.run(main())`,
+
+            curl: `#!/bin/bash
+# Adelaide Weather API - cURL Examples
+
+# Configuration
+API_TOKEN="your-api-token-here"
+BASE_URL="https://api.adelaideweather.example.com"
+
+# Basic health check (no auth required)
+echo "=== Basic Health Check ==="
+curl -X GET "$BASE_URL/health" \\
+  -H "Content-Type: application/json" \\
+  -w "\\nStatus: %{http_code}\\nTime: %{time_total}s\\n"
+
+# Detailed health report (no auth required)
+echo "\\n=== Detailed Health Report ==="
+curl -X GET "$BASE_URL/health/detailed" \\
+  -H "Content-Type: application/json" \\
+  -w "\\nStatus: %{http_code}\\nTime: %{time_total}s\\n"
+
+# FAISS health monitoring (requires auth)
+echo "\\n=== FAISS Health Monitoring ==="
+curl -X GET "$BASE_URL/health/faiss" \\
+  -H "Authorization: Bearer $API_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -w "\\nStatus: %{http_code}\\nTime: %{time_total}s\\n"
+
+# Get weather forecast (requires auth)
+echo "\\n=== 24-hour Weather Forecast ==="
+curl -X GET "$BASE_URL/forecast?horizon=24h&vars=t2m,u10,v10,msl" \\
+  -H "Authorization: Bearer $API_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -w "\\nStatus: %{http_code}\\nTime: %{time_total}s\\n"
+
+# Get short-term forecast
+echo "\\n=== 6-hour Weather Forecast ==="
+curl -X GET "$BASE_URL/forecast?horizon=6h&vars=t2m,tp6h" \\
+  -H "Authorization: Bearer $API_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -w "\\nStatus: %{http_code}\\nTime: %{time_total}s\\n"
+
+# Get metrics (requires auth)
+echo "\\n=== Prometheus Metrics ==="
+curl -X GET "$BASE_URL/metrics" \\
+  -H "Authorization: Bearer $API_TOKEN" \\
+  -w "\\nStatus: %{http_code}\\nTime: %{time_total}s\\n"
+
+# Error handling example
+echo "\\n=== Error Handling Example (Invalid Token) ==="
+curl -X GET "$BASE_URL/forecast" \\
+  -H "Authorization: Bearer invalid-token" \\
+  -H "Content-Type: application/json" \\
+  -w "\\nStatus: %{http_code}\\nTime: %{time_total}s\\n"
+
+# Batch health checks
+echo "\\n=== Batch Health Checks ==="
+endpoints=("/health" "/health/detailed" "/health/live" "/health/ready" "/health/status")
+for endpoint in "\${endpoints[@]}"; do
+    echo "Checking $endpoint..."
+    curl -s -X GET "$BASE_URL$endpoint" \\
+      -w "Status: %{http_code} | Time: %{time_total}s\\n" \\
+      -o /dev/null
+done`,
+
+            php: `<?php
+/**
+ * Adelaide Weather API Client
+ * PHP client with error handling and retry logic
+ */
+
+class AdelaideWeatherClient {
+    private $token;
+    private $baseUrl;
+    private $httpClient;
+
+    public function __construct($token, $baseUrl = 'https://api.adelaideweather.example.com') {
+        $this->token = $token;
+        $this->baseUrl = rtrim($baseUrl, '/');
+        
+        // Initialize cURL with default options
+        $this->httpClient = curl_init();
+        curl_setopt_array($this->httpClient, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_USERAGENT => 'Adelaide-Weather-PHP-Client/1.0'
+        ]);
+    }
+
+    public function __destruct() {
+        if ($this->httpClient) {
+            curl_close($this->httpClient);
+        }
+    }
+
+    /**
+     * Make authenticated request to API endpoint
+     */
+    private function request($endpoint, $headers = []) {
+        $url = $this->baseUrl . $endpoint;
+        
+        // Prepare headers
+        $defaultHeaders = ['Content-Type: application/json'];
+        if ($this->token) {
+            $defaultHeaders[] = "Authorization: Bearer {$this->token}";
+        }
+        $allHeaders = array_merge($defaultHeaders, $headers);
+
+        curl_setopt_array($this->httpClient, [
+            CURLOPT_URL => $url,
+            CURLOPT_HTTPHEADER => $allHeaders
+        ]);
+
+        $response = curl_exec($this->httpClient);
+        $httpCode = curl_getinfo($this->httpClient, CURLINFO_HTTP_CODE);
+        $error = curl_error($this->httpClient);
+
+        if ($error) {
+            throw new Exception("cURL Error: " . $error);
+        }
+
+        if ($httpCode >= 400) {
+            $errorData = json_decode($response, true);
+            $message = isset($errorData['error']) ? $errorData['error'] : "HTTP Error $httpCode";
+            throw new Exception($message, $httpCode);
+        }
+
+        return json_decode($response, true);
+    }
+
+    /**
+     * Get weather forecast
+     */
+    public function getForecast($horizon = '24h', $vars = 't2m,u10,v10,msl') {
+        $params = http_build_query([
+            'horizon' => $horizon,
+            'vars' => $vars
+        ]);
+        
+        return $this->request("/forecast?$params");
+    }
+
+    /**
+     * Get basic system health
+     */
+    public function getHealth() {
+        return $this->request('/health');
+    }
+
+    /**
+     * Get detailed health report
+     */
+    public function getDetailedHealth() {
+        return $this->request('/health/detailed');
+    }
+
+    /**
+     * Get FAISS health monitoring
+     */
+    public function getFaissHealth() {
+        return $this->request('/health/faiss');
+    }
+
+    /**
+     * Get Prometheus metrics
+     */
+    public function getMetrics() {
+        // Note: metrics endpoint returns text/plain
+        curl_setopt($this->httpClient, CURLOPT_HTTPHEADER, [
+            "Authorization: Bearer {$this->token}"
+        ]);
+        
+        $url = $this->baseUrl . '/metrics';
+        curl_setopt($this->httpClient, CURLOPT_URL, $url);
+        
+        $response = curl_exec($this->httpClient);
+        $httpCode = curl_getinfo($this->httpClient, CURLINFO_HTTP_CODE);
+        
+        if ($httpCode >= 400) {
+            throw new Exception("Failed to fetch metrics: HTTP $httpCode");
+        }
+        
+        return $response;
+    }
+}
+
+// Usage Example
+try {
+    $client = new AdelaideWeatherClient('your-api-token');
+    
+    // Get forecast
+    $forecast = $client->getForecast('24h');
+    echo "Temperature: " . $forecast['variables']['t2m']['value'] . "°C\\n";
+    echo "Risk Level: " . $forecast['risk_assessment']['thunderstorm'] . "\\n";
+    
+    // Check health
+    $health = $client->getHealth();
+    echo "API Status: " . ($health['ready'] ? 'Ready' : 'Not Ready') . "\\n";
+    
+    // Get detailed health
+    $detailed = $client->getDetailedHealth();
+    echo "FAISS Status: " . $detailed['index']['status'] . "\\n";
+    
+} catch (Exception $e) {
+    echo "Error: " . $e->getMessage() . "\\n";
+    echo "Code: " . $e->getCode() . "\\n";
+}
+?>`
+        };
+
+        // Initialize Application
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+            checkApiHealth();
+            
+            // Refresh health status every 30 seconds
+            setInterval(checkApiHealth, 30000);
+        });
+
+        function initializeApp() {
+            setupTabNavigation();
+            renderEndpoints();
+            renderCodeExamples();
+            setupEventListeners();
+        }
+
+        function setupTabNavigation() {
+            const tabs = document.querySelectorAll('.nav-tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const tabName = tab.dataset.tab;
+                    switchTab(tabName);
+                });
+            });
+        }
+
+        function switchTab(tabName) {
+            // Update navigation
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+                if (tab.dataset.tab === tabName) {
+                    tab.classList.add('active');
+                }
+            });
+
+            // Update content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+                content.style.display = 'none';
+            });
+
+            const activeContent = document.getElementById(tabName);
+            if (activeContent) {
+                activeContent.classList.add('active');
+                activeContent.style.display = 'block';
+            }
+
+            state.currentTab = tabName;
+
+            // Special handling for specific tabs
+            if (tabName === 'monitoring') {
+                loadHealthData();
+            }
+        }
+
+        async function checkApiHealth() {
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+
+            try {
+                const response = await fetch(\`\${state.baseUrl}/health\`, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    const health = await response.json();
+                    state.healthStatus = health;
+                    
+                    if (health.ready) {
+                        statusDot.className = 'status-dot';
+                        statusText.textContent = 'API Ready';
+                    } else {
+                        statusDot.className = 'status-dot warning';
+                        statusText.textContent = 'API Not Ready';
+                    }
+                } else {
+                    throw new Error(\`HTTP \${response.status}\`);
+                }
+            } catch (error) {
+                state.healthStatus = null;
+                statusDot.className = 'status-dot offline';
+                statusText.textContent = 'API Offline';
+            }
+        }
+
+        function renderEndpoints() {
+            const container = document.getElementById('endpointsList');
+            container.innerHTML = '';
+
+            API_ENDPOINTS.forEach((endpoint, index) => {
+                const endpointCard = createEndpointCard(endpoint, index);
+                container.appendChild(endpointCard);
+            });
+        }
+
+        function createEndpointCard(endpoint, index) {
+            const card = document.createElement('div');
+            card.className = 'endpoint-card';
+            
+            card.innerHTML = \`
+                <div class="endpoint-header" onclick="toggleEndpoint(\${index})">
+                    <span class="method-badge method-\${endpoint.method.toLowerCase()}">\${endpoint.method}</span>
+                    <span class="endpoint-path">\${endpoint.path}</span>
+                    <span style="margin-left: auto;">\${endpoint.summary}</span>
+                    <i class="fas fa-chevron-down" style="margin-left: 1rem;"></i>
+                </div>
+                <div class="endpoint-content" id="endpoint-\${index}">
+                    <p>\${endpoint.description}</p>
+                    
+                    \${endpoint.auth ? '<p><strong>Authentication:</strong> Bearer token required</p>' : '<p><strong>Authentication:</strong> Not required</p>'}
+                    
+                    \${endpoint.parameters.length > 0 ? \`
+                        <h4>Parameters:</h4>
+                        <ul>
+                            \${endpoint.parameters.map(param => \`
+                                <li><strong>\${param.name}</strong> (\${param.type}): \${param.description}
+                                    \${param.default ? \` (default: \${param.default})\` : ''}
+                                    \${param.enum ? \` (options: \${param.enum.join(', ')})\` : ''}
+                                </li>
+                            \`).join('')}
+                        </ul>
+                    \` : ''}
+                    
+                    <button class="btn btn-primary" onclick="testEndpoint('\${endpoint.method}', '\${endpoint.path}', \${endpoint.auth})">
+                        <i class="fas fa-play"></i> Test This Endpoint
+                    </button>
+                    
+                    <div id="response-\${index}" class="response-container hidden">
+                        <div class="response-header">
+                            <span>Response</span>
+                            <span class="response-status" id="status-\${index}"></span>
+                        </div>
+                        <pre class="response-body" id="body-\${index}"></pre>
+                    </div>
+                </div>
+            \`;
+            
+            return card;
+        }
+
+        function toggleEndpoint(index) {
+            const content = document.getElementById(\`endpoint-\${index}\`);
+            content.classList.toggle('active');
+        }
+
+        async function testEndpoint(method, path, requiresAuth) {
+            const index = API_ENDPOINTS.findIndex(ep => ep.method === method && ep.path === path);
+            const responseContainer = document.getElementById(\`response-\${index}\`);
+            const statusElement = document.getElementById(\`status-\${index}\`);
+            const bodyElement = document.getElementById(\`body-\${index}\`);
+
+            if (requiresAuth && !state.apiToken) {
+                switchTab('playground');
+                alert('Please enter your API token in the Live Testing tab first.');
+                return;
+            }
+
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (requiresAuth && state.apiToken) {
+                    headers['Authorization'] = \`Bearer \${state.apiToken}\`;
+                }
+
+                // For testing, use some default parameters
+                let url = \`\${state.baseUrl}\${path}\`;
+                if (path === '/forecast') {
+                    url += '?horizon=24h&vars=t2m,u10,v10,msl';
+                }
+
+                const response = await fetch(url, { method, headers });
+                const data = await response.text();
+
+                responseContainer.classList.remove('hidden');
+                statusElement.textContent = response.status;
+                statusElement.className = \`response-status status-\${Math.floor(response.status / 100) * 100}\`;
+
+                try {
+                    const jsonData = JSON.parse(data);
+                    bodyElement.textContent = JSON.stringify(jsonData, null, 2);
+                } catch {
+                    bodyElement.textContent = data;
+                }
+
+            } catch (error) {
+                responseContainer.classList.remove('hidden');
+                statusElement.textContent = 'Error';
+                statusElement.className = 'response-status status-500';
+                bodyElement.textContent = error.message;
+            }
+        }
+
+        function renderCodeExamples() {
+            const container = document.getElementById('codeExamples');
+            container.innerHTML = '';
+
+            Object.keys(CODE_EXAMPLES).forEach(lang => {
+                const example = document.createElement('div');
+                example.className = \`code-example \${lang === 'javascript' ? 'active' : ''}\`;
+                example.innerHTML = \`<pre><code class="language-\${lang === 'curl' ? 'bash' : lang}">\${CODE_EXAMPLES[lang]}</code></pre>\`;
+                container.appendChild(example);
+            });
+
+            // Re-highlight code
+            Prism.highlightAll();
+        }
+
+        function setupEventListeners() {
+            // Code tab switching
+            document.querySelectorAll('.code-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const lang = tab.dataset.lang;
+                    
+                    document.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    
+                    document.querySelectorAll('.code-example').forEach(ex => ex.classList.remove('active'));
+                    document.querySelector(\`.code-example:nth-child(\${Array.from(document.querySelectorAll('.code-tab')).indexOf(tab) + 1})\`).classList.add('active');
+                });
+            });
+
+            // API token input
+            const tokenInput = document.getElementById('apiToken');
+            if (tokenInput) {
+                tokenInput.addEventListener('input', (e) => {
+                    state.apiToken = e.target.value;
+                });
+            }
+
+            // Base URL input
+            const baseUrlInput = document.getElementById('baseUrl');
+            if (baseUrlInput) {
+                baseUrlInput.addEventListener('input', (e) => {
+                    state.baseUrl = e.target.value.replace(/\/$/, '');
+                });
+            }
+        }
+
+        async function loadHealthData() {
+            const healthOverview = document.getElementById('healthOverview');
+            const detailedHealth = document.getElementById('detailedHealth');
+
+            try {
+                // Get basic health
+                const basicHealth = await fetch(\`\${state.baseUrl}/health\`);
+                const basicData = await basicHealth.json();
+
+                // Get detailed health
+                const detailedResponse = await fetch(\`\${state.baseUrl}/health/detailed\`);
+                const detailedData = await detailedResponse.json();
+
+                // Render health overview
+                healthOverview.innerHTML = \`
+                    <div class="health-metric \${basicData.ready ? 'healthy' : 'error'}">
+                        <div class="metric-value">\${basicData.ready ? 'Ready' : 'Not Ready'}</div>
+                        <div class="metric-label">System Status</div>
+                    </div>
+                    <div class="health-metric \${detailedData.index?.status === 'healthy' ? 'healthy' : 'warning'}">
+                        <div class="metric-value">\${detailedData.index?.status || 'Unknown'}</div>
+                        <div class="metric-label">FAISS Index</div>
+                    </div>
+                    <div class="health-metric \${detailedData.model?.loaded ? 'healthy' : 'error'}">
+                        <div class="metric-value">\${detailedData.model?.loaded ? 'Loaded' : 'Not Loaded'}</div>
+                        <div class="metric-label">Model Status</div>
+                    </div>
+                    <div class="health-metric healthy">
+                        <div class="metric-value">\${basicData.checks?.length || 0}</div>
+                        <div class="metric-label">Health Checks</div>
+                    </div>
+                \`;
+
+                // Render detailed health
+                detailedHealth.innerHTML = \`
+                    <h3>Detailed Health Information</h3>
+                    <pre class="response-body">\${JSON.stringify(detailedData, null, 2)}</pre>
+                \`;
+
+            } catch (error) {
+                healthOverview.innerHTML = \`
+                    <div class="health-metric error">
+                        <div class="metric-value">Error</div>
+                        <div class="metric-label">Failed to Load</div>
+                    </div>
+                \`;
+                detailedHealth.innerHTML = \`<p>Failed to load health data: \${error.message}</p>\`;
+            }
+        }
+
+        // Make functions globally available
+        window.switchTab = switchTab;
+        window.toggleEndpoint = toggleEndpoint;
+        window.testEndpoint = testEndpoint;
+    </script>
+</body>
+</html>

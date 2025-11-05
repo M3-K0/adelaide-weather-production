@@ -1,0 +1,126 @@
+# OWASP ZAP Scan Rules Configuration for Adelaide Weather Forecast API
+# Format: RULE_ID	THRESHOLD	RULE_NAME
+# Thresholds: IGNORE, INFO, LOW, MEDIUM, HIGH
+
+# Authentication and Session Management
+10000	HIGH	Password Autocomplete in Browser
+10001	HIGH	Potentially Weak Password
+10003	HIGH	Weak Password Policy
+10010	HIGH	Cookie No HttpOnly Flag
+10011	HIGH	Cookie Without Secure Flag
+10017	HIGH	Cross-Domain JavaScript Source File Inclusion
+10020	HIGH	X-Frame-Options Missing
+10021	HIGH	X-Content-Type-Options Missing
+10023	HIGH	Information Disclosure - Debug Error Messages
+10024	MEDIUM	Information Disclosure - Sensitive Information in URL
+10025	MEDIUM	Information Disclosure - Sensitive Information in HTTP Referrer Header
+10026	LOW	HTTP Parameter Override
+10027	MEDIUM	Information Disclosure - Suspicious Comments
+10028	LOW	Open Redirect
+10029	MEDIUM	Cookie Poisoning
+10030	MEDIUM	User Controllable Charset
+10031	LOW	User Controllable HTML Element Attribute (Potential XSS)
+10032	MEDIUM	Viewstate Scanner
+10040	LOW	Secure Pages Include Mixed Content
+10041	LOW	HTTP to HTTPS Insecure Transition in Form Post
+10042	LOW	HTTPS to HTTP Insecure Transition in Form Post
+10043	MEDIUM	User Controllable JavaScript Event (XSS)
+10044	LOW	Big Redirect Detected (Potential Sensitive Information Leak)
+10045	LOW	Source Code Disclosure - /WEB-INF folder
+10048	MEDIUM	Remote Code Execution - Shell Shock
+10049	MEDIUM	Content Cacheability
+10050	LOW	Retrieved from Cache
+10051	LOW	Relative Path Confusion
+10052	LOW	X-ChromeLogger-Data (XCOLD) Header Information Leak
+10054	LOW	Cookie Without SameSite Attribute
+10055	LOW	CSP Scanner
+10056	MEDIUM	X-Debug-Token Information Leak
+10057	MEDIUM	Username Hash Found
+10061	LOW	X-AspNet-Version Response Header
+10062	LOW	PII Scanner
+10063	MEDIUM	Feature Policy Header Not Set
+10096	HIGH	Timestamp Disclosure
+10097	LOW	Hash Disclosure
+10098	LOW	Cross-Domain Misconfiguration
+10104	MEDIUM	User Agent Fuzzer
+10105	MEDIUM	Weak Authentication Method
+10106	HIGH	HTTP Only Site
+10107	HIGH	Httpoxy - Proxy Header Misuse
+10108	MEDIUM	Reverse Tabnabbing
+10109	LOW	Modern Web Application
+10110	LOW	Dangerous JS Functions
+
+# Injection Attacks
+40003	HIGH	CRLF Injection
+40008	HIGH	Parameter Tampering
+40009	HIGH	Server Side Include
+40012	HIGH	Cross Site Scripting (Reflected)
+40013	HIGH	Session Fixation
+40014	HIGH	Cross Site Scripting (Persistent)
+40016	HIGH	Cross Site Scripting (Persistent) - Prime
+40017	HIGH	Cross Site Scripting (Persistent) - Spider
+40018	HIGH	SQL Injection
+40019	HIGH	SQL Injection - MySQL
+40020	HIGH	SQL Injection - Hypersonic SQL
+40021	HIGH	SQL Injection - Oracle
+40022	HIGH	SQL Injection - PostgreSQL
+40023	HIGH	Possible Username Enumeration
+40024	HIGH	SQL Injection - SQLite
+40025	HIGH	Proxy Disclosure
+40026	HIGH	Cross Site Scripting (DOM Based)
+40027	HIGH	SQL Injection - MsSQL
+40028	MEDIUM	ELMAH Information Leak
+40029	MEDIUM	Trace.axd Information Leak
+40032	MEDIUM	.htaccess Information Leak
+40033	MEDIUM	Loosely Scoped Cookie
+40034	MEDIUM	.env Information Leak
+40035	MEDIUM	Hidden File Finder
+40036	MEDIUM	Server Side Template Injection
+40037	MEDIUM	Server Side Template Injection (Blind)
+40038	HIGH	Log4Shell (CVE-2021-44228)
+40039	HIGH	LDAP Injection
+40040	HIGH	LDAP Injection (Blind)
+40041	HIGH	XXE (XML External Entity) Attack
+40042	HIGH	Spring4Shell (CVE-2022-22965)
+40043	HIGH	Log4Shell 2.0 (CVE-2021-45046)
+40044	HIGH	Spring Boot Actuator Information Leak
+
+# Configuration and Deployment
+90001	MEDIUM	Insecure JSF ViewState
+90002	MEDIUM	Private IP Disclosure
+90003	LOW	Subdomain Takeover
+90004	LOW	Insufficient Site Isolation Against Spectre Vulnerability
+90011	LOW	Charset Mismatch
+90017	LOW	XSLT Injection
+90018	MEDIUM	SQL Injection - Blind
+90019	HIGH	Code Injection
+90020	HIGH	Command Injection
+90021	HIGH	XPath Injection
+90022	HIGH	Application Error Disclosure
+90023	MEDIUM	XML External Entity Attack
+90024	MEDIUM	Generic Padding Oracle
+90025	MEDIUM	Expression Language Injection
+90026	MEDIUM	SOAP Action Spoofing
+90027	MEDIUM	Cookie Slack Detector
+90028	MEDIUM	Insecure HTTP Method
+90029	MEDIUM	SOAP XML Injection
+90030	LOW	WSDL File Detection
+90033	LOW	Loosely Scoped Cookie
+90034	LOW	Cloud Metadata Potentially Exposed
+
+# API Security
+100000	HIGH	Missing Anti-CSRF Tokens
+100001	HIGH	Cache Control and Pragma
+100002	HIGH	Weak Hash Algorithm
+100003	HIGH	Secure Flag Missing
+
+# Custom rules for Weather Forecast API
+# Authentication endpoints should require tokens
+# Rate limiting should be enforced
+# Error messages should not leak sensitive information
+
+# Weather API specific rules
+200001	HIGH	Weather API Authentication Bypass
+200002	MEDIUM	Weather API Rate Limiting
+200003	MEDIUM	Weather API Error Information Disclosure
+200004	LOW	Weather API Version Disclosure

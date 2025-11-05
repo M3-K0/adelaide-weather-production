@@ -1,0 +1,30 @@
+apiVersion: v2
+name: adelaide-weather-forecast
+description: A Helm chart for Adelaide Weather Forecasting System
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - weather
+  - forecasting
+  - machine-learning
+  - api
+  - nextjs
+
+home: https://github.com/adelaide-weather/adelaide-weather-forecast
+sources:
+  - https://github.com/adelaide-weather/adelaide-weather-forecast
+
+maintainers:
+  - name: Adelaide Weather Team
+    email: team@adelaide-weather.example.com
+
+annotations:
+  category: Weather
+  licenses: MIT
+  
+dependencies: []
+
+# Compatibility
+kubeVersion: ">=1.25.0-0"

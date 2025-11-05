@@ -1,0 +1,276 @@
+# Adelaide Weather Forecasting - SLO Alert Rules
+# Service Level Objective alerts with error budget burn rate monitoring
+
+groups:
+  # API Availability SLO
+  - name: slo_api_availability
+    rules:
+      # 99.9% availability SLO with 30-day window
+      - alert: SLOAvailabilityBreach
+        expr: slo_availability_ratio{slo_name="api_availability"} < 0.999
+        for: 5m
+        labels:
+          severity: critical
+          service: adelaide-weather-api
+          slo: availability
+          error_budget_policy: breach
+        annotations:
+          summary: "API Availability SLO breached"
+          description: "API availability is {{ $value | humanizePercentage }}, below 99.9% SLO target"
+          runbook_url: "https://docs.your-org.com/runbooks/slo-availability-breach"
+          dashboard_url: "https://grafana.your-org.com/d/slo-dashboard"
+
+      # Fast error budget burn (1h window) - Page immediately
+      - alert: SLOErrorBudgetBurnRateFast
+        expr: slo_burn_rate{slo_name="api_availability", window="1h"} > 14.4
+        for: 2m
+        labels:
+          severity: critical
+          service: adelaide-weather-api
+          slo: availability
+          error_budget_policy: fast_burn
+        annotations:
+          summary: "Error budget burning very fast"
+          description: "Error budget burning at {{ $value }}x rate (1h window). At this rate, budget will be exhausted in {{ with query \"slo_error_budget_remaining_ratio{slo_name='api_availability', window='24h'} / slo_burn_rate{slo_name='api_availability', window='1h'} * 24\" }}{{ . | first | value | humanizeDuration }}{{ end }}"
+          runbook_url: "https://docs.your-org.com/runbooks/slo-fast-burn"
+
+      # Medium error budget burn (6h window) - Page during business hours
+      - alert: SLOErrorBudgetBurnRateMedium
+        expr: slo_burn_rate{slo_name="api_availability", window="6h"} > 6.0
+        for: 15m
+        labels:
+          severity: warning
+          service: adelaide-weather-api
+          slo: availability
+          error_budget_policy: medium_burn
+        annotations:
+          summary: "Error budget burning moderately fast"
+          description: "Error budget burning at {{ $value }}x rate (6h window). At this rate, budget will be exhausted in {{ with query \"slo_error_budget_remaining_ratio{slo_name='api_availability', window='24h'} / slo_burn_rate{slo_name='api_availability', window='6h'} * 24\" }}{{ . | first | value | humanizeDuration }}{{ end }}"
+          runbook_url: "https://docs.your-org.com/runbooks/slo-medium-burn"
+
+      # Slow error budget burn (24h window) - Alert only
+      - alert: SLOErrorBudgetBurnRateSlow
+        expr: slo_burn_rate{slo_name="api_availability", window="24h"} > 3.0
+        for: 1h
+        labels:
+          severity: warning
+          service: adelaide-weather-api
+          slo: availability
+          error_budget_policy: slow_burn
+        annotations:
+          summary: "Error budget burning steadily"
+          description: "Error budget burning at {{ $value }}x rate (24h window). Monitor for sustained issues."
+          runbook_url: "https://docs.your-org.com/runbooks/slo-slow-burn"
+
+      # Error budget exhaustion warning
+      - alert: SLOErrorBudgetLow
+        expr: slo_error_budget_remaining_ratio{slo_name="api_availability", window="24h"} < 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: adelaide-weather-api
+          slo: availability
+          error_budget_policy: low_budget
+        annotations:
+          summary: "Error budget running low"
+          description: "Only {{ $value | humanizePercentage }} of error budget remaining for this SLO period"
+          runbook_url: "https://docs.your-org.com/runbooks/slo-low-budget"
+
+  # API Latency SLO
+  - name: slo_api_latency
+    rules:
+      # 95% of requests under 150ms
+      - alert: SLOLatencyBreach
+        expr: slo_availability_ratio{slo_name="api_latency"} < 0.95
+        for: 5m
+        labels:
+          severity: warning
+          service: adelaide-weather-api
+          slo: latency
+          error_budget_policy: breach
+        annotations:
+          summary: "API Latency SLO breached"
+          description: "{{ $value | humanizePercentage }} of requests are meeting latency target (95% required)"
+          runbook_url: "https://docs.your-org.com/runbooks/slo-latency-breach"
+
+      # Critical latency threshold
+      - alert: APILatencyCritical
+        expr: histogram_quantile(0.95, rate(synthetic_check_duration_seconds_bucket{check_name="forecast_api"}[5m])) > 0.3
+        for: 2m
+        labels:
+          severity: critical
+          service: adelaide-weather-api
+          slo: latency
+        annotations:
+          summary: "API latency critically high"
+          description: "95th percentile API latency is {{ $value | humanizeDuration }}, well above 150ms target"
+          runbook_url: "https://docs.your-org.com/runbooks/high-latency"
+
+  # Frontend Performance SLO
+  - name: slo_frontend_performance
+    rules:
+      # 90% of page loads under 2s
+      - alert: SLOFrontendPerformanceBreach
+        expr: slo_availability_ratio{slo_name="frontend_performance"} < 0.90
+        for: 10m
+        labels:
+          severity: warning
+          service: adelaide-weather-frontend
+          slo: performance
+        annotations:
+          summary: "Frontend Performance SLO breached"
+          description: "{{ $value | humanizePercentage }} of page loads are meeting performance target (90% required)"
+          runbook_url: "https://docs.your-org.com/runbooks/slo-frontend-performance"
+
+  # Data Quality SLO
+  - name: slo_data_quality
+    rules:
+      # 98% of forecasts have valid data
+      - alert: SLODataQualityBreach
+        expr: slo_availability_ratio{slo_name="forecast_accuracy"} < 0.98
+        for: 5m
+        labels:
+          severity: warning
+          service: adelaide-weather-api
+          slo: data_quality
+        annotations:
+          summary: "Forecast Data Quality SLO breached"
+          description: "{{ $value | humanizePercentage }} of forecasts have valid data (98% required)"
+          runbook_url: "https://docs.your-org.com/runbooks/slo-data-quality"
+
+      # Critical data quality issues
+      - alert: ForecastDataQualityCritical
+        expr: rate(synthetic_forecast_data_valid_total[10m]) / rate(synthetic_forecast_data_total[10m]) < 0.8
+        for: 5m
+        labels:
+          severity: critical
+          service: adelaide-weather-api
+          slo: data_quality
+        annotations:
+          summary: "Critical forecast data quality issues"
+          description: "Only {{ $value | humanizePercentage }} of recent forecasts have valid data"
+          runbook_url: "https://docs.your-org.com/runbooks/critical-data-quality"
+
+  # Synthetic Check Failures
+  - name: synthetic_monitoring
+    rules:
+      # Synthetic check failure rate
+      - alert: SyntheticCheckFailureRate
+        expr: (1 - rate(synthetic_check_success_total[10m]) / rate(synthetic_check_total[10m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: adelaide-weather-api
+          component: synthetic_monitoring
+        annotations:
+          summary: "High synthetic check failure rate"
+          description: "{{ $value | humanizePercentage }} of synthetic checks are failing"
+          runbook_url: "https://docs.your-org.com/runbooks/synthetic-check-failures"
+
+      # All synthetic checks failing
+      - alert: SyntheticChecksDown
+        expr: rate(synthetic_check_success_total[5m]) == 0 and rate(synthetic_check_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+          service: adelaide-weather-api
+          component: synthetic_monitoring
+        annotations:
+          summary: "All synthetic checks failing"
+          description: "No synthetic checks have succeeded in the last 5 minutes"
+          runbook_url: "https://docs.your-org.com/runbooks/all-checks-down"
+
+      # Geographic distribution failures
+      - alert: SyntheticCheckRegionDown
+        expr: rate(synthetic_check_success_total[10m]) by (region) == 0 and rate(synthetic_check_total[10m]) by (region) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: adelaide-weather-api
+          component: synthetic_monitoring
+        annotations:
+          summary: "Synthetic checks failing in {{ $labels.region }}"
+          description: "All synthetic checks are failing in region {{ $labels.region }}"
+          runbook_url: "https://docs.your-org.com/runbooks/region-checks-down"
+
+  # Error Budget Management
+  - name: error_budget_management
+    rules:
+      # Calculate error budget consumption rate
+      - record: slo:error_budget_consumption_rate_1h
+        expr: |
+          (
+            (1 - slo_availability_ratio) / (1 - 0.999)
+          ) * 24 * 30
+
+      - record: slo:error_budget_consumption_rate_24h
+        expr: |
+          (
+            (1 - slo_availability_ratio) / (1 - 0.999)
+          ) * 30
+
+      # Calculate time to error budget exhaustion
+      - record: slo:time_to_exhaustion_hours
+        expr: |
+          (
+            slo_error_budget_remaining_ratio / 
+            (slo_burn_rate + 0.001)
+          ) * 24
+
+  # SLO Recording Rules for Dashboards
+  - name: slo_recording_rules
+    interval: 30s
+    rules:
+      # API Success Rate (5m window)
+      - record: slo:api_success_rate_5m
+        expr: |
+          rate(synthetic_check_success_total{check_name="forecast_api"}[5m]) /
+          rate(synthetic_check_total{check_name="forecast_api"}[5m])
+
+      # API Success Rate (1h window)  
+      - record: slo:api_success_rate_1h
+        expr: |
+          rate(synthetic_check_success_total{check_name="forecast_api"}[1h]) /
+          rate(synthetic_check_total{check_name="forecast_api"}[1h])
+
+      # API Success Rate (24h window)
+      - record: slo:api_success_rate_24h
+        expr: |
+          rate(synthetic_check_success_total{check_name="forecast_api"}[24h]) /
+          rate(synthetic_check_total{check_name="forecast_api"}[24h])
+
+      # API Latency P95 (5m window)
+      - record: slo:api_latency_p95_5m
+        expr: |
+          histogram_quantile(0.95,
+            rate(synthetic_check_duration_seconds_bucket{check_name="forecast_api"}[5m])
+          )
+
+      # Data Quality Success Rate
+      - record: slo:data_quality_success_rate_5m
+        expr: |
+          rate(synthetic_forecast_data_valid_total[5m]) /
+          rate(synthetic_forecast_data_total[5m])
+
+      # Overall System Health Score
+      - record: slo:system_health_score
+        expr: |
+          (
+            slo:api_success_rate_5m * 0.4 +
+            (slo:api_latency_p95_5m < bool 0.15) * 0.3 +
+            slo:data_quality_success_rate_5m * 0.3
+          )
+
+  # Alertmanager Configuration Templates
+  - name: alertmanager_templates
+    rules:
+      # This creates labels that can be used in Alertmanager routing
+      - alert: SLOMetadata
+        expr: up{job="synthetic-monitor"} == 1
+        labels:
+          slo_dashboard: "https://grafana.your-org.com/d/slo-dashboard"
+          runbook_base: "https://docs.your-org.com/runbooks/"
+          escalation_policy: "weather-sre-team"
+          pagerduty_service: "weather-forecasting-api"
+        annotations:
+          summary: "SLO metadata for routing rules"

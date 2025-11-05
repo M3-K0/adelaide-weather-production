@@ -1,0 +1,288 @@
+{
+  "authentication": {
+    "validToken": "test-token-12345",
+    "invalidToken": "invalid-token-xyz",
+    "expiredToken": "expired-token-abc",
+    "malformedToken": "malformed.token.here"
+  },
+  
+  "weatherScenarios": {
+    "typicalSummer": {
+      "description": "Typical Adelaide summer day",
+      "horizon": "24h",
+      "variables": ["t2m", "u10", "v10", "msl", "cape"],
+      "expectedResponse": {
+        "t2m": { "value": 32.5, "p05": 28.2, "p95": 36.8, "available": true },
+        "u10": { "value": -2.1, "p05": -5.3, "p95": 1.1, "available": true },
+        "v10": { "value": 1.8, "p05": -1.2, "p95": 4.8, "available": true },
+        "msl": { "value": 101650, "p05": 101200, "p95": 102100, "available": true },
+        "cape": { "value": 450, "p05": 120, "p95": 780, "available": true }
+      },
+      "expectedRisks": {
+        "thunderstorm": "low",
+        "heat_stress": "moderate",
+        "wind_damage": "minimal",
+        "precipitation": "low"
+      }
+    },
+    
+    "extremeHeat": {
+      "description": "Extreme heat wave conditions",
+      "horizon": "24h",
+      "variables": ["t2m", "u10", "v10", "msl", "cape"],
+      "expectedResponse": {
+        "t2m": { "value": 42.3, "p05": 39.1, "p95": 45.5, "available": true },
+        "u10": { "value": -1.2, "p05": -3.8, "p95": 1.4, "available": true },
+        "v10": { "value": 0.8, "p05": -2.1, "p95": 3.7, "available": true },
+        "msl": { "value": 101820, "p05": 101400, "p95": 102240, "available": true },
+        "cape": { "value": 250, "p05": 80, "p95": 420, "available": true }
+      },
+      "expectedRisks": {
+        "thunderstorm": "minimal",
+        "heat_stress": "extreme",
+        "wind_damage": "minimal",
+        "precipitation": "low"
+      }
+    },
+    
+    "severeStorm": {
+      "description": "Severe thunderstorm potential",
+      "horizon": "12h",
+      "variables": ["t2m", "u10", "v10", "msl", "cape"],
+      "expectedResponse": {
+        "t2m": { "value": 28.7, "p05": 25.4, "p95": 32.0, "available": true },
+        "u10": { "value": -8.3, "p05": -12.7, "p95": -3.9, "available": true },
+        "v10": { "value": 6.2, "p05": 2.8, "p95": 9.6, "available": true },
+        "msl": { "value": 100980, "p05": 100600, "p95": 101360, "available": true },
+        "cape": { "value": 2350, "p05": 1800, "p95": 2900, "available": true }
+      },
+      "expectedRisks": {
+        "thunderstorm": "extreme",
+        "heat_stress": "moderate",
+        "wind_damage": "high",
+        "precipitation": "high"
+      }
+    },
+    
+    "windyConditions": {
+      "description": "High wind conditions",
+      "horizon": "6h",
+      "variables": ["t2m", "u10", "v10", "msl"],
+      "expectedResponse": {
+        "t2m": { "value": 18.5, "p05": 16.2, "p95": 20.8, "available": true },
+        "u10": { "value": -15.2, "p05": -18.6, "p95": -11.8, "available": true },
+        "v10": { "value": 12.8, "p05": 9.4, "p95": 16.2, "available": true },
+        "msl": { "value": 99850, "p05": 99400, "p95": 100300, "available": true }
+      },
+      "expectedRisks": {
+        "thunderstorm": "low",
+        "heat_stress": "minimal",
+        "wind_damage": "extreme",
+        "precipitation": "moderate"
+      }
+    },
+    
+    "mildWinter": {
+      "description": "Mild winter day",
+      "horizon": "48h",
+      "variables": ["t2m", "u10", "v10", "msl"],
+      "expectedResponse": {
+        "t2m": { "value": 14.2, "p05": 11.8, "p95": 16.6, "available": true },
+        "u10": { "value": -3.4, "p05": -6.1, "p95": -0.7, "available": true },
+        "v10": { "value": 2.1, "p05": -0.5, "p95": 4.7, "available": true },
+        "msl": { "value": 102150, "p05": 101800, "p95": 102500, "available": true }
+      },
+      "expectedRisks": {
+        "thunderstorm": "minimal",
+        "heat_stress": "minimal",
+        "wind_damage": "low",
+        "precipitation": "low"
+      }
+    }
+  },
+  
+  "errorScenarios": {
+    "invalidHorizon": {
+      "horizon": "72h",
+      "variables": ["t2m"],
+      "expectedStatus": 400,
+      "expectedError": "Invalid request parameters"
+    },
+    
+    "invalidVariable": {
+      "horizon": "24h",
+      "variables": ["invalid_var"],
+      "expectedStatus": 400,
+      "expectedError": "Invalid request parameters"
+    },
+    
+    "systemDown": {
+      "description": "Backend system unavailable",
+      "expectedStatus": 503,
+      "expectedError": "Forecasting system not ready"
+    },
+    
+    "rateLimitExceeded": {
+      "description": "Rate limit exceeded scenario",
+      "expectedStatus": 429,
+      "expectedError": "Rate limit exceeded"
+    }
+  },
+  
+  "performanceThresholds": {
+    "forecastRequest": {
+      "maxLatencyMs": 2000,
+      "p95LatencyMs": 1500,
+      "p99LatencyMs": 2500
+    },
+    
+    "pageLoad": {
+      "maxFirstContentfulPaint": 1500,
+      "maxLargestContentfulPaint": 2500,
+      "maxCumulativeLayoutShift": 0.1,
+      "maxFirstInputDelay": 100
+    },
+    
+    "apiEndpoints": {
+      "/forecast": { "maxLatencyMs": 2000 },
+      "/health": { "maxLatencyMs": 500 },
+      "/metrics": { "maxLatencyMs": 1000 }
+    }
+  },
+  
+  "accessibilitySettings": {
+    "screenReader": {
+      "enabled": true,
+      "voice": "Alex",
+      "rate": "medium"
+    },
+    
+    "colorBlindness": {
+      "protanopia": true,
+      "deuteranopia": true,
+      "tritanopia": true
+    },
+    
+    "motorImpairment": {
+      "keyboardOnly": true,
+      "slowMotion": true,
+      "largeTargets": true
+    }
+  },
+  
+  "networkConditions": {
+    "fast": {
+      "downloadThroughput": 50000000,
+      "uploadThroughput": 50000000,
+      "latency": 20
+    },
+    
+    "slow3G": {
+      "downloadThroughput": 1500000,
+      "uploadThroughput": 750000,
+      "latency": 300
+    },
+    
+    "offline": {
+      "downloadThroughput": 0,
+      "uploadThroughput": 0,
+      "latency": 0
+    },
+    
+    "intermittent": {
+      "description": "Connection drops every 30 seconds",
+      "pattern": [
+        { "duration": 30000, "online": true },
+        { "duration": 5000, "online": false }
+      ]
+    }
+  },
+  
+  "deviceViewports": {
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "deviceScaleFactor": 3
+    },
+    
+    "tablet": {
+      "width": 820,
+      "height": 1180,
+      "deviceScaleFactor": 2
+    },
+    
+    "desktop": {
+      "width": 1920,
+      "height": 1080,
+      "deviceScaleFactor": 1
+    },
+    
+    "ultrawide": {
+      "width": 3440,
+      "height": 1440,
+      "deviceScaleFactor": 1
+    }
+  },
+  
+  "userProfiles": {
+    "newUser": {
+      "description": "First-time user with no prior experience",
+      "apiKey": null,
+      "preferences": {},
+      "tourCompleted": false
+    },
+    
+    "powerUser": {
+      "description": "Experienced meteorologist user",
+      "apiKey": "test-token-12345",
+      "preferences": {
+        "defaultHorizon": "12h",
+        "defaultVariables": ["t2m", "u10", "v10", "msl", "cape"],
+        "chartType": "advanced",
+        "showAnalogs": true,
+        "enableNotifications": true
+      },
+      "tourCompleted": true
+    },
+    
+    "mobileUser": {
+      "description": "Primary mobile user",
+      "device": "mobile",
+      "preferences": {
+        "simplifiedView": true,
+        "touchOptimized": true,
+        "offlineMode": true
+      }
+    },
+    
+    "accessibilityUser": {
+      "description": "User with visual impairments",
+      "preferences": {
+        "highContrast": true,
+        "largeText": true,
+        "screenReader": true,
+        "keyboardNavigation": true
+      }
+    }
+  },
+  
+  "testEnvironments": {
+    "local": {
+      "frontend": "http://localhost:3000",
+      "api": "http://localhost:8000",
+      "database": "postgresql://localhost:5432/weather_test"
+    },
+    
+    "staging": {
+      "frontend": "https://staging-weather.adelaide.com",
+      "api": "https://api-staging.adelaide.com",
+      "database": "postgresql://staging-db:5432/weather"
+    },
+    
+    "production": {
+      "frontend": "https://weather.adelaide.com",
+      "api": "https://api.adelaide.com",
+      "database": "postgresql://prod-db:5432/weather"
+    }
+  }
+}

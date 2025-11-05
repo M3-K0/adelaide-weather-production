@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adelaide Weather Forecasting API Documentation</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAsTAAALEwEAmpwYAAAA3klEQVR4nO2WQQ6CMBQF36fGE3gCjyddegJPwAk8gSfgBJzAE3gCTuAJOIEn4AScwBN4Ak7gCTiBJ+AEnIATcAJOwAk4gSfgBJzAE3ACTsAJOAEn4AScgBNwAk7ACTgBJ+AEnIATcAJOwAk4ASfgBJyAE3ACTsAJOAEn4AScgBNwAk7ACTgBJ+AEnIATcAJOwAk4ASfgBJyAE3ACTsAJOAEn4AScgBNwAk7ACTgBJ+AEnIATcAJOwAk4ASfgBJyAE3ACTsAJOAEn4AScgBNwAk7ACTgBJ+AEnIATcAJOwAk4ASfgBJyAE3ACTsAJOAEn4AScgBNwAk7ACTgBJ+AEnIATcAJOHQfV3KhqbKaXAAAAAElFTkSuQmCC">
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui.css" />
+    <style>
+        html {
+            box-sizing: border-box;
+            overflow: -moz-scrollbars-vertical;
+            overflow-y: scroll;
+        }
+
+        *, *:before, *:after {
+            box-sizing: inherit;
+        }
+
+        body {
+            margin: 0;
+            background: #fafafa;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        /* Custom styling for Adelaide Weather API */
+        .swagger-ui .topbar {
+            background-color: #2c5aa0;
+            padding: 10px 0;
+        }
+
+        .swagger-ui .topbar .download-url-wrapper {
+            display: none;
+        }
+
+        .swagger-ui .topbar .link {
+            content: "";
+        }
+
+        .swagger-ui .topbar .link:after {
+            content: "Adelaide Weather Forecasting API";
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .swagger-ui .info {
+            margin: 20px 0;
+        }
+
+        .swagger-ui .info .title {
+            color: #2c5aa0;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .swagger-ui .info .description {
+            color: #555;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        .swagger-ui .scheme-container {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .swagger-ui .auth-wrapper {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .swagger-ui .auth-wrapper .auth-btn-wrapper {
+            margin-top: 10px;
+        }
+
+        /* Custom banner */
+        .api-banner {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .api-banner h1 {
+            margin: 0 0 15px 0;
+            font-size: 2.5rem;
+            font-weight: 300;
+        }
+
+        .api-banner p {
+            margin: 0;
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .api-banner .version {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            display: inline-block;
+            margin-top: 15px;
+        }
+
+        /* Quick links */
+        .quick-links {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin: 0 20px 30px 20px;
+            overflow: hidden;
+        }
+
+        .quick-links h3 {
+            background: #f8f9fa;
+            margin: 0;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e9ecef;
+            color: #495057;
+        }
+
+        .quick-links ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .quick-links li {
+            border-bottom: 1px solid #f8f9fa;
+        }
+
+        .quick-links li:last-child {
+            border-bottom: none;
+        }
+
+        .quick-links a {
+            display: block;
+            padding: 12px 20px;
+            text-decoration: none;
+            color: #2c5aa0;
+            transition: background-color 0.2s;
+        }
+
+        .quick-links a:hover {
+            background-color: #f8f9fa;
+        }
+
+        .quick-links .method {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-right: 10px;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        .method.get {
+            background: #61affe;
+            color: white;
+        }
+
+        .method.post {
+            background: #49cc90;
+            color: white;
+        }
+
+        /* Override swagger-ui button colors */
+        .swagger-ui .btn.authorize {
+            background-color: #2c5aa0;
+            border-color: #2c5aa0;
+        }
+
+        .swagger-ui .btn.authorize:hover {
+            background-color: #1e3d6f;
+            border-color: #1e3d6f;
+        }
+
+        /* Try it out button styling */
+        .swagger-ui .btn.try-out__btn {
+            background-color: #28a745;
+            border-color: #28a745;
+            color: white;
+        }
+
+        .swagger-ui .btn.try-out__btn:hover {
+            background-color: #218838;
+            border-color: #1e7e34;
+        }
+
+        /* Error styling */
+        .swagger-ui .errors-wrapper {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            color: #721c24;
+        }
+
+        /* Success styling */
+        .swagger-ui .response .response-col_status {
+            color: #155724;
+        }
+
+        .swagger-ui .response .response-col_status.response-col_status_200 {
+            color: #155724;
+        }
+
+        /* Loading spinner */
+        .swagger-ui .loading-container {
+            padding: 40px;
+            text-align: center;
+        }
+
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .api-banner h1 {
+                font-size: 2rem;
+            }
+            
+            .api-banner p {
+                font-size: 1rem;
+            }
+            
+            .quick-links {
+                margin: 0 10px 20px 10px;
+            }
+        }
+
+        /* Status indicators */
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-indicator.healthy {
+            background-color: #28a745;
+        }
+
+        .status-indicator.warning {
+            background-color: #ffc107;
+        }
+
+        .status-indicator.error {
+            background-color: #dc3545;
+        }
+
+        /* Footer */
+        .api-footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+            margin-top: 40px;
+            border-top: 1px solid #e9ecef;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="api-banner">
+        <h1>Adelaide Weather Forecasting API</h1>
+        <p>Production-ready analog ensemble weather forecasting system</p>
+        <div class="version">API Version 1.1.0</div>
+    </div>
+
+    <div class="quick-links">
+        <h3>🚀 Quick Start</h3>
+        <ul>
+            <li>
+                <a href="#operations-Forecasting-getForecast">
+                    <span class="method get">GET</span>
+                    <strong>/forecast</strong> - Get weather forecast with uncertainty bounds
+                </a>
+            </li>
+            <li>
+                <a href="#operations-Monitoring-getHealth">
+                    <span class="method get">GET</span>
+                    <strong>/health</strong> - Check system health and readiness
+                </a>
+            </li>
+            <li>
+                <a href="#operations-Monitoring-getMetrics">
+                    <span class="method get">GET</span>
+                    <strong>/metrics</strong> - Get Prometheus metrics (requires auth)
+                </a>
+            </li>
+            <li>
+                <a href="#operations-Analysis-getAnalogs">
+                    <span class="method get">GET</span>
+                    <strong>/analogs</strong> - Explore historical analog patterns
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    <div class="quick-links">
+        <h3>📋 Documentation Links</h3>
+        <ul>
+            <li><a href="./authentication.md">🔐 Authentication Guide</a></li>
+            <li><a href="./quickstart.md">⚡ Quick Start Tutorial</a></li>
+            <li><a href="./integration-guide.md">🏗️ Integration Guide</a></li>
+            <li><a href="./rate-limiting.md">🚦 Rate Limiting Policy</a></li>
+            <li><a href="./error-codes.md">❌ Error Codes Reference</a></li>
+            <li><a href="./examples/">📝 Code Examples</a></li>
+        </ul>
+    </div>
+
+    <div class="quick-links">
+        <h3>🧪 Interactive Testing</h3>
+        <ul>
+            <li><a href="#" onclick="testBasicForecast()">🌡️ Test Basic Forecast</a></li>
+            <li><a href="#" onclick="testHealthCheck()">❤️ Test Health Check</a></li>
+            <li><a href="#" onclick="testAuthentication()">🔑 Test Authentication</a></li>
+            <li><a href="#" onclick="showExampleRequests()">📋 Show Example Requests</a></li>
+            <li><a href="./test-interface.html" target="_blank">🔬 Advanced Testing Interface</a></li>
+        </ul>
+    </div>
+
+    <div id="swagger-ui"></div>
+
+    <div class="api-footer">
+        <p>
+            <span class="status-indicator healthy" id="api-status"></span>
+            Adelaide Weather Forecasting API - Built with ❤️ for meteorologists and developers
+        </p>
+        <p>
+            <small>
+                Need help? Check our <a href="./quickstart.md">Quick Start Guide</a> or 
+                contact <a href="mailto:support@adelaideweather.example.com">support</a>
+            </small>
+        </p>
+    </div>
+
+    <script src="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui-standalone-preset.js"></script>
+    <script>
+        // Swagger UI configuration
+        window.onload = function() {
+            const ui = SwaggerUIBundle({
+                url: './openapi.yaml',
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout",
+                
+                // Request interceptor to add correlation IDs
+                requestInterceptor: (request) => {
+                    // Add correlation ID for debugging
+                    const correlationId = 'web_' + Math.random().toString(36).substr(2, 9);
+                    request.headers['X-Correlation-ID'] = correlationId;
+                    
+                    // Log request for debugging
+                    console.log('API Request:', {
+                        url: request.url,
+                        method: request.method,
+                        correlationId: correlationId
+                    });
+                    
+                    return request;
+                },
+                
+                // Response interceptor for better error handling
+                responseInterceptor: (response) => {
+                    // Log response for debugging
+                    console.log('API Response:', {
+                        url: response.url,
+                        status: response.status,
+                        headers: response.headers
+                    });
+                    
+                    return response;
+                },
+                
+                // Custom validation
+                validatorUrl: null, // Disable online validator
+                
+                // Try it out enabled by default
+                tryItOutEnabled: true,
+                
+                // Display request duration
+                displayRequestDuration: true,
+                
+                // Custom CSS
+                customCss: `
+                    .swagger-ui .topbar { display: none; }
+                `,
+                
+                // OAuth configuration (if needed in future)
+                oauth: {
+                    clientId: "swagger-ui",
+                    realm: "swagger-ui-realm",
+                    appName: "Adelaide Weather API Explorer"
+                }
+            });
+
+            // Check API health status
+            checkApiHealth();
+            
+            // Auto-refresh health status every 30 seconds
+            setInterval(checkApiHealth, 30000);
+        };
+
+        // Function to check API health and update status indicator
+        async function checkApiHealth() {
+            const statusIndicator = document.getElementById('api-status');
+            
+            try {
+                // Try to reach health endpoint without auth (should work)
+                const response = await fetch('./health', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    },
+                    signal: AbortSignal.timeout(5000) // 5 second timeout
+                });
+                
+                if (response.ok) {
+                    const health = await response.json();
+                    if (health.ready) {
+                        statusIndicator.className = 'status-indicator healthy';
+                        statusIndicator.title = 'API is healthy and ready';
+                    } else {
+                        statusIndicator.className = 'status-indicator warning';
+                        statusIndicator.title = 'API is running but not fully ready';
+                    }
+                } else {
+                    statusIndicator.className = 'status-indicator warning';
+                    statusIndicator.title = `API returned status ${response.status}`;
+                }
+            } catch (error) {
+                statusIndicator.className = 'status-indicator error';
+                statusIndicator.title = 'API is not responding';
+                console.warn('Health check failed:', error.message);
+            }
+        }
+
+        // Add some helpful console messages
+        console.log(`
+╔══════════════════════════════════════════════════════════════╗
+║                Adelaide Weather Forecasting API             ║
+║                    Interactive Documentation                 ║
+╠══════════════════════════════════════════════════════════════╣
+║  • Click "Authorize" to add your API token                  ║
+║  • Use "Try it out" to test endpoints directly              ║
+║  • Check the Quick Start guide for examples                 ║
+║  • All requests include correlation IDs for debugging       ║
+╚══════════════════════════════════════════════════════════════╝
+        `);
+
+        // Helper function to copy curl commands to clipboard
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                console.log('Copied to clipboard:', text);
+            }).catch(err => {
+                console.error('Failed to copy to clipboard:', err);
+            });
+        }
+
+        // Add keyboard shortcuts
+        document.addEventListener('keydown', (event) => {
+            // Ctrl/Cmd + K to focus on search
+            if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+                event.preventDefault();
+                const searchInput = document.querySelector('.swagger-ui input[type="text"]');
+                if (searchInput) {
+                    searchInput.focus();
+                }
+            }
+        });
+
+        // Interactive testing functions
+        async function testBasicForecast() {
+            const token = prompt('Enter your API token:');
+            if (!token) return;
+
+            try {
+                const response = await fetch('./forecast?horizon=24h&vars=t2m,u10,v10,msl', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showTestResult('✅ Basic Forecast Test Passed', 
+                        `Temperature: ${result.variables.t2m.value}°C\n` +
+                        `Confidence: ${(result.variables.t2m.confidence * 100).toFixed(1)}%\n` +
+                        `Response time: ${result.latency_ms}ms`
+                    );
+                } else {
+                    showTestResult('❌ Basic Forecast Test Failed', 
+                        `Error: ${result.error.message}\n` +
+                        `Correlation ID: ${result.error.correlation_id}`
+                    );
+                }
+            } catch (error) {
+                showTestResult('❌ Basic Forecast Test Failed', `Network error: ${error.message}`);
+            }
+        }
+
+        async function testHealthCheck() {
+            try {
+                const response = await fetch('./health');
+                const result = await response.json();
+                
+                if (response.ok && result.ready) {
+                    showTestResult('✅ Health Check Passed', 
+                        `System is ready\n` +
+                        `Uptime: ${result.uptime_seconds}s\n` +
+                        `Model version: ${result.model.version}`
+                    );
+                } else {
+                    showTestResult('⚠️ Health Check Warning', 
+                        `System not ready\n` +
+                        `Status: ${result.ready ? 'Ready' : 'Not Ready'}`
+                    );
+                }
+            } catch (error) {
+                showTestResult('❌ Health Check Failed', `Network error: ${error.message}`);
+            }
+        }
+
+        async function testAuthentication() {
+            const token = prompt('Enter your API token to test:');
+            if (!token) return;
+
+            try {
+                const response = await fetch('./forecast?horizon=6h&vars=t2m', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (response.status === 200) {
+                    showTestResult('✅ Authentication Test Passed', 'Token is valid and working');
+                } else if (response.status === 401) {
+                    showTestResult('❌ Authentication Test Failed', 'Invalid or expired token');
+                } else if (response.status === 403) {
+                    showTestResult('❌ Authentication Test Failed', 'Token lacks required permissions');
+                } else {
+                    const result = await response.json();
+                    showTestResult('⚠️ Authentication Test Warning', 
+                        `Unexpected response: ${result.error?.message || 'Unknown error'}`
+                    );
+                }
+            } catch (error) {
+                showTestResult('❌ Authentication Test Failed', `Network error: ${error.message}`);
+            }
+        }
+
+        function showExampleRequests() {
+            const examples = `
+🔗 Example API Requests:
+
+1. Basic Forecast:
+   GET /forecast?horizon=24h&vars=t2m,u10,v10,msl
+   Authorization: Bearer YOUR_TOKEN
+
+2. Extended Forecast:
+   GET /forecast?horizon=48h&vars=t2m,u10,v10,msl,cape,tp6h
+   Authorization: Bearer YOUR_TOKEN
+
+3. Quick Temperature Check:
+   GET /forecast?horizon=6h&vars=t2m
+   Authorization: Bearer YOUR_TOKEN
+
+4. Health Check (no auth required):
+   GET /health
+
+5. Historical Analogs:
+   GET /analogs?horizon=24h
+   Authorization: Bearer YOUR_TOKEN
+
+6. System Metrics:
+   GET /metrics
+   Authorization: Bearer YOUR_TOKEN
+
+📋 Copy these URLs and test them in the Swagger UI below!
+            `;
+            
+            showTestResult('📋 Example Requests', examples);
+        }
+
+        function showTestResult(title, message) {
+            // Create modal overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 10000;
+            `;
+
+            // Create modal content
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                max-width: 600px;
+                max-height: 80vh;
+                overflow-y: auto;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                margin: 20px;
+            `;
+
+            modal.innerHTML = `
+                <h3 style="margin-top: 0; color: #2c5aa0;">${title}</h3>
+                <pre style="background: #f8f9fa; padding: 15px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap;">${message}</pre>
+                <button onclick="this.closest('[style*=fixed]').remove()" 
+                        style="background: #2c5aa0; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; float: right;">
+                    Close
+                </button>
+                <div style="clear: both;"></div>
+            `;
+
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+
+            // Close on click outside
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.remove();
+                }
+            });
+        }
+    </script>
+</body>
+</html>

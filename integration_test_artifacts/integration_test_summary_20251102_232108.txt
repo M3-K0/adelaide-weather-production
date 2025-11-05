@@ -1,0 +1,58 @@
+Adelaide Weather Forecasting System - Integration Test Summary
+======================================================================
+
+Total Tests: 14
+Passed: 11
+Failed: 3
+Success Rate: 78.57%
+Total Duration: 24.05s
+
+Component Status:
+--------------------
+✅ Environment Config Manager: passed
+❌ Secure Credential Manager: failed
+✅ Config Drift Detection: passed
+✅ Deployment Script: passed
+✅ Faiss Health Monitoring: passed
+✅ Api Integration: passed
+✅ Frontend Connection: passed
+
+Performance Summary:
+--------------------
+development_config_load_time: 11.8ms (avg), 11.8-11.8ms (range)
+staging_config_load_time: 12.0ms (avg), 12.0-12.0ms (range)
+production_config_load_time: 11.8ms (avg), 11.8-11.8ms (range)
+monitoring_startup_time: 3482.9ms (avg), 3482.9-3482.9ms (range)
+drift_detection_time: 3484.6ms (avg), 3484.6-3484.6ms (range)
+help_command_time: 12.4ms (avg), 12.4-12.4ms (range)
+faiss_health_endpoint_time: 3.8ms (avg), 3.8-3.8ms (range)
+metrics_endpoint_time: 2.3ms (avg), 2.3-2.3ms (range)
+forecast_endpoint_time: 2.4ms (avg), 2.4-2.4ms (range)
+api_connectivity__health: 2.7ms (avg), 2.7-2.7ms (range)
+api_connectivity__forecast?horizon=24h&vars=t2m: 2.3ms (avg), 2.3-2.3ms (range)
+single_forecast_avg_time: 2.4ms (avg), 2.4-2.4ms (range)
+single_forecast_max_time: 2.4ms (avg), 2.4-2.4ms (range)
+burst_forecast_avg_time: 6.1ms (avg), 6.1-6.1ms (range)
+burst_forecast_max_time: 8.6ms (avg), 8.6-8.6ms (range)
+health_checks_avg_time: 9.6ms (avg), 9.6-9.6ms (range)
+health_checks_max_time: 12.2ms (avg), 12.2-12.2ms (range)
+
+Recommendations:
+--------------------
+1. Verify credential storage security and encryption settings
+2. Check API service startup and dependency initialization
+3. Investigate performance bottlenecks in slow-responding components
+4. Address security configuration warnings
+
+Failed Tests Details:
+--------------------
+❌ Secure Credential Manager
+   Error: Secure Credential Manager test failed: Master key not found in environment variable: CREDENTIAL_MASTER_KEY
+
+❌ API Startup Integration
+   Error: Failed to start API services
+
+❌ Complete Forecast Workflow
+   Error: Health check failed in workflow
+   Error: Forecast request failed in workflow
+

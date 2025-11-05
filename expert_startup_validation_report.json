@@ -1,0 +1,887 @@
+{
+  "validation_framework": "Expert-Validated Startup System v3.0.0",
+  "validation_timestamp": "2025-11-05T10:36:01.716698",
+  "expert_thresholds": {
+    "model_match_threshold": 0.95,
+    "data_validity_threshold": 0.99,
+    "faiss_size_tolerance": 0.01,
+    "expected_pattern_counts": {
+      "6": 6574,
+      "12": 6574,
+      "24": 13148,
+      "48": 13148
+    },
+    "temporal_correlation_threshold": 0.999
+  },
+  "system_state": {
+    "validation_timestamp": "2025-11-05T10:36:01.623011",
+    "model_hash": "44bffea204f1405b440b2006d640fd8e4c8c13db07516718886b99a727c8d9b1",
+    "model_match_ratio": 1.0,
+    "database_integrity_scores": {
+      "6h": 1.0,
+      "12h": 1.0,
+      "24h": 1.0,
+      "48h": 1.0
+    },
+    "faiss_index_states": {
+      "6h": {
+        "flatip": {
+          "ntotal": 6574,
+          "d": 256,
+          "file_size_mb": 6.419964790344238
+        },
+        "ivfpq": {
+          "ntotal": 6574,
+          "d": 256,
+          "file_size_mb": 0.5659828186035156
+        }
+      },
+      "12h": {
+        "flatip": {
+          "ntotal": 6574,
+          "d": 256,
+          "file_size_mb": 6.419964790344238
+        },
+        "ivfpq": {
+          "ntotal": 6574,
+          "d": 256,
+          "file_size_mb": 0.5659828186035156
+        }
+      },
+      "24h": {
+        "flatip": {
+          "ntotal": 13148,
+          "d": 256,
+          "file_size_mb": 12.839886665344238
+        },
+        "ivfpq": {
+          "ntotal": 13148,
+          "d": 256,
+          "file_size_mb": 0.8030586242675781
+        }
+      },
+      "48h": {
+        "flatip": {
+          "ntotal": 13148,
+          "d": 256,
+          "file_size_mb": 12.839886665344238
+        },
+        "ivfpq": {
+          "ntotal": 13148,
+          "d": 256,
+          "file_size_mb": 0.8030586242675781
+        }
+      }
+    },
+    "temporal_alignment_status": {
+      "6h": true,
+      "12h": true,
+      "24h": true,
+      "48h": true
+    },
+    "correlation_matrix": {
+      "6h_12h": 0.9925314483424722
+    },
+    "startup_time_seconds": 0.7677261829376221
+  },
+  "validation_results": [
+    {
+      "test_name": "critical_file_structure",
+      "status": "PASS",
+      "message": "Critical file structure validated - 100.0% availability (9/9 files)",
+      "metrics": {
+        "structure_analysis": {
+          "indices": {
+            "exists": true,
+            "is_directory": true,
+            "readable": true,
+            "file_count": 9,
+            "expected_files_found": {
+              "faiss_6h_flatip.faiss": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 6731821,
+                "size_mb": 6.419964790344238
+              },
+              "faiss_6h_ivfpq.faiss": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 593476,
+                "size_mb": 0.5659828186035156
+              },
+              "faiss_12h_flatip.faiss": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 6731821,
+                "size_mb": 6.419964790344238
+              },
+              "faiss_12h_ivfpq.faiss": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 593476,
+                "size_mb": 0.5659828186035156
+              },
+              "faiss_24h_flatip.faiss": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 13463597,
+                "size_mb": 12.839886665344238
+              },
+              "faiss_24h_ivfpq.faiss": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 842068,
+                "size_mb": 0.8030586242675781
+              },
+              "faiss_48h_flatip.faiss": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 13463597,
+                "size_mb": 12.839886665344238
+              },
+              "faiss_48h_ivfpq.faiss": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 842068,
+                "size_mb": 0.8030586242675781
+              }
+            },
+            "unexpected_files": [],
+            "total_size_mb": 41.263739585876465
+          },
+          "embeddings": {
+            "exists": true,
+            "is_directory": true,
+            "readable": true,
+            "file_count": 8,
+            "expected_files_found": {},
+            "unexpected_files": [
+              "metadata_48h.parquet",
+              "metadata_24h.parquet",
+              "embeddings_24h.npy",
+              "embeddings_48h.npy",
+              "embeddings_6h.npy",
+              "embeddings_12h.npy",
+              "metadata_12h.parquet",
+              "metadata_6h.parquet"
+            ],
+            "total_size_mb": 39.091514587402344
+          },
+          "models": {
+            "exists": true,
+            "is_directory": true,
+            "readable": true,
+            "file_count": 1,
+            "expected_files_found": {},
+            "unexpected_files": [
+              "best_model.pt"
+            ],
+            "total_size_mb": 34.297157287597656
+          },
+          "outcomes": {
+            "exists": true,
+            "is_directory": true,
+            "readable": true,
+            "file_count": 8,
+            "expected_files_found": {},
+            "unexpected_files": [
+              "outcomes_12h.npy",
+              "metadata_24h_clean.parquet",
+              "metadata_6h_clean.parquet",
+              "metadata_12h_clean.parquet",
+              "metadata_48h_clean.parquet",
+              "outcomes_48h.npy",
+              "outcomes_6h.npy",
+              "outcomes_24h.npy"
+            ],
+            "total_size_mb": 2.287014961242676
+          }
+        },
+        "critical_failures": [],
+        "actionable_errors": [],
+        "total_critical_files": 9,
+        "files_available": 9,
+        "availability_ratio": 1.0,
+        "expected_faiss_files": [
+          "faiss_6h_flatip.faiss",
+          "faiss_6h_ivfpq.faiss",
+          "faiss_12h_flatip.faiss",
+          "faiss_12h_ivfpq.faiss",
+          "faiss_24h_flatip.faiss",
+          "faiss_24h_ivfpq.faiss",
+          "faiss_48h_flatip.faiss",
+          "faiss_48h_ivfpq.faiss"
+        ]
+      },
+      "timestamp": "2025-11-05T10:36:01.071960",
+      "expert_threshold_met": true
+    },
+    {
+      "test_name": "file_integrity_checksums",
+      "status": "PASS",
+      "message": "File integrity validated - 100.0% integrity ratio (13 files checked)",
+      "metrics": {
+        "integrity_analysis": {
+          "models": {
+            "best_model.pt": {
+              "permissions": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 35963176,
+                "size_mb": 34.297157287597656
+              },
+              "age_info": {
+                "modification_time": "2025-10-30T11:01:47.577378",
+                "age_days": 5,
+                "too_old": false,
+                "size_bytes": 35963176
+              },
+              "hash": "0fda2a91c4d233cde62fb7c358619377",
+              "size_mb": 34.297157287597656
+            }
+          },
+          "indices": {
+            "faiss_48h_flatip.faiss": {
+              "permissions": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 13463597,
+                "size_mb": 12.839886665344238
+              },
+              "age_info": {
+                "modification_time": "2025-11-05T04:11:35.659749",
+                "age_days": 0,
+                "too_old": false,
+                "size_bytes": 13463597
+              },
+              "hash": "5c31397778eefd2601348aa57a24d9e0",
+              "size_mb": 12.839886665344238
+            },
+            "faiss_6h_flatip.faiss": {
+              "permissions": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 6731821,
+                "size_mb": 6.419964790344238
+              },
+              "age_info": {
+                "modification_time": "2025-11-05T04:11:33.987746",
+                "age_days": 0,
+                "too_old": false,
+                "size_bytes": 6731821
+              },
+              "hash": "d5f8a921d4d25ca61154e75237662db4",
+              "size_mb": 6.419964790344238
+            },
+            "faiss_24h_flatip.faiss": {
+              "permissions": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 13463597,
+                "size_mb": 12.839886665344238
+              },
+              "age_info": {
+                "modification_time": "2025-11-05T04:11:34.823747",
+                "age_days": 0,
+                "too_old": false,
+                "size_bytes": 13463597
+              },
+              "hash": "741a14bffaa5fcaaf2cf19d6b15d5659",
+              "size_mb": 12.839886665344238
+            },
+            "faiss_6h_ivfpq.faiss": {
+              "permissions": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 593476,
+                "size_mb": 0.5659828186035156
+              },
+              "age_info": {
+                "modification_time": "2025-11-05T04:11:34.327747",
+                "age_days": 0,
+                "too_old": false,
+                "size_bytes": 593476
+              },
+              "hash": "7ec8c0a58c79613663e4122db5375394",
+              "size_mb": 0.5659828186035156
+            },
+            "faiss_12h_flatip.faiss": {
+              "permissions": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 6731821,
+                "size_mb": 6.419964790344238
+              },
+              "age_info": {
+                "modification_time": "2025-11-05T04:11:34.387747",
+                "age_days": 0,
+                "too_old": false,
+                "size_bytes": 6731821
+              },
+              "hash": "999b597ac75d80bee9b77b61036f795d",
+              "size_mb": 6.419964790344238
+            },
+            "faiss_24h_ivfpq.faiss": {
+              "permissions": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 842068,
+                "size_mb": 0.8030586242675781
+              },
+              "age_info": {
+                "modification_time": "2025-11-05T04:11:35.531749",
+                "age_days": 0,
+                "too_old": false,
+                "size_bytes": 842068
+              },
+              "hash": "de61266a053a547ef76e5198789b2534",
+              "size_mb": 0.8030586242675781
+            },
+            "faiss_12h_ivfpq.faiss": {
+              "permissions": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 593476,
+                "size_mb": 0.5659828186035156
+              },
+              "age_info": {
+                "modification_time": "2025-11-05T04:11:34.687747",
+                "age_days": 0,
+                "too_old": false,
+                "size_bytes": 593476
+              },
+              "hash": "e8ed0f209b7214fbcf05b96adfef1760",
+              "size_mb": 0.5659828186035156
+            },
+            "faiss_48h_ivfpq.faiss": {
+              "permissions": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 842068,
+                "size_mb": 0.8030586242675781
+              },
+              "age_info": {
+                "modification_time": "2025-11-05T04:11:36.351750",
+                "age_days": 0,
+                "too_old": false,
+                "size_bytes": 842068
+              },
+              "hash": "07baa72367cf9cc509bf02161be6e48b",
+              "size_mb": 0.8030586242675781
+            }
+          },
+          "embeddings": {
+            "embeddings_24h.npy": {
+              "permissions": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 13463680,
+                "size_mb": 12.8399658203125
+              },
+              "age_info": {
+                "modification_time": "2025-11-05T04:11:34.751747",
+                "age_days": 0,
+                "too_old": false,
+                "size_bytes": 13463680
+              },
+              "hash": "b5b075eb223c86720173f1734273d559",
+              "size_mb": 12.8399658203125
+            },
+            "embeddings_48h.npy": {
+              "permissions": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 13463680,
+                "size_mb": 12.8399658203125
+              },
+              "age_info": {
+                "modification_time": "2025-11-05T04:11:35.595749",
+                "age_days": 0,
+                "too_old": false,
+                "size_bytes": 13463680
+              },
+              "hash": "3bb02a0f67a663021cc91b4d5472f948",
+              "size_mb": 12.8399658203125
+            },
+            "embeddings_6h.npy": {
+              "permissions": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 6731904,
+                "size_mb": 6.4200439453125
+              },
+              "age_info": {
+                "modification_time": "2025-11-05T04:11:33.915746",
+                "age_days": 0,
+                "too_old": false,
+                "size_bytes": 6731904
+              },
+              "hash": "fdfd0c80b5d40e8b4e3b82bd7484b927",
+              "size_mb": 6.4200439453125
+            },
+            "embeddings_12h.npy": {
+              "permissions": {
+                "exists": true,
+                "readable": true,
+                "writable": true,
+                "is_file": true,
+                "size_ok": true,
+                "size_bytes": 6731904,
+                "size_mb": 6.4200439453125
+              },
+              "age_info": {
+                "modification_time": "2025-11-05T04:11:34.355747",
+                "age_days": 0,
+                "too_old": false,
+                "size_bytes": 6731904
+              },
+              "hash": "676577f3dd5968bda47a0b9ee7f959d2",
+              "size_mb": 6.4200439453125
+            }
+          }
+        },
+        "corruption_detected": [],
+        "size_warnings": [],
+        "total_files_checked": 13,
+        "files_with_issues": 0,
+        "integrity_ratio": 1.0,
+        "corruption_count": 0
+      },
+      "timestamp": "2025-11-05T10:36:01.348715",
+      "expert_threshold_met": true
+    },
+    {
+      "test_name": "model_integrity_expert",
+      "status": "PASS",
+      "message": "Model integrity validated - 100.0% match ratio (\u226595.0%)",
+      "metrics": {
+        "match_ratio": 1.0,
+        "model_hash": "44bffea204f1405b440b2006d640fd8e4c8c13db07516718886b99a727c8d9b1",
+        "current_hash": "44bffea204f1405b440b2006d640fd8e4c8c13db07516718886b99a727c8d9b1",
+        "hash_consistency": true,
+        "dataparallel_prefix_handling": true,
+        "embedding_norm_pre": 1.0,
+        "embedding_norm_post": 1.0,
+        "norm_stability": true,
+        "expert_threshold_met": true
+      },
+      "timestamp": "2025-11-05T10:36:01.479858",
+      "expert_threshold_met": true
+    },
+    {
+      "test_name": "database_integrity_expert",
+      "status": "PASS",
+      "message": "Database integrity validated - all horizons \u226599% valid",
+      "metrics": {
+        "horizon_metrics": {
+          "6h": {
+            "valid_percentage": 1.0,
+            "zero_percentage": 0.0,
+            "uniqueness_ratio": 0.995396,
+            "excessive_zeros": false,
+            "completely_zero_rows": false,
+            "poor_uniqueness": false,
+            "temporal_misalignment": false,
+            "corrupted_variables": [],
+            "expert_threshold_met": true
+          },
+          "12h": {
+            "valid_percentage": 1.0,
+            "zero_percentage": 0.0,
+            "uniqueness_ratio": 0.994978,
+            "excessive_zeros": false,
+            "completely_zero_rows": false,
+            "poor_uniqueness": false,
+            "temporal_misalignment": false,
+            "corrupted_variables": [],
+            "expert_threshold_met": true
+          },
+          "24h": {
+            "valid_percentage": 1.0,
+            "zero_percentage": 0.0,
+            "uniqueness_ratio": 0.990932,
+            "excessive_zeros": false,
+            "completely_zero_rows": false,
+            "poor_uniqueness": false,
+            "temporal_misalignment": false,
+            "corrupted_variables": [],
+            "expert_threshold_met": true
+          },
+          "48h": {
+            "valid_percentage": 1.0,
+            "zero_percentage": 0.0,
+            "uniqueness_ratio": 0.990932,
+            "excessive_zeros": false,
+            "completely_zero_rows": false,
+            "poor_uniqueness": false,
+            "temporal_misalignment": false,
+            "corrupted_variables": [],
+            "expert_threshold_met": true
+          }
+        },
+        "correlation_issues": [],
+        "critical_failures": [],
+        "expert_failures": [],
+        "cross_horizon_analysis": {
+          "shifting_detected": false,
+          "correlation_6h_12h": -0.009175448710240047
+        }
+      },
+      "timestamp": "2025-11-05T10:36:01.481950",
+      "expert_threshold_met": true
+    },
+    {
+      "test_name": "faiss_indices_expert",
+      "status": "PASS",
+      "message": "FAISS indices validated - all sizes within \u00b11%, horizon-specific patterns",
+      "metrics": {
+        "horizon_metrics": {
+          "6h": {
+            "flatip": {
+              "index_size": 6574,
+              "expected_size": 6574,
+              "size_deviation": 0.0,
+              "size_within_tolerance": true,
+              "dimension": 256,
+              "dimension_correct": true,
+              "search_successful": true,
+              "search_time_ms": 0.16188621520996094,
+              "unique_neighbors": 50,
+              "neighbor_uniqueness": 1.0,
+              "similarity_variance": 0.00027029382181353867,
+              "has_variance": true,
+              "dataset_hash": "8f04e1cbf5b8"
+            },
+            "ivfpq": {
+              "index_size": 6574,
+              "expected_size": 6574,
+              "size_deviation": 0.0,
+              "size_within_tolerance": true,
+              "dimension": 256,
+              "dimension_correct": true,
+              "search_successful": true,
+              "search_time_ms": 0.2884864807128906,
+              "unique_neighbors": 50,
+              "neighbor_uniqueness": 1.0,
+              "similarity_variance": 0.0017691404791548848,
+              "has_variance": true,
+              "dataset_hash": "fb2adc4fcab9"
+            }
+          },
+          "12h": {
+            "flatip": {
+              "index_size": 6574,
+              "expected_size": 6574,
+              "size_deviation": 0.0,
+              "size_within_tolerance": true,
+              "dimension": 256,
+              "dimension_correct": true,
+              "search_successful": true,
+              "search_time_ms": 0.09918212890625,
+              "unique_neighbors": 50,
+              "neighbor_uniqueness": 1.0,
+              "similarity_variance": 0.0003232899762224406,
+              "has_variance": true,
+              "dataset_hash": "8f04e1cbf5b8"
+            },
+            "ivfpq": {
+              "index_size": 6574,
+              "expected_size": 6574,
+              "size_deviation": 0.0,
+              "size_within_tolerance": true,
+              "dimension": 256,
+              "dimension_correct": true,
+              "search_successful": true,
+              "search_time_ms": 0.26702880859375,
+              "unique_neighbors": 50,
+              "neighbor_uniqueness": 1.0,
+              "similarity_variance": 0.0007590887835249305,
+              "has_variance": true,
+              "dataset_hash": "fb2adc4fcab9"
+            }
+          },
+          "24h": {
+            "flatip": {
+              "index_size": 13148,
+              "expected_size": 13148,
+              "size_deviation": 0.0,
+              "size_within_tolerance": true,
+              "dimension": 256,
+              "dimension_correct": true,
+              "search_successful": true,
+              "search_time_ms": 0.2732276916503906,
+              "unique_neighbors": 50,
+              "neighbor_uniqueness": 1.0,
+              "similarity_variance": 0.000254060112638399,
+              "has_variance": true,
+              "dataset_hash": "de1458548666"
+            },
+            "ivfpq": {
+              "index_size": 13148,
+              "expected_size": 13148,
+              "size_deviation": 0.0,
+              "size_within_tolerance": true,
+              "dimension": 256,
+              "dimension_correct": true,
+              "search_successful": true,
+              "search_time_ms": 0.28252601623535156,
+              "unique_neighbors": 50,
+              "neighbor_uniqueness": 1.0,
+              "similarity_variance": 0.0008799840579740703,
+              "has_variance": true,
+              "dataset_hash": "8892252b4d05"
+            }
+          },
+          "48h": {
+            "flatip": {
+              "index_size": 13148,
+              "expected_size": 13148,
+              "size_deviation": 0.0,
+              "size_within_tolerance": true,
+              "dimension": 256,
+              "dimension_correct": true,
+              "search_successful": true,
+              "search_time_ms": 0.3075599670410156,
+              "unique_neighbors": 50,
+              "neighbor_uniqueness": 1.0,
+              "similarity_variance": 0.00016653163766022772,
+              "has_variance": true,
+              "dataset_hash": "de1458548666"
+            },
+            "ivfpq": {
+              "index_size": 13148,
+              "expected_size": 13148,
+              "size_deviation": 0.0,
+              "size_within_tolerance": true,
+              "dimension": 256,
+              "dimension_correct": true,
+              "search_successful": true,
+              "search_time_ms": 0.27561187744140625,
+              "unique_neighbors": 50,
+              "neighbor_uniqueness": 1.0,
+              "similarity_variance": 0.0006360247498378158,
+              "has_variance": true,
+              "dataset_hash": "8892252b4d05"
+            }
+          }
+        },
+        "critical_failures": [],
+        "expected_pattern_counts": {
+          "6": 6574,
+          "12": 6574,
+          "24": 13148,
+          "48": 13148
+        },
+        "size_tolerance": 0.01
+      },
+      "timestamp": "2025-11-05T10:36:01.497355",
+      "expert_threshold_met": true
+    },
+    {
+      "test_name": "temporal_alignment_expert",
+      "status": "PASS",
+      "message": "Temporal alignment validated - all horizons properly aligned",
+      "metrics": {
+        "horizon_alignment": {
+          "6h": {
+            "total_records": 7168,
+            "correct_alignments": 7168,
+            "alignment_accuracy": 1.0,
+            "sample_accuracy": 1.0,
+            "expected_offset_hours": 6,
+            "mean_offset_hours": 6.0,
+            "offset_std_hours": 0.0
+          },
+          "12h": {
+            "total_records": 7168,
+            "correct_alignments": 7168,
+            "alignment_accuracy": 1.0,
+            "sample_accuracy": 1.0,
+            "expected_offset_hours": 12,
+            "mean_offset_hours": 12.0,
+            "offset_std_hours": 0.0
+          },
+          "24h": {
+            "total_records": 14336,
+            "correct_alignments": 14336,
+            "alignment_accuracy": 1.0,
+            "sample_accuracy": 1.0,
+            "expected_offset_hours": 24,
+            "mean_offset_hours": 24.0,
+            "offset_std_hours": 0.0
+          },
+          "48h": {
+            "total_records": 14336,
+            "correct_alignments": 14336,
+            "alignment_accuracy": 1.0,
+            "sample_accuracy": 1.0,
+            "expected_offset_hours": 48,
+            "mean_offset_hours": 48.0,
+            "offset_std_hours": 0.0
+          }
+        },
+        "correlation_analysis": {
+          "6h_12h_correlation": 0.99209807542421
+        },
+        "alignment_failures": [],
+        "temporal_data_available": true
+      },
+      "timestamp": "2025-11-05T10:36:01.596351",
+      "expert_threshold_met": true
+    },
+    {
+      "test_name": "resource_guardrails_expert",
+      "status": "PASS",
+      "message": "Resource guardrails validated - cpu device, 4096MB limit, profiling enabled",
+      "metrics": {
+        "current_metrics": {
+          "cpu_count": 32,
+          "cpu_percent": 10.0,
+          "memory_total_gb": 8.0,
+          "memory_available_gb": 4.0,
+          "memory_used_percent": 50.0,
+          "process_memory_mb": 100.0,
+          "gpu_available": false,
+          "gpu_memory_mb": null,
+          "disk_usage_percent": 50.0,
+          "load_average": [
+            0.10400390625,
+            0.0283203125,
+            0.005859375
+          ]
+        },
+        "device_info": {
+          "selected_device": {
+            "device_type": "cpu",
+            "device_id": null,
+            "capabilities": {
+              "device_type": "cpu",
+              "device_count": 32,
+              "memory_mb": null,
+              "compute_capability": null,
+              "driver_version": null,
+              "available": true,
+              "performance_score": 32.0
+            },
+            "selection_reason": "Fallback to CPU: No GPU detected, FAISS GPU support unavailable",
+            "fallback_applied": true
+          },
+          "cpu_capabilities": {
+            "device_type": "cpu",
+            "device_count": 32,
+            "memory_mb": null,
+            "compute_capability": null,
+            "driver_version": null,
+            "available": true,
+            "performance_score": 32.0
+          },
+          "gpu_capabilities": [],
+          "faiss_gpu_available": false,
+          "environment_config": {
+            "gpu_enabled": "auto",
+            "force_cpu": false,
+            "gpu_device_id": null,
+            "gpu_memory_fraction": 0.8
+          }
+        },
+        "budget_check": {
+          "total_violation": false,
+          "process_violation": false,
+          "warning_level": false,
+          "critical_level": false,
+          "budget_exceeded": false,
+          "severity": "normal"
+        },
+        "device_validation": {
+          "device_selected": true,
+          "device_available": true,
+          "performance_adequate": true,
+          "memory_sufficient": true,
+          "issues": [],
+          "overall_valid": true
+        },
+        "environment_config": {
+          "FAISS_MEMORY_LIMIT": "4096",
+          "FAISS_GPU_ENABLED": "not_set",
+          "FAISS_LAZY_LOAD": "not_set",
+          "FAISS_FAIL_FAST": "not_set"
+        },
+        "profiling_test_success": true,
+        "device_switch_test": true,
+        "memory_available_gb": 4.0,
+        "process_memory_mb": 100.0,
+        "gpu_available": false,
+        "expert_thresholds_met": true
+      },
+      "timestamp": "2025-11-05T10:36:01.622920",
+      "expert_threshold_met": true
+    }
+  ],
+  "summary": {
+    "total_tests": 7,
+    "passed_tests": 7,
+    "critical_failures": 0,
+    "expert_threshold_violations": 0,
+    "expert_standards_met": true
+  }
+}

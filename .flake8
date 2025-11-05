@@ -1,0 +1,34 @@
+[flake8]
+max-line-length = 88
+extend-ignore = E203, W503, E501
+exclude = 
+    .git,
+    __pycache__,
+    venv,
+    .venv,
+    forecast_env,
+    node_modules,
+    .next,
+    build,
+    dist,
+    .eggs,
+    *.egg,
+    .tox,
+    .coverage,
+    .coverage.*,
+    .cache,
+    .pytest_cache,
+    noqa,
+    .mypy_cache
+
+per-file-ignores =
+    __init__.py:F401
+    test_*.py:S101,S311
+    *_test.py:S101,S311
+
+# Ignore specific warnings for scientific code
+# E402: module level import not at top of file (common in Jupyter-style scripts)
+# E501: line too long (handled by black)
+# F401: imported but unused (common in __init__.py files)
+# W503: line break before binary operator (conflicts with black)
+extend-ignore = E402

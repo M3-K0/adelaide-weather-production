@@ -1,0 +1,115 @@
+# Production Environment Overlay for Adelaide Weather Forecast
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: adelaide-weather-production
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+namespace: adelaide-weather-production
+
+resources:
+- ../../base
+- production-hpa.yaml
+- production-pdb.yaml
+- production-monitoring.yaml
+
+namePrefix: prod-
+
+commonLabels:
+  environment: production
+  tier: production
+
+commonAnnotations:
+  deployment.environment: production
+  monitoring.enabled: "true"
+  security.enforced: "true"
+
+configMapGenerator:
+- name: production-config
+  behavior: merge
+  literals:
+  - ENVIRONMENT=production
+  - LOG_LEVEL=INFO
+  - RATE_LIMIT_PER_MINUTE=60
+  - PERFORMANCE_CACHE_TTL=300
+  - API_BASE_URL=http://prod-api-service:8000
+  - ENABLE_DEBUG_ENDPOINTS=false
+  - SECURITY_HEADERS_ENABLED=true
+
+secretGenerator:
+- name: production-secrets
+  behavior: merge
+  literals:
+  - API_TOKEN=production-api-token-placeholder
+
+replicas:
+- name: api-deployment
+  count: 3
+- name: frontend-deployment
+  count: 3
+- name: redis-deployment
+  count: 1
+
+images:
+- name: api-image
+  newName: ghcr.io/adelaide-weather/api
+  newTag: production-latest
+- name: frontend-image
+  newName: ghcr.io/adelaide-weather/frontend
+  newTag: production-latest
+
+patchesStrategicMerge:
+- production-patches.yaml
+
+patchesJson6902:
+- target:
+    group: networking.k8s.io
+    version: v1
+    kind: Ingress
+    name: adelaide-weather-ingress
+  patch: |-
+    - op: replace
+      path: /spec/rules/0/host
+      value: adelaide-weather.example.com
+    - op: replace
+      path: /spec/tls/0/hosts/0
+      value: adelaide-weather.example.com
+    - op: add
+      path: /metadata/annotations/alb.ingress.kubernetes.io~1wafv2-acl-arn
+      value: arn:aws:wafv2:us-east-1:ACCOUNT:regional/webacl/adelaide-weather-waf/WAF-ID
+
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: api-deployment
+  patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: PRODUCTION_MODE
+        value: "true"
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: SENTRY_ENVIRONMENT
+        value: "production"
+
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: frontend-deployment
+  patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: PRODUCTION_MODE
+        value: "true"
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: SENTRY_ENVIRONMENT
+        value: "production"

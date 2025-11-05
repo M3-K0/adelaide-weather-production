@@ -1,0 +1,303 @@
+{
+  "forecast_scenarios": {
+    "normal_conditions": {
+      "horizon": "24h",
+      "variables": {
+        "t2m": { "value": 23.5, "confidence": 0.85, "available": true },
+        "cape": { "value": 1250, "confidence": 0.78, "available": true },
+        "msl": { "value": 1013.2, "confidence": 0.92, "available": true }
+      },
+      "risk_assessment": {
+        "temperature_extreme": "low",
+        "precipitation_heavy": "moderate",
+        "wind_strong": "low",
+        "thunderstorm": "high"
+      }
+    },
+    "extreme_weather": {
+      "horizon": "24h",
+      "variables": {
+        "t2m": { "value": 42.1, "confidence": 0.67, "available": true },
+        "cape": { "value": 3500, "confidence": 0.71, "available": true },
+        "msl": { "value": 995.8, "confidence": 0.89, "available": true }
+      },
+      "risk_assessment": {
+        "temperature_extreme": "extreme",
+        "precipitation_heavy": "high",
+        "wind_strong": "extreme",
+        "thunderstorm": "extreme"
+      }
+    },
+    "data_unavailable": {
+      "horizon": "48h",
+      "variables": {
+        "t2m": { "value": null, "confidence": null, "available": false },
+        "cape": { "value": null, "confidence": null, "available": false },
+        "msl": { "value": null, "confidence": null, "available": false }
+      },
+      "risk_assessment": {
+        "temperature_extreme": "low",
+        "precipitation_heavy": "low",
+        "wind_strong": "low",
+        "thunderstorm": "low"
+      }
+    }
+  },
+  
+  "metrics_scenarios": {
+    "healthy_system": {
+      "forecast_accuracy": [
+        { "horizon": "6h", "variable": "t2m", "accuracy_percent": 94.2 },
+        { "horizon": "12h", "variable": "t2m", "accuracy_percent": 91.5 },
+        { "horizon": "24h", "variable": "t2m", "accuracy_percent": 87.8 }
+      ],
+      "performance_metrics": [
+        { "metric": "response_time_ms", "value": 145, "status": "healthy" },
+        { "metric": "memory_usage_mb", "value": 256, "status": "healthy" }
+      ],
+      "system_health": [
+        { "component": "forecast_api", "status": "up", "uptime_percent": 99.9 },
+        { "component": "database", "status": "up", "uptime_percent": 100.0 }
+      ]
+    },
+    
+    "degraded_performance": {
+      "forecast_accuracy": [
+        { "horizon": "6h", "variable": "t2m", "accuracy_percent": 78.2 },
+        { "horizon": "12h", "variable": "t2m", "accuracy_percent": 72.1 },
+        { "horizon": "24h", "variable": "t2m", "accuracy_percent": 65.4 }
+      ],
+      "performance_metrics": [
+        { "metric": "response_time_ms", "value": 2500, "status": "critical" },
+        { "metric": "memory_usage_mb", "value": 980, "status": "warning" }
+      ],
+      "system_health": [
+        { "component": "forecast_api", "status": "degraded", "uptime_percent": 85.2 },
+        { "component": "database", "status": "up", "uptime_percent": 99.1 }
+      ]
+    },
+    
+    "system_outage": {
+      "forecast_accuracy": [],
+      "performance_metrics": [
+        { "metric": "response_time_ms", "value": 0, "status": "critical" },
+        { "metric": "memory_usage_mb", "value": 0, "status": "critical" }
+      ],
+      "system_health": [
+        { "component": "forecast_api", "status": "down", "uptime_percent": 0.0 },
+        { "component": "database", "status": "down", "uptime_percent": 0.0 }
+      ]
+    }
+  },
+  
+  "analog_scenarios": {
+    "rich_analogs": {
+      "top_analogs": [
+        {
+          "date": "2023-08-15T12:00:00Z",
+          "similarity_score": 0.89,
+          "outcome_actual": 24.2,
+          "outcome_description": "Warm day with isolated thunderstorms",
+          "timeline": [
+            { "hours_offset": 0, "t2m": 20.5, "cape": 1250 },
+            { "hours_offset": 6, "t2m": 23.8, "cape": 1850 },
+            { "hours_offset": 12, "t2m": 24.2, "cape": 2100 },
+            { "hours_offset": 24, "t2m": 22.1, "cape": 800 }
+          ]
+        },
+        {
+          "date": "2023-07-22T12:00:00Z",
+          "similarity_score": 0.85,
+          "outcome_actual": 23.9,
+          "outcome_description": "Hot and humid with afternoon storms",
+          "timeline": [
+            { "hours_offset": 0, "t2m": 21.2, "cape": 1180 },
+            { "hours_offset": 6, "t2m": 24.1, "cape": 1920 },
+            { "hours_offset": 12, "t2m": 23.9, "cape": 2250 },
+            { "hours_offset": 24, "t2m": 21.8, "cape": 650 }
+          ]
+        }
+      ],
+      "statistics": {
+        "total_patterns_searched": 15000,
+        "confidence_score": 0.87
+      }
+    },
+    
+    "sparse_analogs": {
+      "top_analogs": [
+        {
+          "date": "2022-12-03T12:00:00Z",
+          "similarity_score": 0.45,
+          "outcome_actual": 18.7,
+          "outcome_description": "Limited pattern match - uncertain conditions",
+          "timeline": [
+            { "hours_offset": 0, "t2m": 17.2, "cape": 0 },
+            { "hours_offset": 12, "t2m": 18.7, "cape": 150 },
+            { "hours_offset": 24, "t2m": 16.9, "cape": 0 }
+          ]
+        }
+      ],
+      "statistics": {
+        "total_patterns_searched": 15000,
+        "confidence_score": 0.31
+      }
+    },
+    
+    "no_analogs": {
+      "top_analogs": [],
+      "statistics": {
+        "total_patterns_searched": 15000,
+        "confidence_score": 0.0
+      }
+    }
+  },
+  
+  "accessibility_scenarios": {
+    "high_contrast": {
+      "enabled": true,
+      "theme": "high-contrast",
+      "screen_reader": true,
+      "reduced_motion": false
+    },
+    
+    "reduced_motion": {
+      "enabled": true,
+      "theme": "default",
+      "screen_reader": false,
+      "reduced_motion": true
+    },
+    
+    "screen_reader": {
+      "enabled": true,
+      "theme": "default",
+      "screen_reader": true,
+      "reduced_motion": false,
+      "focus_management": true,
+      "live_regions": true
+    },
+    
+    "standard": {
+      "enabled": false,
+      "theme": "default",
+      "screen_reader": false,
+      "reduced_motion": false
+    }
+  },
+  
+  "state_synchronization_scenarios": {
+    "forecast_card_metrics_sync": {
+      "trigger_component": "forecast-card-6h",
+      "target_components": ["metrics-dashboard", "status-bar"],
+      "sync_attributes": ["data-last-update", "data-forecast-horizon"],
+      "expected_values": {
+        "data-last-update": "2024-01-15T10:30:00Z",
+        "data-forecast-horizon": "6h"
+      }
+    },
+    
+    "cape_badge_status_sync": {
+      "trigger_component": "cape-badge",
+      "target_components": ["status-bar", "risk-indicator"],
+      "sync_attributes": ["data-cape-level", "data-risk-status"],
+      "expected_values": {
+        "data-cape-level": "high",
+        "data-risk-status": "elevated"
+      }
+    },
+    
+    "analog_explorer_versions_sync": {
+      "trigger_component": "analog-explorer",
+      "target_components": ["forecast-versions", "historical-browser"],
+      "sync_attributes": ["data-selected-analog", "data-timeline-position"],
+      "expected_values": {
+        "data-selected-analog": "2023-08-15T12:00:00Z",
+        "data-timeline-position": "12h"
+      }
+    }
+  },
+  
+  "error_scenarios": {
+    "api_timeout": {
+      "error_type": "timeout",
+      "status_code": 408,
+      "message": "Request timeout",
+      "affected_components": ["forecast-card", "metrics-dashboard"]
+    },
+    
+    "server_error": {
+      "error_type": "server_error",
+      "status_code": 500,
+      "message": "Internal server error",
+      "affected_components": ["all"]
+    },
+    
+    "network_error": {
+      "error_type": "network",
+      "status_code": 0,
+      "message": "Network unavailable",
+      "affected_components": ["all"],
+      "fallback_behavior": "offline_mode"
+    },
+    
+    "validation_error": {
+      "error_type": "validation",
+      "status_code": 400,
+      "message": "Invalid forecast parameters",
+      "affected_components": ["forecast-card"]
+    }
+  },
+  
+  "performance_scenarios": {
+    "normal_load": {
+      "api_response_time": 150,
+      "component_render_time": 50,
+      "memory_usage": 256,
+      "concurrent_users": 10
+    },
+    
+    "high_load": {
+      "api_response_time": 800,
+      "component_render_time": 200,
+      "memory_usage": 512,
+      "concurrent_users": 100
+    },
+    
+    "stress_test": {
+      "api_response_time": 2000,
+      "component_render_time": 500,
+      "memory_usage": 1024,
+      "concurrent_users": 500
+    }
+  },
+  
+  "workflow_scenarios": {
+    "complete_forecast_workflow": {
+      "steps": [
+        { "action": "load_dashboard", "expected_components": ["metrics-dashboard", "status-bar"] },
+        { "action": "select_horizon", "parameter": "24h", "expected_updates": ["forecast-card"] },
+        { "action": "view_cape_details", "expected_modal": "cape-explanation" },
+        { "action": "explore_analogs", "expected_components": ["analog-explorer"] },
+        { "action": "export_data", "expected_download": true }
+      ]
+    },
+    
+    "error_recovery_workflow": {
+      "steps": [
+        { "action": "trigger_api_error", "error_type": "timeout" },
+        { "action": "verify_error_display", "expected_components": ["error-boundary"] },
+        { "action": "retry_request", "expected_recovery": true },
+        { "action": "verify_normal_operation", "expected_components": ["forecast-card"] }
+      ]
+    },
+    
+    "accessibility_workflow": {
+      "steps": [
+        { "action": "enable_screen_reader", "a11y_mode": "screen_reader" },
+        { "action": "navigate_with_keyboard", "navigation_type": "tab" },
+        { "action": "verify_aria_labels", "expected_attributes": ["aria-label", "role"] },
+        { "action": "test_live_regions", "expected_announcements": true }
+      ]
+    }
+  }
+}

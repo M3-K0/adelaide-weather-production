@@ -1,0 +1,59 @@
+{
+  "location": "adelaide",
+  "stations": [
+    "adelaide_airport",
+    "adelaide_kent_town", 
+    "adelaide_west_terrace"
+  ],
+  "variables": [
+    "temperature",
+    "pressure", 
+    "cape",
+    "wind_speed",
+    "humidity",
+    "dewpoint",
+    "wind_direction"
+  ],
+  "horizons": [6, 12, 24, 48],
+  "models": [
+    "gfs",
+    "ecmwf", 
+    "analog_ensemble",
+    "neural_network"
+  ],
+  "timescaledb": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "weather_data",
+    "user": "weather_user",
+    "password": "weather_pass"
+  },
+  "update_interval": 30,
+  "analog_processing": {
+    "max_patterns": 10,
+    "similarity_threshold": 0.6,
+    "temporal_window_hours": 168,
+    "confidence_threshold": 0.7
+  },
+  "forecast_verification": {
+    "enable_accuracy_tracking": true,
+    "verification_window_hours": 24,
+    "min_samples_for_accuracy": 10
+  },
+  "panel_usage_tracking": {
+    "enable_usage_metrics": true,
+    "track_animations": true,
+    "track_variable_selections": true,
+    "track_horizon_changes": true
+  },
+  "data_quality": {
+    "min_observation_quality": 0.8,
+    "max_forecast_age_hours": 6,
+    "enable_quality_filtering": true
+  },
+  "performance": {
+    "max_concurrent_queries": 5,
+    "query_timeout_seconds": 30,
+    "cache_duration_seconds": 60
+  }
+}

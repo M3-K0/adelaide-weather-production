@@ -1,0 +1,427 @@
+# Adelaide Weather E2E Smoke Tests
+# ================================
+# 
+# Automated smoke test workflow for Adelaide Weather Forecasting System
+# Validates complete critical path: Browser → Nginx → FastAPI → FAISS → Response
+#
+# Triggered on:
+# - Pull requests to main/production branches
+# - Manual workflow dispatch
+# - Scheduled nightly runs
+# - Pre-deployment validation
+
+name: E2E Smoke Tests
+
+on:
+  pull_request:
+    branches: [ main, production, staging ]
+    paths:
+      - 'api/**'
+      - 'nginx/**'
+      - 'docker-compose*.yml'
+      - 'test_e2e_smoke.py'
+      - 'run_smoke_tests.sh'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment for testing'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      timeout:
+        description: 'Test timeout in seconds'
+        required: false
+        default: '300'
+        type: string
+      skip_setup:
+        description: 'Skip docker-compose setup (use existing services)'
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  # Test configuration
+  TEST_TIMEOUT: ${{ github.event.inputs.timeout || '300' }}
+  SKIP_SETUP: ${{ github.event.inputs.skip_setup || 'false' }}
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'development' }}
+  API_TOKEN: ${{ secrets.E2E_TEST_API_TOKEN || 'test-e2e-smoke-token-12345' }}
+  
+  # Docker configuration
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+jobs:
+  smoke-tests:
+    name: Run E2E Smoke Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        test-scenario: [critical-path]  # Can be extended for parallel test execution
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better caching
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+      
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests>=2.28.0
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            network=host
+      
+      - name: Configure Docker Compose Cache
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      
+      - name: Pre-flight System Check
+        run: |
+          echo "🔍 System Information:"
+          echo "  • OS: $(uname -a)"
+          echo "  • Docker: $(docker --version)"
+          echo "  • Docker Compose: $(docker-compose --version)"
+          echo "  • Python: $(python --version)"
+          echo "  • Available Memory: $(free -h | grep Mem | awk '{print $2}')"
+          echo "  • Available Disk: $(df -h / | tail -1 | awk '{print $4}')"
+          echo ""
+          echo "🎯 Test Configuration:"
+          echo "  • Environment: ${{ env.ENVIRONMENT }}"
+          echo "  • Timeout: ${{ env.TEST_TIMEOUT }}s"
+          echo "  • Skip Setup: ${{ env.SKIP_SETUP }}"
+          echo "  • API Token: ${API_TOKEN:0:8}..."
+      
+      - name: Free Up Disk Space
+        run: |
+          # Remove unnecessary packages to free up space
+          sudo apt-get autoremove -y
+          sudo apt-get autoclean
+          
+          # Remove large packages we don't need
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          
+          echo "Available disk space after cleanup:"
+          df -h /
+      
+      - name: Prepare Test Environment
+        run: |
+          # Create necessary directories
+          mkdir -p logs
+          
+          # Ensure test scripts are executable
+          chmod +x test_e2e_smoke.py
+          chmod +x run_smoke_tests.sh
+          
+          # Validate required files exist
+          echo "📋 Validating test files:"
+          ls -la test_e2e_smoke.py run_smoke_tests.sh
+          ls -la docker-compose.yml
+          ls -la nginx/nginx.conf
+          ls -la api/main.py
+      
+      - name: Start Adelaide Weather Services
+        if: env.SKIP_SETUP != 'true'
+        run: |
+          echo "🚀 Starting Adelaide Weather services..."
+          
+          # Export API token for docker-compose
+          export API_TOKEN="${{ env.API_TOKEN }}"
+          
+          # Start services with timeout
+          timeout 300 docker-compose up -d --build
+          
+          echo "✅ Services started"
+          
+          # Show service status
+          echo "📊 Service Status:"
+          docker-compose ps
+          
+          # Wait for services to be ready
+          echo "⏳ Waiting for services to be ready..."
+          timeout 120 bash -c 'until curl -sf http://localhost/health >/dev/null 2>&1; do echo -n "."; sleep 2; done'
+          echo ""
+          echo "✅ Services are ready"
+      
+      - name: Run E2E Smoke Tests
+        run: |
+          echo "🧪 Running E2E Smoke Tests..."
+          
+          # Prepare arguments
+          ARGS=""
+          if [[ "${{ env.SKIP_SETUP }}" == "true" ]]; then
+            ARGS="$ARGS --skip-setup"
+          fi
+          ARGS="$ARGS --timeout ${{ env.TEST_TIMEOUT }}"
+          ARGS="$ARGS --verbose"
+          
+          # Run the smoke tests
+          ./run_smoke_tests.sh $ARGS
+        
+        env:
+          API_TOKEN: ${{ env.API_TOKEN }}
+      
+      - name: Collect Service Logs
+        if: always()
+        run: |
+          echo "📋 Collecting service logs for analysis..."
+          
+          # Create logs directory
+          mkdir -p logs/services
+          
+          # Collect docker-compose logs
+          if docker-compose ps --services | grep -q "api"; then
+            docker-compose logs api > logs/services/api.log 2>&1 || true
+            docker-compose logs nginx > logs/services/nginx.log 2>&1 || true
+            docker-compose logs ui > logs/services/ui.log 2>&1 || true
+          fi
+          
+          # Collect system information
+          docker system df > logs/docker-system-info.txt 2>&1 || true
+          docker-compose ps > logs/services-status.txt 2>&1 || true
+          
+          # Show log sizes
+          echo "📊 Collected logs:"
+          find logs -type f -exec ls -lh {} \; 2>/dev/null || true
+      
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: e2e-smoke-test-results-${{ matrix.test-scenario }}-${{ github.sha }}
+          path: |
+            e2e_smoke_test_results.json
+            smoke_test_run.log
+            logs/
+          retention-days: 30
+      
+      - name: Parse Test Results
+        if: always()
+        id: test-results
+        run: |
+          # Parse test results if available
+          if [[ -f "e2e_smoke_test_results.json" ]]; then
+            echo "📊 Parsing test results..."
+            
+            # Extract key metrics using Python
+            python3 -c "
+          import json
+          import sys
+          
+          try:
+              with open('e2e_smoke_test_results.json', 'r') as f:
+                  results = json.load(f)
+              
+              print(f'::set-output name=success::{results.get(\"success\", False)}')
+              print(f'::set-output name=total_tests::{results.get(\"total_tests\", 0)}')
+              print(f'::set-output name=passed_tests::{results.get(\"passed_tests\", 0)}')
+              print(f'::set-output name=failed_tests::{results.get(\"failed_tests\", 0)}')
+              print(f'::set-output name=success_rate::{results.get(\"success_rate\", 0):.1f}')
+              print(f'::set-output name=avg_response_time::{results.get(\"avg_response_time_ms\", 0):.1f}')
+              print(f'::set-output name=critical_path_passing::{results.get(\"critical_path_passing\", False)}')
+              
+              # Extract failed test names
+              failed_tests = [test['name'] for test in results.get('test_results', []) if not test.get('passed', True)]
+              print(f'::set-output name=failed_test_names::{\";\".join(failed_tests)}')
+              
+          except Exception as e:
+              print(f'Error parsing results: {e}', file=sys.stderr)
+              print('::set-output name=success::false')
+              print('::set-output name=parse_error::true')
+          "
+          else
+            echo "⚠️ Test results file not found"
+            echo "::set-output name=success::false"
+            echo "::set-output name=results_missing::true"
+          fi
+      
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const testSuccess = '${{ steps.test-results.outputs.success }}' === 'true';
+            const totalTests = '${{ steps.test-results.outputs.total_tests }}';
+            const passedTests = '${{ steps.test-results.outputs.passed_tests }}';
+            const failedTests = '${{ steps.test-results.outputs.failed_tests }}';
+            const successRate = '${{ steps.test-results.outputs.success_rate }}';
+            const avgResponseTime = '${{ steps.test-results.outputs.avg_response_time }}';
+            const criticalPathPassing = '${{ steps.test-results.outputs.critical_path_passing }}' === 'true';
+            const failedTestNames = '${{ steps.test-results.outputs.failed_test_names }}';
+            
+            const statusIcon = testSuccess ? '✅' : '❌';
+            const criticalPathIcon = criticalPathPassing ? '✅' : '❌';
+            
+            let comment = `## ${statusIcon} E2E Smoke Test Results\n\n`;
+            comment += `**Test Summary:**\n`;
+            comment += `- Total Tests: ${totalTests}\n`;
+            comment += `- Passed: ${passedTests}\n`;
+            comment += `- Failed: ${failedTests}\n`;
+            comment += `- Success Rate: ${successRate}%\n`;
+            comment += `- Average Response Time: ${avgResponseTime}ms\n`;
+            comment += `- Critical Path: ${criticalPathIcon} ${criticalPathPassing ? 'PASSING' : 'FAILING'}\n\n`;
+            
+            if (!testSuccess) {
+              comment += `**Failed Tests:**\n`;
+              if (failedTestNames) {
+                const failedList = failedTestNames.split(';');
+                failedList.forEach(test => {
+                  comment += `- ❌ ${test}\n`;
+                });
+              }
+              comment += `\n`;
+            }
+            
+            comment += `**Deployment Status:** ${testSuccess ? '🚀 Ready for deployment' : '🚫 Not ready for deployment'}\n\n`;
+            comment += `<details>\n<summary>View detailed results</summary>\n\n`;
+            comment += `Check the [workflow run](${context.payload.pull_request.html_url}/checks) for detailed test logs and artifacts.\n\n`;
+            comment += `</details>`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+      
+      - name: Update Deployment Status
+        if: always()
+        run: |
+          # Create deployment readiness status file
+          cat > deployment-status.json << EOF
+          {
+            "ready_for_deployment": ${{ steps.test-results.outputs.success }},
+            "critical_path_passing": ${{ steps.test-results.outputs.critical_path_passing }},
+            "test_summary": {
+              "total": ${{ steps.test-results.outputs.total_tests || 0 }},
+              "passed": ${{ steps.test-results.outputs.passed_tests || 0 }},
+              "failed": ${{ steps.test-results.outputs.failed_tests || 0 }},
+              "success_rate": ${{ steps.test-results.outputs.success_rate || 0 }}
+            },
+            "performance": {
+              "avg_response_time_ms": ${{ steps.test-results.outputs.avg_response_time || 0 }}
+            },
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "commit_sha": "${{ github.sha }}",
+            "workflow_run": "${{ github.run_id }}"
+          }
+          EOF
+          
+          echo "📄 Deployment status:"
+          cat deployment-status.json | python3 -m json.tool
+      
+      - name: Upload Deployment Status
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: deployment-status-${{ github.sha }}
+          path: deployment-status.json
+          retention-days: 90
+      
+      - name: Cleanup Test Environment
+        if: always()
+        run: |
+          echo "🧹 Cleaning up test environment..."
+          
+          # Stop services
+          docker-compose down --remove-orphans --volumes 2>/dev/null || true
+          
+          # Clean up Docker system
+          docker system prune -f 2>/dev/null || true
+          
+          echo "✅ Cleanup complete"
+      
+      - name: Fail Workflow on Test Failure
+        if: steps.test-results.outputs.success != 'true'
+        run: |
+          echo "❌ E2E Smoke tests failed"
+          echo "System is not ready for deployment"
+          exit 1
+
+  # Job for posting summary to GitHub Status API
+  update-status:
+    name: Update Status
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    if: always()
+    
+    steps:
+      - name: Update Commit Status
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { data: workflowRun } = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId
+            });
+            
+            const success = '${{ needs.smoke-tests.result }}' === 'success';
+            const state = success ? 'success' : 'failure';
+            const description = success 
+              ? 'All E2E smoke tests passed - Ready for deployment'
+              : 'E2E smoke tests failed - Not ready for deployment';
+            
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: state,
+              description: description,
+              context: 'E2E Smoke Tests',
+              target_url: workflowRun.html_url
+            });
+
+  # Optional: Trigger deployment workflow if tests pass
+  trigger-deployment:
+    name: Trigger Deployment
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    if: |
+      success() && 
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production') &&
+      github.event_name == 'push'
+    
+    steps:
+      - name: Trigger Deployment Workflow
+        uses: actions/github-script@v6
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'deploy.yml',  # Adjust to actual deployment workflow
+              ref: context.ref,
+              inputs: {
+                environment: '${{ env.ENVIRONMENT }}',
+                commit_sha: context.sha,
+                smoke_tests_passed: 'true'
+              }
+            });
+            
+            console.log('🚀 Deployment workflow triggered successfully');

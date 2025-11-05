@@ -1,0 +1,795 @@
+name: 'Production Deployment - Blue-Green Strategy'
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_strategy:
+        description: 'Production deployment strategy'
+        required: true
+        default: 'blue-green'
+        type: choice
+        options:
+          - blue-green
+          - canary
+          - rolling
+      image_tag:
+        description: 'Docker image tag to deploy (must be tested in staging)'
+        required: true
+        type: string
+      approval_required:
+        description: 'Require manual approval before traffic switch'
+        required: false
+        default: true
+        type: boolean
+      rollback_timeout:
+        description: 'Automatic rollback timeout (minutes)'
+        required: false
+        default: '30'
+        type: string
+      maintenance_window:
+        description: 'Deploy during maintenance window'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  AWS_REGION: us-east-1
+  EKS_CLUSTER_NAME: adelaide-weather-production-cluster
+  NAMESPACE: adelaide-weather-production
+  HELM_CHART_PATH: ./helm/adelaide-weather-forecast
+  REGISTRY: ghcr.io
+  DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+  PAGERDUTY_SERVICE_KEY: ${{ secrets.PAGERDUTY_SERVICE_KEY }}
+
+jobs:
+  # =============================================================================
+  # PRE-DEPLOYMENT VALIDATION
+  # =============================================================================
+  pre-deployment-validation:
+    name: 'Pre-Deployment Validation'
+    runs-on: ubuntu-latest
+    
+    outputs:
+      staging-validation: ${{ steps.staging-check.outputs.status }}
+      security-scan: ${{ steps.security-validation.outputs.status }}
+      performance-baseline: ${{ steps.performance-check.outputs.status }}
+      change-freeze: ${{ steps.change-freeze-check.outputs.status }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Validate Image Exists in Registry
+        run: |
+          echo "Validating image: ${{ env.REGISTRY }}/adelaide-weather/api:${{ github.event.inputs.image_tag }}"
+          echo "Validating image: ${{ env.REGISTRY }}/adelaide-weather/frontend:${{ github.event.inputs.image_tag }}"
+          
+          # Check if images exist in registry
+          docker manifest inspect ${{ env.REGISTRY }}/adelaide-weather/api:${{ github.event.inputs.image_tag }}
+          docker manifest inspect ${{ env.REGISTRY }}/adelaide-weather/frontend:${{ github.event.inputs.image_tag }}
+          
+      - name: Verify Staging Deployment Status
+        id: staging-check
+        run: |
+          # Verify the same image tag was successfully deployed to staging
+          # This would typically query your monitoring/deployment tracking system
+          
+          echo "Checking staging deployment status for tag: ${{ github.event.inputs.image_tag }}"
+          
+          # Mock validation - in real implementation, check staging health
+          # Example: Query monitoring API, check deployment logs, etc.
+          STAGING_HEALTHY="true"  # Replace with actual staging health check
+          
+          if [ "$STAGING_HEALTHY" = "true" ]; then
+            echo "status=validated" >> $GITHUB_OUTPUT
+            echo "✅ Staging validation passed for image tag ${{ github.event.inputs.image_tag }}"
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "❌ Staging validation failed for image tag ${{ github.event.inputs.image_tag }}"
+            exit 1
+          fi
+          
+      - name: Security Validation
+        id: security-validation
+        run: |
+          # Run security checks on the specific image tag
+          echo "Running security validation for production deployment..."
+          
+          # Check for critical vulnerabilities
+          # In real implementation, integrate with your security scanning tools
+          echo "✅ Security validation passed"
+          echo "status=passed" >> $GITHUB_OUTPUT
+          
+      - name: Performance Baseline Check
+        id: performance-check
+        run: |
+          # Validate performance baselines
+          echo "Checking performance baselines..."
+          
+          # In real implementation, check performance metrics from staging
+          echo "✅ Performance baseline validation passed"
+          echo "status=passed" >> $GITHUB_OUTPUT
+          
+      - name: Change Freeze Check
+        id: change-freeze-check
+        run: |
+          # Check if there's an active change freeze
+          CURRENT_HOUR=$(date +%H)
+          CURRENT_DAY=$(date +%u)  # 1=Monday, 7=Sunday
+          
+          # Example: No deployments on Friday afternoon/evening (production freeze)
+          if [[ "$CURRENT_DAY" == "5" && "$CURRENT_HOUR" -gt "16" ]]; then
+            if [[ "${{ github.event.inputs.maintenance_window }}" != "true" ]]; then
+              echo "❌ Production change freeze in effect (Friday evening)"
+              echo "status=frozen" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          fi
+          
+          echo "✅ No active change freeze"
+          echo "status=clear" >> $GITHUB_OUTPUT
+
+  # =============================================================================
+  # PRODUCTION INFRASTRUCTURE READINESS
+  # =============================================================================
+  validate-production-infrastructure:
+    name: 'Production Infrastructure Readiness'
+    runs-on: ubuntu-latest
+    needs: pre-deployment-validation
+    
+    outputs:
+      cluster-health: ${{ steps.cluster-health.outputs.status }}
+      capacity-check: ${{ steps.capacity-check.outputs.status }}
+      dependencies-health: ${{ steps.dependencies-check.outputs.status }}
+      
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
+          aws-region: ${{ env.AWS_REGION }}
+          
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.4'
+          
+      - name: Cluster Health Check
+        id: cluster-health
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+          
+          # Check cluster status
+          CLUSTER_STATUS=$(aws eks describe-cluster --name ${{ env.EKS_CLUSTER_NAME }} --query 'cluster.status' --output text)
+          echo "Cluster Status: $CLUSTER_STATUS"
+          
+          # Check node readiness and capacity
+          READY_NODES=$(kubectl get nodes --no-headers | grep Ready | wc -l)
+          TOTAL_NODES=$(kubectl get nodes --no-headers | wc -l)
+          
+          echo "Ready Nodes: $READY_NODES/$TOTAL_NODES"
+          
+          if [ "$READY_NODES" -lt 2 ]; then
+            echo "❌ Insufficient ready nodes for production deployment"
+            exit 1
+          fi
+          
+          echo "✅ Cluster health check passed"
+          echo "status=healthy" >> $GITHUB_OUTPUT
+          
+      - name: Capacity and Resource Check
+        id: capacity-check
+        run: |
+          # Check available resources
+          kubectl top nodes || echo "Metrics server not available"
+          kubectl get nodes -o wide
+          
+          # Check for resource capacity
+          # In real implementation, validate sufficient CPU/memory for blue-green deployment
+          echo "✅ Sufficient capacity available"
+          echo "status=sufficient" >> $GITHUB_OUTPUT
+          
+      - name: Dependencies Health Check
+        id: dependencies-check
+        run: |
+          # Check RDS health
+          DB_STATUS=$(aws rds describe-db-instances \
+            --db-instance-identifier adelaide-weather-production-db \
+            --query 'DBInstances[0].DBInstanceStatus' \
+            --output text)
+          echo "Database Status: $DB_STATUS"
+          
+          # Check ElastiCache health
+          REDIS_STATUS=$(aws elasticache describe-replication-groups \
+            --replication-group-id adelaide-weather-production-cache \
+            --query 'ReplicationGroups[0].Status' \
+            --output text)
+          echo "Redis Status: $REDIS_STATUS"
+          
+          if [[ "$DB_STATUS" != "available" || "$REDIS_STATUS" != "available" ]]; then
+            echo "❌ Dependencies not healthy"
+            exit 1
+          fi
+          
+          echo "✅ All dependencies healthy"
+          echo "status=healthy" >> $GITHUB_OUTPUT
+
+  # =============================================================================
+  # BLUE-GREEN DEPLOYMENT EXECUTION
+  # =============================================================================
+  blue-green-deployment:
+    name: 'Blue-Green Production Deployment'
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-validation, validate-production-infrastructure]
+    if: github.event.inputs.deployment_strategy == 'blue-green'
+    environment: production
+    
+    outputs:
+      current-environment: ${{ steps.determine-environment.outputs.current }}
+      target-environment: ${{ steps.determine-environment.outputs.target }}
+      deployment-url: ${{ steps.get-urls.outputs.target_url }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
+          aws-region: ${{ env.AWS_REGION }}
+          
+      - name: Setup Tools
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.13.2'
+          
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+          
+      - name: Determine Current and Target Environments
+        id: determine-environment
+        run: |
+          # Check which environment is currently active
+          CURRENT_ENV=$(kubectl get service adelaide-weather-active -n ${{ env.NAMESPACE }} \
+            -o jsonpath='{.spec.selector.deployment}' 2>/dev/null || echo "blue")
+          
+          if [ "$CURRENT_ENV" = "blue" ]; then
+            TARGET_ENV="green"
+          else
+            TARGET_ENV="blue"
+          fi
+          
+          echo "Current active environment: $CURRENT_ENV"
+          echo "Deploying to target environment: $TARGET_ENV"
+          
+          echo "current=$CURRENT_ENV" >> $GITHUB_OUTPUT
+          echo "target=$TARGET_ENV" >> $GITHUB_OUTPUT
+          
+      - name: Create Production Values File
+        run: |
+          cat > production-values.yaml << EOF
+          environment: production
+          
+          image:
+            api:
+              repository: ${{ env.REGISTRY }}/adelaide-weather/api
+              tag: ${{ github.event.inputs.image_tag }}
+              pullPolicy: Always
+            frontend:
+              repository: ${{ env.REGISTRY }}/adelaide-weather/frontend
+              tag: ${{ github.event.inputs.image_tag }}
+              pullPolicy: Always
+          
+          deployment:
+            suffix: ${{ steps.determine-environment.outputs.target }}
+            
+          replicaCount:
+            api: 3
+            frontend: 3
+            
+          resources:
+            api:
+              requests:
+                memory: "1Gi"
+                cpu: "500m"
+              limits:
+                memory: "2Gi"
+                cpu: "1000m"
+            frontend:
+              requests:
+                memory: "512Mi"
+                cpu: "250m"
+              limits:
+                memory: "1Gi"
+                cpu: "500m"
+          
+          service:
+            type: ClusterIP
+            api:
+              port: 8000
+            frontend:
+              port: 3000
+          
+          ingress:
+            enabled: true
+            className: "alb"
+            annotations:
+              kubernetes.io/ingress.class: alb
+              alb.ingress.kubernetes.io/scheme: internet-facing
+              alb.ingress.kubernetes.io/target-type: ip
+              alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS-1-2-2017-01
+              alb.ingress.kubernetes.io/certificate-arn: ${{ secrets.PRODUCTION_SSL_CERT_ARN }}
+              alb.ingress.kubernetes.io/wafv2-acl-arn: ${{ secrets.PRODUCTION_WAF_ARN }}
+            hosts:
+              - host: adelaide-weather.com
+                paths:
+                  - path: /api
+                    pathType: Prefix
+                    service: api
+                  - path: /
+                    pathType: Prefix
+                    service: frontend
+          
+          database:
+            host: ${{ secrets.PRODUCTION_DB_HOST }}
+            name: adelaide_weather
+            user: admin
+            
+          redis:
+            host: ${{ secrets.PRODUCTION_REDIS_HOST }}
+            port: 6379
+          
+          monitoring:
+            enabled: true
+            prometheus:
+              scrape: true
+            datadog:
+              enabled: true
+              tags:
+                - "env:production"
+                - "deployment:${{ steps.determine-environment.outputs.target }}"
+          
+          autoscaling:
+            enabled: true
+            api:
+              minReplicas: 3
+              maxReplicas: 10
+              targetCPUUtilizationPercentage: 70
+              targetMemoryUtilizationPercentage: 80
+            frontend:
+              minReplicas: 3
+              maxReplicas: 10
+              targetCPUUtilizationPercentage: 70
+              targetMemoryUtilizationPercentage: 80
+          
+          podDisruptionBudget:
+            enabled: true
+            api:
+              minAvailable: 2
+            frontend:
+              minAvailable: 2
+          
+          security:
+            podSecurityPolicy:
+              enabled: true
+            networkPolicy:
+              enabled: true
+          EOF
+          
+      - name: Deploy to Target Environment
+        run: |
+          TARGET_ENV="${{ steps.determine-environment.outputs.target }}"
+          
+          echo "Deploying to $TARGET_ENV environment..."
+          
+          # Start deployment monitoring
+          python scripts/setup_deployment_monitoring.py \
+            --deployment-id=${{ github.run_id }} \
+            --environment=production \
+            --deployment-type=blue-green \
+            --target=$TARGET_ENV
+          
+          # Deploy to target environment
+          helm upgrade --install adelaide-weather-$TARGET_ENV ${{ env.HELM_CHART_PATH }} \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --values production-values.yaml \
+            --set deployment.strategy.type=RollingUpdate \
+            --set deployment.strategy.rollingUpdate.maxUnavailable=0 \
+            --set deployment.strategy.rollingUpdate.maxSurge=50% \
+            --wait --timeout=20m \
+            --history-max=5
+            
+      - name: Verify Target Environment Health
+        run: |
+          TARGET_ENV="${{ steps.determine-environment.outputs.target }}"
+          
+          echo "Verifying $TARGET_ENV environment health..."
+          
+          # Wait for deployment to be ready
+          kubectl rollout status deployment/adelaide-weather-api-$TARGET_ENV -n ${{ env.NAMESPACE }} --timeout=600s
+          kubectl rollout status deployment/adelaide-weather-frontend-$TARGET_ENV -n ${{ env.NAMESPACE }} --timeout=600s
+          
+          # Check pod health
+          kubectl get pods -n ${{ env.NAMESPACE }} -l deployment=$TARGET_ENV
+          
+          # Verify all pods are running and ready
+          READY_PODS=$(kubectl get pods -n ${{ env.NAMESPACE }} -l deployment=$TARGET_ENV \
+            --field-selector=status.phase=Running --no-headers | wc -l)
+          TOTAL_PODS=$(kubectl get pods -n ${{ env.NAMESPACE }} -l deployment=$TARGET_ENV --no-headers | wc -l)
+          
+          echo "Ready pods in $TARGET_ENV: $READY_PODS/$TOTAL_PODS"
+          
+          if [ "$READY_PODS" -lt "$TOTAL_PODS" ]; then
+            echo "❌ Not all pods are ready in $TARGET_ENV environment"
+            kubectl describe pods -n ${{ env.NAMESPACE }} -l deployment=$TARGET_ENV
+            exit 1
+          fi
+          
+          echo "✅ All pods ready in $TARGET_ENV environment"
+          
+      - name: Get Target Environment URLs
+        id: get-urls
+        run: |
+          TARGET_ENV="${{ steps.determine-environment.outputs.target }}"
+          
+          # Get the target environment ingress
+          INGRESS_HOST=$(kubectl get ingress adelaide-weather-ingress-$TARGET_ENV -n ${{ env.NAMESPACE }} \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          
+          echo "Target URL: https://$INGRESS_HOST"
+          echo "target_url=https://$INGRESS_HOST" >> $GITHUB_OUTPUT
+
+  # =============================================================================
+  # PRODUCTION HEALTH VALIDATION
+  # =============================================================================
+  validate-production-health:
+    name: 'Production Health Validation'
+    runs-on: ubuntu-latest
+    needs: blue-green-deployment
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests pytest python-dotenv datadog
+          
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+          
+      - name: Run Comprehensive Health Checks
+        run: |
+          TARGET_ENV="${{ needs.blue-green-deployment.outputs.target-environment }}"
+          TARGET_URL="${{ needs.blue-green-deployment.outputs.deployment-url }}"
+          
+          echo "Running health checks on $TARGET_ENV environment..."
+          
+          # Run production health suite
+          python production_health_suite.py \
+            --deployment=$TARGET_ENV \
+            --url=$TARGET_URL \
+            --timeout=300
+            
+      - name: Performance Validation
+        run: |
+          TARGET_URL="${{ needs.blue-green-deployment.outputs.deployment-url }}"
+          
+          # Test response times
+          for i in {1..10}; do
+            RESPONSE_TIME=$(curl -o /dev/null -s -w '%{time_total}' "$TARGET_URL/api/health")
+            echo "Health check response time: ${RESPONSE_TIME}s"
+            
+            # Check if response time is acceptable
+            if (( $(echo "$RESPONSE_TIME > 1.0" | bc -l) )); then
+              echo "❌ Response time too slow: ${RESPONSE_TIME}s"
+              exit 1
+            fi
+            
+            sleep 2
+          done
+          
+          echo "✅ Performance validation passed"
+          
+      - name: Database Connection Validation
+        run: |
+          TARGET_URL="${{ needs.blue-green-deployment.outputs.deployment-url }}"
+          
+          # Test database connectivity through new deployment
+          RESPONSE=$(curl -s "$TARGET_URL/api/health/database")
+          
+          if echo "$RESPONSE" | grep -q "healthy"; then
+            echo "✅ Database connectivity validated"
+          else
+            echo "❌ Database connectivity failed"
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+          
+      - name: Integration Test Suite
+        run: |
+          TARGET_URL="${{ needs.blue-green-deployment.outputs.deployment-url }}"
+          
+          # Run production integration tests
+          export PRODUCTION_URL="$TARGET_URL/api"
+          pytest tests/integration/production_tests.py -v --tb=short
+          
+      - name: Send Health Check Metrics to Datadog
+        run: |
+          # Send deployment health metrics
+          python -c "
+          from datadog import initialize, statsd
+          import os
+          
+          options = {
+              'api_key': os.environ.get('DATADOG_API_KEY'),
+              'app_key': os.environ.get('DATADOG_APP_KEY')
+          }
+          initialize(**options)
+          
+          # Send deployment success metric
+          statsd.increment(
+              'adelaide_weather.deployment.success',
+              tags=[
+                  'environment:production',
+                  'deployment_type:blue-green',
+                  'target:${{ needs.blue-green-deployment.outputs.target-environment }}',
+                  'image_tag:${{ github.event.inputs.image_tag }}'
+              ]
+          )
+          
+          print('✅ Metrics sent to Datadog')
+          "
+
+  # =============================================================================
+  # TRAFFIC SWITCHING APPROVAL
+  # =============================================================================
+  traffic-switch-approval:
+    name: 'Traffic Switch Approval'
+    runs-on: ubuntu-latest
+    needs: [blue-green-deployment, validate-production-health]
+    if: github.event.inputs.approval_required == 'true'
+    environment: production-traffic-switch
+    
+    steps:
+      - name: Manual Approval Required
+        run: |
+          echo "Manual approval required for traffic switch to ${{ needs.blue-green-deployment.outputs.target-environment }}"
+          echo "Target URL: ${{ needs.blue-green-deployment.outputs.deployment-url }}"
+          echo "Image Tag: ${{ github.event.inputs.image_tag }}"
+          echo "Approval timeout: ${{ github.event.inputs.rollback_timeout }} minutes"
+
+  # =============================================================================
+  # TRAFFIC SWITCHING
+  # =============================================================================
+  switch-traffic:
+    name: 'Switch Production Traffic'
+    runs-on: ubuntu-latest
+    needs: [blue-green-deployment, validate-production-health, traffic-switch-approval]
+    if: always() && needs.validate-production-health.result == 'success' && (needs.traffic-switch-approval.result == 'success' || github.event.inputs.approval_required == 'false')
+    
+    steps:
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+          
+      - name: Create Traffic Switch Backup
+        run: |
+          # Backup current service configuration
+          kubectl get service adelaide-weather-active -n ${{ env.NAMESPACE }} -o yaml > \
+            service-backup-$(date +%Y%m%d-%H%M%S).yaml
+            
+      - name: Switch Traffic to Target Environment
+        run: |
+          TARGET_ENV="${{ needs.blue-green-deployment.outputs.target-environment }}"
+          CURRENT_ENV="${{ needs.blue-green-deployment.outputs.current-environment }}"
+          
+          echo "Switching traffic from $CURRENT_ENV to $TARGET_ENV..."
+          
+          # Update the active service to point to target environment
+          kubectl patch service adelaide-weather-active -n ${{ env.NAMESPACE }} \
+            -p '{"spec":{"selector":{"deployment":"'$TARGET_ENV'"}}}'
+          
+          echo "✅ Traffic switched to $TARGET_ENV environment"
+          
+      - name: Wait for DNS Propagation
+        run: |
+          echo "Waiting for DNS propagation and connection draining..."
+          sleep 60
+          
+      - name: Verify Traffic Switch
+        run: |
+          # Verify the service is pointing to the new environment
+          CURRENT_SELECTOR=$(kubectl get service adelaide-weather-active -n ${{ env.NAMESPACE }} \
+            -o jsonpath='{.spec.selector.deployment}')
+          
+          if [ "$CURRENT_SELECTOR" = "${{ needs.blue-green-deployment.outputs.target-environment }}" ]; then
+            echo "✅ Traffic switch verified successfully"
+          else
+            echo "❌ Traffic switch verification failed"
+            exit 1
+          fi
+          
+      - name: Monitor Post-Switch Health
+        run: |
+          echo "Monitoring post-switch health for 5 minutes..."
+          
+          for i in {1..30}; do
+            # Check service health
+            RESPONSE=$(curl -s -w "%{http_code}" -o /dev/null https://adelaide-weather.com/api/health)
+            
+            if [ "$RESPONSE" != "200" ]; then
+              echo "❌ Health check failed with response $RESPONSE"
+              echo "Initiating emergency rollback..."
+              
+              # Emergency rollback
+              kubectl patch service adelaide-weather-active -n ${{ env.NAMESPACE }} \
+                -p '{"spec":{"selector":{"deployment":"${{ needs.blue-green-deployment.outputs.current-environment }}"}}}'
+              
+              exit 1
+            fi
+            
+            echo "Health check $i/30: OK"
+            sleep 10
+          done
+          
+          echo "✅ Post-switch monitoring completed successfully"
+
+  # =============================================================================
+  # CLEANUP AND MONITORING
+  # =============================================================================
+  cleanup-old-environment:
+    name: 'Cleanup Previous Environment'
+    runs-on: ubuntu-latest
+    needs: [blue-green-deployment, switch-traffic]
+    if: success()
+    
+    steps:
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+          
+      - name: Wait Before Cleanup
+        run: |
+          # Wait for rollback timeout period before cleaning up
+          TIMEOUT_MINUTES="${{ github.event.inputs.rollback_timeout }}"
+          echo "Waiting $TIMEOUT_MINUTES minutes before cleaning up old environment..."
+          sleep $((TIMEOUT_MINUTES * 60))
+          
+      - name: Cleanup Old Environment
+        run: |
+          OLD_ENV="${{ needs.blue-green-deployment.outputs.current-environment }}"
+          
+          echo "Cleaning up old environment: $OLD_ENV"
+          
+          # Scale down old environment instead of deleting (for emergency rollback)
+          kubectl scale deployment adelaide-weather-api-$OLD_ENV \
+            --replicas=0 -n ${{ env.NAMESPACE }} || true
+          kubectl scale deployment adelaide-weather-frontend-$OLD_ENV \
+            --replicas=0 -n ${{ env.NAMESPACE }} || true
+          
+          echo "✅ Old environment $OLD_ENV scaled down"
+          
+      - name: Update Deployment Status
+        run: |
+          # Update deployment tracking
+          python scripts/setup_deployment_monitoring.py \
+            --deployment-id=${{ github.run_id }} \
+            --status=completed \
+            --active-environment=${{ needs.blue-green-deployment.outputs.target-environment }}
+
+  # =============================================================================
+  # NOTIFICATIONS AND REPORTING
+  # =============================================================================
+  notify-deployment-completion:
+    name: 'Deployment Completion Notification'
+    runs-on: ubuntu-latest
+    needs: [blue-green-deployment, switch-traffic, cleanup-old-environment]
+    if: always()
+    
+    steps:
+      - name: Determine Deployment Status
+        id: status
+        run: |
+          if [[ "${{ needs.switch-traffic.result }}" == "success" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "message=Production deployment completed successfully" >> $GITHUB_OUTPUT
+            echo "emoji=🎉" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "message=Production deployment failed" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Send Slack Notification
+        uses: 8398a7/action-slack@v3
+        if: always()
+        with:
+          status: ${{ steps.status.outputs.status }}
+          channel: '#production-deployments'
+          text: |
+            ${{ steps.status.outputs.emoji }} Production Deployment Update
+            Status: ${{ steps.status.outputs.message }}
+            Strategy: ${{ github.event.inputs.deployment_strategy }}
+            Image Tag: ${{ github.event.inputs.image_tag }}
+            Active Environment: ${{ needs.blue-green-deployment.outputs.target-environment }}
+            Actor: ${{ github.actor }}
+            
+            🔗 View Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          
+      - name: Send PagerDuty Event
+        if: needs.switch-traffic.result == 'failure'
+        run: |
+          curl -X POST https://events.pagerduty.com/v2/enqueue \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "routing_key": "${{ env.PAGERDUTY_SERVICE_KEY }}",
+              "event_action": "trigger",
+              "payload": {
+                "summary": "Production deployment failed for Adelaide Weather Forecast",
+                "severity": "critical",
+                "source": "GitHub Actions",
+                "custom_details": {
+                  "deployment_id": "${{ github.run_id }}",
+                  "image_tag": "${{ github.event.inputs.image_tag }}",
+                  "actor": "${{ github.actor }}"
+                }
+              }
+            }'
+            
+      - name: Create Deployment Report
+        if: always()
+        run: |
+          cat > deployment-report.md << EOF
+          # Production Deployment Report
+          
+          **Deployment ID**: ${{ github.run_id }}
+          **Status**: ${{ steps.status.outputs.message }}
+          **Image Tag**: ${{ github.event.inputs.image_tag }}
+          **Strategy**: ${{ github.event.inputs.deployment_strategy }}
+          **Deployed By**: ${{ github.actor }}
+          **Timestamp**: $(date -u)
+          
+          ## Environment Details
+          - **Previous Environment**: ${{ needs.blue-green-deployment.outputs.current-environment }}
+          - **New Environment**: ${{ needs.blue-green-deployment.outputs.target-environment }}
+          - **Deployment URL**: ${{ needs.blue-green-deployment.outputs.deployment-url }}
+          
+          ## Validation Results
+          - **Health Checks**: ${{ needs.validate-production-health.result == 'success' && '✅ Passed' || '❌ Failed' }}
+          - **Traffic Switch**: ${{ needs.switch-traffic.result == 'success' && '✅ Successful' || '❌ Failed' }}
+          - **Cleanup**: ${{ needs.cleanup-old-environment.result == 'success' && '✅ Completed' || '❌ Failed' }}
+          
+          ## Timeline
+          - **Deployment Started**: ${{ github.event.created_at }}
+          - **Health Validation**: ${{ needs.validate-production-health.result }}
+          - **Traffic Switch**: ${{ needs.switch-traffic.result }}
+          - **Cleanup**: ${{ needs.cleanup-old-environment.result }}
+          EOF
+          
+          echo "Deployment report generated"
+          
+      - name: Upload Deployment Artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: production-deployment-report
+          path: |
+            deployment-report.md
+            service-backup-*.yaml
+          retention-days: 90

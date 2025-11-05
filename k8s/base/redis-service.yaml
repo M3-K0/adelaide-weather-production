@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: adelaide-weather
+  labels:
+    app.kubernetes.io/component: redis
+    app.kubernetes.io/part-of: adelaide-weather
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: redis
+    protocol: TCP
+    name: redis
+  selector:
+    app.kubernetes.io/component: redis
+  sessionAffinity: None

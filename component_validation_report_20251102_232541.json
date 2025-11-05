@@ -1,0 +1,119 @@
+{
+  "test_summary": {
+    "total_tests": 6,
+    "passed_tests": 4,
+    "failed_tests": 2,
+    "success_rate_percent": 66.67,
+    "total_duration_seconds": 16.07
+  },
+  "test_results": {
+    "Environment Config Manager": {
+      "status": "passed",
+      "data": {
+        "development": {
+          "config_loaded": true,
+          "has_data_section": true,
+          "has_model_section": true,
+          "config_hash": "4dae38d3b6974ad8",
+          "load_time_ms": 11.57
+        },
+        "staging": {
+          "config_loaded": true,
+          "has_data_section": true,
+          "has_model_section": true,
+          "config_hash": "1dfda55ce430922c",
+          "load_time_ms": 11.88
+        },
+        "production": {
+          "config_loaded": true,
+          "has_data_section": true,
+          "has_model_section": true,
+          "config_hash": "0601d9c9f7ab1fe1",
+          "load_time_ms": 10.97
+        }
+      }
+    },
+    "Secure Credential Manager": {
+      "status": "failed",
+      "data": {
+        "error": "SecureCredentialManager.store_credential() missing 1 required positional argument: 'credential_type'"
+      }
+    },
+    "Config Drift Detector": {
+      "status": "passed",
+      "data": {
+        "monitoring_started": true,
+        "startup_time_ms": 7023.64,
+        "drift_detection_time_ms": 3467.94,
+        "drift_events_detected": 0,
+        "report_generated": true,
+        "baseline_updated": true,
+        "monitoring_stopped": true
+      }
+    },
+    "Deployment Script": {
+      "status": "passed",
+      "data": {
+        "help_command_works": true,
+        "help_response_time_ms": 12.55,
+        "help_output_length": 1335,
+        "environment_configs": {
+          "total": 3,
+          "available": 3,
+          "environments": {
+            "development": true,
+            "staging": true,
+            "production": true
+          }
+        }
+      }
+    },
+    "API Components": {
+      "status": "failed",
+      "data": {
+        "variables_module": {
+          "variable_count": 9,
+          "variable_specs": 9,
+          "horizons": 4
+        },
+        "forecast_adapter": {
+          "import_successful": true
+        },
+        "faiss_monitoring": {
+          "import_successful": true
+        },
+        "security_middleware": {
+          "import_successful": true
+        }
+      }
+    },
+    "Docker Configuration": {
+      "status": "passed",
+      "data": {
+        "compose_files": {
+          "docker-compose.yml": true,
+          "docker-compose.dev.yml": true,
+          "docker-compose.staging.yml": true,
+          "docker-compose.production.yml": true
+        },
+        "dockerfiles": {
+          "api/Dockerfile": true,
+          "api/Dockerfile.simple": true,
+          "api/Dockerfile.production": true,
+          "frontend/Dockerfile": true
+        },
+        "compose_validation": {
+          "docker-compose.yml": true,
+          "docker-compose.dev.yml": true
+        },
+        "summary": {
+          "files_present": 8,
+          "total_files": 8,
+          "file_availability": 1.0,
+          "valid_compose_files": 2
+        }
+      }
+    }
+  },
+  "generated_at": "2025-11-02T12:55:41.819550+00:00"
+}

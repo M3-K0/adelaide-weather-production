@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: adelaide-weather
+  labels:
+    name: adelaide-weather
+    app.kubernetes.io/name: adelaide-weather
+    app.kubernetes.io/component: forecasting-system
+  annotations:
+    kubernetes.io/managed-by: kustomize
+    description: "Adelaide Weather Forecasting System namespace"

@@ -1,0 +1,26 @@
+{
+  "type": "panel",
+  "name": "Weather Forecast Panel",
+  "id": "weather-forecast-panel",
+  "info": {
+    "description": "Custom panel for meteorologists with split view observations/forecast and analog pattern analysis",
+    "author": {
+      "name": "Adelaide Weather Team"
+    },
+    "version": "1.0.0",
+    "updated": "2025-10-29"
+  },
+  "includes": [
+    {
+      "type": "panel",
+      "name": "Weather Forecast Panel",
+      "path": "dist/module.js"
+    }
+  ],
+  "state": "stable",
+  "category": "Meteorology",
+  "dependencies": {
+    "grafanaVersion": "9.0.0",
+    "plugins": []
+  }
+}

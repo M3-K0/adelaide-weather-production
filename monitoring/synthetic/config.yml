@@ -1,0 +1,224 @@
+# Synthetic Monitoring Configuration
+# Configuration for synthetic checks and SLO definitions
+
+synthetic_monitoring:
+  global:
+    check_interval: 30s
+    timeout: 10s
+    retry_count: 3
+    retry_delay: 5s
+    geographic_locations:
+      - name: "sydney"
+        endpoint: "https://sydney.monitoring.example.com"
+        region: "ap-southeast-2"
+      - name: "melbourne"
+        endpoint: "https://melbourne.monitoring.example.com"
+        region: "ap-southeast-2"
+      - name: "perth"
+        endpoint: "https://perth.monitoring.example.com"
+        region: "ap-southeast-2"
+      - name: "singapore"
+        endpoint: "https://singapore.monitoring.example.com"
+        region: "ap-southeast-1"
+
+  endpoints:
+    # Forecast API endpoint checks
+    forecast_api:
+      url: "${API_BASE_URL}/forecast"
+      method: GET
+      headers:
+        Authorization: "Bearer ${API_TOKEN}"
+        Content-Type: "application/json"
+      query_params:
+        horizon: "24h"
+        vars: "t2m,u10,v10,msl"
+      expected_status: 200
+      expected_response_time_ms: 150
+      checks:
+        - type: "json_path"
+          path: "$.horizon"
+          expected: "24h"
+        - type: "json_path"
+          path: "$.ready"
+          expected: true
+        - type: "json_path"
+          path: "$.variables.t2m.available"
+          expected: true
+        - type: "response_size"
+          min_bytes: 1000
+          max_bytes: 50000
+        - type: "json_schema"
+          schema_path: "/monitoring/synthetic/schemas/forecast_response.json"
+
+    # Health endpoint checks
+    health_api:
+      url: "${API_BASE_URL}/health"
+      method: GET
+      expected_status: 200
+      expected_response_time_ms: 100
+      checks:
+        - type: "json_path"
+          path: "$.ready"
+          expected: true
+        - type: "json_path"
+          path: "$.checks[?(@.name=='startup_validation')].status"
+          expected: "pass"
+        - type: "json_path"
+          path: "$.model.version"
+          regex: "^v\\d+\\.\\d+\\.\\d+$"
+
+    # Frontend health checks
+    frontend_app:
+      url: "${FRONTEND_BASE_URL}"
+      method: GET
+      expected_status: 200
+      expected_response_time_ms: 2000
+      checks:
+        - type: "content"
+          contains: "Adelaide Weather"
+        - type: "header"
+          name: "content-type"
+          contains: "text/html"
+
+    # Frontend metrics endpoint
+    frontend_metrics:
+      url: "${FRONTEND_BASE_URL}/api/metrics"
+      method: GET
+      expected_status: 200
+      expected_response_time_ms: 500
+      checks:
+        - type: "content"
+          contains: "forecast_requests_total"
+        - type: "header"
+          name: "content-type"
+          contains: "text/plain"
+
+  # Complex end-to-end scenarios
+  scenarios:
+    complete_forecast_journey:
+      name: "Complete Forecast User Journey"
+      steps:
+        - name: "Load frontend"
+          endpoint: frontend_app
+          store_cookies: true
+        - name: "Request forecast"
+          endpoint: forecast_api
+          depends_on: "Load frontend"
+        - name: "Verify forecast data"
+          endpoint: forecast_api
+          query_params:
+            horizon: "48h"
+            vars: "t2m,cape,msl"
+
+# Service Level Objectives (SLOs)
+slos:
+  # API Availability SLO
+  api_availability:
+    name: "API Availability"
+    objective: 99.9  # 99.9% uptime
+    measurement_window: "30d"
+    error_budget_burn_rate_threshold: 2.0
+    metrics:
+      success_metric: "sum(rate(synthetic_check_success_total{check_type='forecast_api'}[5m]))"
+      total_metric: "sum(rate(synthetic_check_total{check_type='forecast_api'}[5m]))"
+    alerting:
+      burn_rate_1h: 14.4    # 1h burn rate for immediate action
+      burn_rate_6h: 6.0     # 6h burn rate for urgent action
+      burn_rate_24h: 3.0    # 24h burn rate for warning
+      burn_rate_72h: 1.0    # 72h burn rate for monitoring
+
+  # API Latency SLO  
+  api_latency:
+    name: "API Response Time"
+    objective: 95  # 95% of requests under threshold
+    threshold_ms: 150
+    measurement_window: "30d"
+    metrics:
+      success_metric: "histogram_quantile(0.95, sum(rate(synthetic_check_duration_seconds_bucket{check_type='forecast_api'}[5m])) by (le))"
+    alerting:
+      warning_threshold_ms: 200
+      critical_threshold_ms: 300
+
+  # Frontend Performance SLO
+  frontend_performance:
+    name: "Frontend Load Time"
+    objective: 90  # 90% of page loads under 2s
+    threshold_ms: 2000
+    measurement_window: "30d"
+    metrics:
+      success_metric: "histogram_quantile(0.90, sum(rate(synthetic_check_duration_seconds_bucket{check_type='frontend_app'}[5m])) by (le))"
+
+  # Data Accuracy SLO
+  forecast_accuracy:
+    name: "Forecast Data Quality"
+    objective: 98  # 98% of forecasts have valid data
+    measurement_window: "30d"
+    metrics:
+      success_metric: "sum(rate(synthetic_forecast_data_valid_total[5m]))"
+      total_metric: "sum(rate(synthetic_forecast_data_total[5m]))"
+
+# Error Budget Configuration
+error_budgets:
+  calculation_window: "30d"
+  burn_rate_windows:
+    - duration: "1h"
+      threshold_multiplier: 14.4
+    - duration: "6h" 
+      threshold_multiplier: 6.0
+    - duration: "24h"
+      threshold_multiplier: 3.0
+    - duration: "72h"
+      threshold_multiplier: 1.0
+
+# Alerting Configuration
+alerting:
+  notification_channels:
+    slack:
+      webhook_url: "${SLACK_WEBHOOK_URL}"
+      channel: "#weather-alerts"
+      escalation_delay: "15m"
+    
+    pagerduty:
+      service_key: "${PAGERDUTY_SERVICE_KEY}"
+      escalation_policies:
+        critical: "P1_WEATHER_CRITICAL"
+        warning: "P2_WEATHER_WARNING"
+    
+    email:
+      smtp_server: "${SMTP_SERVER}"
+      recipients:
+        - "sre-team@weather.com"
+        - "engineering@weather.com"
+
+  escalation_policies:
+    critical:
+      - channel: "pagerduty"
+        delay: "0m"
+      - channel: "slack"
+        delay: "5m"
+      - channel: "email"
+        delay: "15m"
+    
+    warning:
+      - channel: "slack"
+        delay: "0m"
+      - channel: "email"
+        delay: "30m"
+
+# Geographic Distribution
+geographic_monitoring:
+  enabled: true
+  primary_region: "ap-southeast-2"  # Sydney/Melbourne
+  regions:
+    - name: "sydney"
+      weight: 0.4
+      checks: ["forecast_api", "health_api", "frontend_app"]
+    - name: "melbourne"  
+      weight: 0.4
+      checks: ["forecast_api", "health_api", "frontend_app"]
+    - name: "perth"
+      weight: 0.1
+      checks: ["forecast_api", "health_api"]
+    - name: "singapore"
+      weight: 0.1
+      checks: ["forecast_api", "health_api"]

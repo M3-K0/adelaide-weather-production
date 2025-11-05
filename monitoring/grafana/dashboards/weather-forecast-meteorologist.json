@@ -1,0 +1,418 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Weather Forecast - Meteorologist Panel",
+    "tags": ["weather", "forecast", "meteorology", "analog-patterns"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Weather Forecast Analysis",
+        "type": "weather-forecast-panel",
+        "gridPos": {
+          "h": 20,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "targets": [
+          {
+            "expr": "weather_observation{location=\"adelaide\"}",
+            "refId": "A",
+            "legendFormat": "{{variable}} - Observed",
+            "interval": "1m"
+          },
+          {
+            "expr": "weather_forecast{location=\"adelaide\"}",
+            "refId": "B", 
+            "legendFormat": "{{variable}} - {{horizon}}h Forecast",
+            "interval": "1m"
+          },
+          {
+            "expr": "analog_similarity_score{location=\"adelaide\"}",
+            "refId": "C",
+            "legendFormat": "Analog Pattern {{pattern_id}}",
+            "interval": "5m"
+          },
+          {
+            "expr": "ensemble_spread_current{location=\"adelaide\"}",
+            "refId": "D",
+            "legendFormat": "Uncertainty - {{variable}}",
+            "interval": "1m"
+          }
+        ],
+        "options": {
+          "showObservations": true,
+          "showForecast": true,
+          "showAnalogPatterns": true,
+          "showUncertaintyBands": true,
+          "animationSpeed": 1000,
+          "maxAnalogCount": 5,
+          "confidenceThreshold": 0.7,
+          "defaultHorizon": "6h",
+          "enableHistoricalEvents": true,
+          "splitViewRatio": 0.5
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "barAlignment": 0,
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "spanNulls": false,
+              "insertNulls": false,
+              "showPoints": "auto",
+              "pointSize": 5
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Forecast Performance Metrics",
+        "type": "row",
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 20
+        }
+      },
+      {
+        "id": 3,
+        "title": "Current Forecast Accuracy",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg_over_time(forecast_accuracy_score{horizon=\"6h\"}[1h])",
+            "refId": "A",
+            "legendFormat": "6h Accuracy"
+          },
+          {
+            "expr": "avg_over_time(forecast_accuracy_score{horizon=\"12h\"}[1h])",
+            "refId": "B", 
+            "legendFormat": "12h Accuracy"
+          },
+          {
+            "expr": "avg_over_time(forecast_accuracy_score{horizon=\"24h\"}[1h])",
+            "refId": "C",
+            "legendFormat": "24h Accuracy"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "mappings": [],
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow", 
+                  "value": 0.6
+                },
+                {
+                  "color": "green",
+                  "value": 0.8
+                }
+              ]
+            },
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 21
+        }
+      },
+      {
+        "id": 4,
+        "title": "Analog Pattern Quality",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "avg(analog_similarity_score)",
+            "refId": "A",
+            "legendFormat": "Avg Similarity"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "mappings": [],
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 0.5
+                },
+                {
+                  "color": "green", 
+                  "value": 0.8
+                }
+              ]
+            },
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 21
+        }
+      },
+      {
+        "id": 5,
+        "title": "Real-time CAPE Distribution",
+        "type": "histogram",
+        "targets": [
+          {
+            "expr": "cape_distribution_values",
+            "refId": "A",
+            "legendFormat": "CAPE {{horizon}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              }
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 16,
+          "y": 21
+        }
+      },
+      {
+        "id": 6,
+        "title": "System Status & Health",
+        "type": "row",
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 29
+        }
+      },
+      {
+        "id": 7,
+        "title": "Analog Processing Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(analog_processing_requests_total[5m])",
+            "refId": "A",
+            "legendFormat": "Processing Rate"
+          },
+          {
+            "expr": "rate(analog_processing_errors_total[5m])",
+            "refId": "B",
+            "legendFormat": "Error Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "barAlignment": 0,
+              "lineWidth": 1,
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "spanNulls": false,
+              "insertNulls": false,
+              "showPoints": "auto",
+              "pointSize": 5
+            },
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 30
+        }
+      },
+      {
+        "id": 8,
+        "title": "Database Performance",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(timescaledb_query_duration_seconds_sum[5m]) / rate(timescaledb_query_duration_seconds_count[5m])",
+            "refId": "A",
+            "legendFormat": "Avg Query Time"
+          },
+          {
+            "expr": "rate(prometheus_query_duration_seconds_sum[5m]) / rate(prometheus_query_duration_seconds_count[5m])",
+            "refId": "B",
+            "legendFormat": "Avg Metrics Query Time"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "barAlignment": 0,
+              "lineWidth": 1,
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "spanNulls": false,
+              "insertNulls": false,
+              "showPoints": "auto",
+              "pointSize": 5
+            },
+            "unit": "s"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 30
+        }
+      },
+      {
+        "id": 9,
+        "title": "Panel Usage Analytics",
+        "type": "row", 
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 38
+        }
+      },
+      {
+        "id": 10,
+        "title": "Animation Usage",
+        "type": "bargauge",
+        "targets": [
+          {
+            "expr": "increase(weather_panel_animation_starts_total[1h])",
+            "refId": "A",
+            "legendFormat": "Animation Starts"
+          },
+          {
+            "expr": "increase(weather_panel_horizon_changes_total[1h])",
+            "refId": "B",
+            "legendFormat": "Horizon Changes"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "orientation": "horizontal",
+              "displayMode": "basic"
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 39
+        }
+      },
+      {
+        "id": 11,
+        "title": "Variable Selection Frequency",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "increase(weather_panel_variable_toggles_total[24h])",
+            "refId": "A",
+            "legendFormat": "{{variable}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              }
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 39
+        }
+      }
+    ],
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": [
+        "10s",
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "1d"
+      ]
+    },
+    "timezone": "",
+    "title": "Weather Forecast - Meteorologist Panel",
+    "uid": "weather-forecast-meteorologist",
+    "version": 1,
+    "weekStart": "",
+    "refresh": "30s"
+  }
+}

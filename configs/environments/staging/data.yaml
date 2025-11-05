@@ -1,0 +1,39 @@
+# Staging Data Configuration Overrides
+# Production-like dataset for integration testing with moderate scope
+
+era5:
+  # Representative temporal range for staging validation
+  years: [2015, 2023]  # 8-year dataset for testing
+  
+  # Production-scale spatial domain but focused on validation
+  area: [-33.4, 137.1, -36.4, 140.1]  # 22°×22° domain around Adelaide
+  
+preprocessing:
+  # Production-grade preprocessing for realistic testing
+  normalize_method: 'zscore'  # Same as production
+  fill_method: 'interpolate'  # Production-quality interpolation
+
+gfs:
+  # Core lead times for staging validation
+  lead_times: [6, 12, 24, 48]  # Most important forecast horizons
+
+# Staging-specific optimizations
+caching:
+  enabled: true
+  ttl: 300  # 5-minute cache for testing
+
+performance:
+  batch_size: 32  # Moderate batch size for staging
+  max_workers: 2  # Limited parallelism for staging
+
+quality_assurance:
+  # Enhanced validation for staging environment
+  enable_data_validation: true
+  validation_threshold: 0.95
+  enable_quality_metrics: true
+  
+monitoring:
+  # Comprehensive monitoring for staging validation
+  enable_metrics: true
+  metrics_interval: 60  # 1-minute intervals
+  enable_alerts: true

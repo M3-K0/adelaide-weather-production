@@ -1,0 +1,198 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 11% 6%;
+    --foreground: 213 31% 91%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
+  }
+
+  /* Focus styles for accessibility */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* High contrast mode support */
+  @media (prefers-contrast: high) {
+    :root {
+      --border: 0 0% 80%;
+      --foreground: 0 0% 100%;
+    }
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-muted;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-accent;
+  }
+}
+
+@layer components {
+  /* Weather card base styles */
+  .weather-card {
+    @apply bg-card border border-border rounded-lg p-6;
+    @apply hover:border-accent transition-colors duration-200;
+    @apply focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+
+  .weather-card.low-confidence {
+    @apply border-amber-700/40;
+    box-shadow:
+      0 0 16px rgba(251, 191, 36, 0.15),
+      0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Typography utilities */
+  .text-tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Loading states */
+  .loading-pulse {
+    @apply animate-pulse bg-muted;
+  }
+
+  /* Status indicators */
+  .status-indicator {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .status-indicator.ready {
+    @apply bg-emerald-950/50 border border-emerald-700 text-emerald-400;
+  }
+
+  .status-indicator.warning {
+    @apply bg-amber-950/50 border border-amber-600 text-amber-400;
+  }
+
+  .status-indicator.error {
+    @apply bg-red-950/50 border border-red-700 text-red-400;
+  }
+
+  .status-indicator.unavailable {
+    @apply bg-slate-800/50 border border-slate-700 text-slate-500;
+  }
+
+  /* Enhanced slider styling */
+  .slider {
+    @apply appearance-none bg-secondary rounded-lg cursor-pointer;
+  }
+
+  .slider::-webkit-slider-thumb {
+    @apply appearance-none w-4 h-4 bg-primary rounded-full cursor-pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  .slider::-moz-range-thumb {
+    @apply w-4 h-4 bg-primary rounded-full cursor-pointer border-0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  .slider:focus::-webkit-slider-thumb {
+    @apply ring-2 ring-ring ring-offset-2;
+  }
+
+  .slider:focus::-moz-range-thumb {
+    @apply ring-2 ring-ring ring-offset-2;
+  }
+
+  /* Timeline slider for AnalogExplorer */
+  .timeline-slider {
+    @apply appearance-none bg-slate-700 rounded-lg cursor-pointer h-2;
+  }
+
+  .timeline-slider::-webkit-slider-thumb {
+    @apply appearance-none w-4 h-4 rounded-full cursor-pointer;
+    background: #22d3ee;
+    box-shadow: 0 2px 8px rgba(34, 211, 238, 0.3);
+    transition: all 0.2s ease;
+  }
+
+  .timeline-slider::-moz-range-thumb {
+    @apply w-4 h-4 rounded-full cursor-pointer border-0;
+    background: #22d3ee;
+    box-shadow: 0 2px 8px rgba(34, 211, 238, 0.3);
+  }
+
+  .timeline-slider:hover::-webkit-slider-thumb {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(34, 211, 238, 0.4);
+  }
+
+  .timeline-slider:focus::-webkit-slider-thumb {
+    @apply ring-2 ring-cyan-400 ring-offset-2 ring-offset-slate-900;
+  }
+
+  .timeline-slider:focus::-moz-range-thumb {
+    @apply ring-2 ring-cyan-400 ring-offset-2 ring-offset-slate-900;
+  }
+
+  /* Line clamp utility for multi-line text truncation */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}

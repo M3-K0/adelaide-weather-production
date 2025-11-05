@@ -1,0 +1,48 @@
+# Pod Disruption Budgets for Production High Availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-pdb
+  namespace: adelaide-weather-production
+  labels:
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: adelaide-weather
+    environment: production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: api
+      environment: production
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+  namespace: adelaide-weather-production
+  labels:
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: adelaide-weather
+    environment: production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: frontend
+      environment: production
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  namespace: adelaide-weather-production
+  labels:
+    app.kubernetes.io/component: redis
+    app.kubernetes.io/part-of: adelaide-weather
+    environment: production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: redis
+      environment: production

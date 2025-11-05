@@ -1,0 +1,84 @@
+# Production Monitoring Configuration
+apiVersion: v1
+kind: ServiceMonitor
+metadata:
+  name: production-api-monitor
+  namespace: adelaide-weather-production
+  labels:
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: adelaide-weather
+    environment: production
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: api
+      environment: production
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+    honorLabels: true
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: adelaide-weather-alerts
+  namespace: adelaide-weather-production
+  labels:
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: adelaide-weather
+    environment: production
+spec:
+  groups:
+  - name: adelaide-weather.rules
+    rules:
+    - alert: HighErrorRate
+      expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+      for: 5m
+      labels:
+        severity: critical
+        service: adelaide-weather
+      annotations:
+        summary: "High error rate detected"
+        description: "Error rate is {{ $value }} errors per second"
+    
+    - alert: HighResponseTime
+      expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+      for: 5m
+      labels:
+        severity: warning
+        service: adelaide-weather
+      annotations:
+        summary: "High response time detected"
+        description: "95th percentile response time is {{ $value }} seconds"
+    
+    - alert: HighMemoryUsage
+      expr: container_memory_usage_bytes{container="api"} / container_spec_memory_limit_bytes{container="api"} > 0.9
+      for: 10m
+      labels:
+        severity: warning
+        service: adelaide-weather
+      annotations:
+        summary: "High memory usage"
+        description: "Memory usage is {{ $value | humanizePercentage }}"
+    
+    - alert: PodCrashLooping
+      expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+      for: 5m
+      labels:
+        severity: critical
+        service: adelaide-weather
+      annotations:
+        summary: "Pod is crash looping"
+        description: "Pod {{ $labels.pod }} is restarting frequently"
+    
+    - alert: ServiceDown
+      expr: up{job="adelaide-weather-api"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        service: adelaide-weather
+      annotations:
+        summary: "Service is down"
+        description: "Adelaide Weather API service is not responding"

@@ -1,0 +1,87 @@
+{
+  "test_suite": "Configuration Drift Monitoring",
+  "executed_at": "2025-11-05T04:14:07.441314",
+  "summary": {
+    "total_tests": 7,
+    "passed": 5,
+    "failed": 1,
+    "simulated": 1,
+    "success_rate": "71.4%"
+  },
+  "test_results": [
+    {
+      "scenario": "critical_config_change",
+      "description": "Test critical configuration file changes",
+      "started_at": "2025-11-05T04:13:36.074601",
+      "status": "passed",
+      "metrics_validated": true,
+      "alerts_validated": false,
+      "webhook_tested": true,
+      "errors": [],
+      "completed_at": "2025-11-05T04:13:50.652820"
+    },
+    {
+      "scenario": "high_severity_env_change",
+      "description": "Test high severity environment variable changes",
+      "started_at": "2025-11-05T04:13:50.652873",
+      "status": "failed",
+      "metrics_validated": false,
+      "alerts_validated": false,
+      "webhook_tested": false,
+      "errors": [
+        "No drift events detected"
+      ],
+      "completed_at": "2025-11-05T04:13:50.656320"
+    },
+    {
+      "scenario": "schema_validation_failure",
+      "description": "Test schema validation failure detection",
+      "started_at": "2025-11-05T04:13:50.656368",
+      "status": "passed",
+      "metrics_validated": true,
+      "alerts_validated": false,
+      "webhook_tested": false,
+      "errors": [],
+      "completed_at": "2025-11-05T04:13:55.666989"
+    },
+    {
+      "scenario": "security_drift_detection",
+      "description": "Test security-related drift detection",
+      "started_at": "2025-11-05T04:13:55.667050",
+      "status": "passed",
+      "metrics_validated": true,
+      "alerts_validated": false,
+      "webhook_tested": true,
+      "errors": [],
+      "completed_at": "2025-11-05T04:14:07.431830"
+    },
+    {
+      "test": "prometheus_metrics_integration",
+      "status": "passed",
+      "started_at": "2025-11-05T04:14:07.431883",
+      "errors": [],
+      "completed_at": "2025-11-05T04:14:07.431923"
+    },
+    {
+      "test": "api_metrics_endpoint",
+      "status": "simulated",
+      "started_at": "2025-11-05T04:14:07.431969",
+      "errors": [],
+      "completed_at": "2025-11-05T04:14:07.431988"
+    },
+    {
+      "test": "alert_rule_syntax",
+      "status": "passed",
+      "started_at": "2025-11-05T04:14:07.432034",
+      "errors": [],
+      "completed_at": "2025-11-05T04:14:07.441300"
+    }
+  ],
+  "recommendations": [
+    "Review and fix failed test scenarios",
+    "Run full integration tests with live API and Prometheus",
+    "Configure webhook URL for critical drift notifications",
+    "Ensure Prometheus is monitoring the application metrics endpoint",
+    "Test alert manager configuration for drift notifications"
+  ]
+}

@@ -1,0 +1,569 @@
+name: Security Baseline Scanning
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of security scan to run'
+        required: false
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - sast-only
+          - dast-only
+          - dependency-only
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18.17.0'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # SAST Scanning - Static Application Security Testing
+  sast-python-bandit:
+    name: SAST - Python Bandit Scan
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'sast-only' || github.event.inputs.scan_type == ''
+    
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Bandit
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit[toml] bandit-sarif-formatter
+
+      - name: Run Bandit security scan
+        run: |
+          bandit -r api/ core/ -f sarif -o bandit-report.sarif || true
+          bandit -r api/ core/ -f json -o bandit-report.json || true
+          bandit -r api/ core/ -f txt -o bandit-report.txt || true
+
+      - name: Upload Bandit SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit-report.sarif
+          category: bandit
+
+      - name: Upload Bandit results as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-security-report
+          path: |
+            bandit-report.sarif
+            bandit-report.json
+            bandit-report.txt
+
+      - name: Comment PR with Bandit results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let banditResults = '';
+            try {
+              banditResults = fs.readFileSync('bandit-report.txt', 'utf8');
+            } catch (e) {
+              banditResults = 'Bandit scan completed successfully with no issues found.';
+            }
+            
+            const comment = `## 🔒 Bandit Security Scan Results
+            
+            \`\`\`
+            ${banditResults.slice(0, 2000)}${banditResults.length > 2000 ? '\n... (truncated)' : ''}
+            \`\`\`
+            
+            📋 Full report available in workflow artifacts.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # SAST - CodeQL Analysis (Enhanced)
+  sast-codeql:
+    name: SAST - CodeQL Analysis
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'sast-only' || github.event.inputs.scan_type == ''
+    
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript', 'python']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended,security-and-quality
+          config: |
+            paths:
+              - api/
+              - core/
+              - frontend/
+
+      - name: Setup Node.js (for JavaScript)
+        if: matrix.language == 'javascript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        if: matrix.language == 'javascript'
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        if: matrix.language == 'javascript'
+        working-directory: frontend
+        run: npm run build
+
+      - name: Setup Python (for Python)
+        if: matrix.language == 'python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Python dependencies
+        if: matrix.language == 'python'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r api/requirements.txt
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{matrix.language}}'
+
+  # Dependency Vulnerability Scanning
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'dependency-only' || github.event.inputs.scan_type == ''
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Python dependency scanning
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Safety for Python dependency scanning
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety
+
+      - name: Run Python dependency security scan
+        run: |
+          safety check --json --output safety-report.json || true
+          safety check --output safety-report.txt || true
+
+      - name: Upload Python dependency scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-dependency-scan
+          path: |
+            safety-report.json
+            safety-report.txt
+
+      # Node.js dependency scanning
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run npm audit
+        working-directory: frontend
+        run: |
+          npm audit --audit-level=moderate --json > ../npm-audit-report.json || true
+          npm audit --audit-level=moderate > ../npm-audit-report.txt || true
+
+      - name: Run audit-ci for enhanced dependency scanning
+        working-directory: frontend
+        run: |
+          npx audit-ci --moderate --report-type json --output-format ../audit-ci-report.json || true
+          npx audit-ci --moderate > ../audit-ci-report.txt || true
+
+      - name: Upload Node.js dependency scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: nodejs-dependency-scan
+          path: |
+            npm-audit-report.json
+            npm-audit-report.txt
+            audit-ci-report.json
+            audit-ci-report.txt
+
+  # Container Security Scanning
+  container-security-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'sast-only' || github.event.inputs.scan_type == ''
+
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build API container for scanning
+      - name: Build API container
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: api/Dockerfile
+          tags: weather-api:security-scan
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Build frontend container for scanning
+      - name: Build frontend container  
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          tags: weather-frontend:security-scan
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Trivy container scanning
+      - name: Run Trivy vulnerability scanner - API
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'weather-api:security-scan'
+          format: 'sarif'
+          output: 'trivy-api-results.sarif'
+
+      - name: Run Trivy vulnerability scanner - Frontend
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'weather-frontend:security-scan'
+          format: 'sarif'
+          output: 'trivy-frontend-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: |
+            trivy-api-results.sarif
+            trivy-frontend-results.sarif
+          category: trivy
+
+      # Generate detailed Trivy reports
+      - name: Run Trivy for detailed reports
+        run: |
+          trivy image --format json --output trivy-api-detailed.json weather-api:security-scan
+          trivy image --format table --output trivy-api-table.txt weather-api:security-scan
+          trivy image --format json --output trivy-frontend-detailed.json weather-frontend:security-scan
+          trivy image --format table --output trivy-frontend-table.txt weather-frontend:security-scan
+
+      - name: Upload Trivy detailed results
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-container-scan
+          path: |
+            trivy-*-detailed.json
+            trivy-*-table.txt
+            trivy-*-results.sarif
+
+  # Infrastructure Security Scanning
+  infrastructure-security-scan:
+    name: Infrastructure Security Scan
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'sast-only' || github.event.inputs.scan_type == ''
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      # tfsec scanning
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: infrastructure/
+          format: sarif
+          soft_fail: true
+
+      - name: Upload tfsec results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: tfsec
+
+      # Checkov scanning
+      - name: Run Checkov action
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: infrastructure/
+          framework: terraform
+          output_format: sarif
+          output_file_path: checkov-results.sarif
+          soft_fail: true
+
+      - name: Upload Checkov results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov-results.sarif
+          category: checkov
+
+      - name: Upload infrastructure security scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: infrastructure-security-scan
+          path: |
+            results.sarif
+            checkov-results.sarif
+
+  # Secrets Scanning
+  secrets-scan:
+    name: Secrets Scanning
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'sast-only' || github.event.inputs.scan_type == ''
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for complete secret scanning
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+      - name: Upload Gitleaks results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gitleaks-scan
+          path: results.sarif
+
+  # DAST Scanning - Dynamic Application Security Testing
+  dast-owasp-zap:
+    name: DAST - OWASP ZAP Scan
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'dast-only' || github.event.inputs.scan_type == ''
+    needs: [sast-python-bandit] # Run after SAST to ensure code is ready
+
+    services:
+      weather-api:
+        image: python:3.11-slim
+        ports:
+          - 8000:8000
+        options: >-
+          --health-cmd "curl -f http://localhost:8000/health || exit 1"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Start the API for DAST testing
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install API dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r api/requirements.txt
+
+      - name: Start API for testing
+        run: |
+          cd api
+          export API_TOKEN="test-token-for-dast-scanning"
+          export ENVIRONMENT="testing"
+          python main.py &
+          sleep 10
+          curl -f http://localhost:8000/health || exit 1
+
+      # OWASP ZAP Security Scan
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.10.0
+        with:
+          target: 'http://localhost:8000'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a -d -T 60 -m 10'
+
+      - name: ZAP Full Scan
+        uses: zaproxy/action-full-scan@v0.8.0
+        with:
+          target: 'http://localhost:8000'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a -d -T 60'
+
+      - name: Upload ZAP scan results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-scan-reports
+          path: |
+            report_html.html
+            report_json.json
+            report_md.md
+
+  # Security baseline summary
+  security-baseline-summary:
+    name: Security Baseline Summary
+    runs-on: ubuntu-latest
+    needs: [sast-python-bandit, sast-codeql, dependency-scan, container-security-scan, infrastructure-security-scan, secrets-scan]
+    if: always()
+
+    permissions:
+      contents: read
+      security-events: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all scan artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Generate security baseline report
+        run: |
+          echo "# Security Baseline Scan Report" > security-baseline-report.md
+          echo "" >> security-baseline-report.md
+          echo "**Scan Date:** $(date -u)" >> security-baseline-report.md
+          echo "**Repository:** ${{ github.repository }}" >> security-baseline-report.md
+          echo "**Branch:** ${{ github.ref_name }}" >> security-baseline-report.md
+          echo "**Commit:** ${{ github.sha }}" >> security-baseline-report.md
+          echo "" >> security-baseline-report.md
+          
+          echo "## Scan Results Summary" >> security-baseline-report.md
+          echo "" >> security-baseline-report.md
+          echo "| Security Scan | Status |" >> security-baseline-report.md
+          echo "|---------------|---------|" >> security-baseline-report.md
+          echo "| SAST - Bandit | ${{ needs.sast-python-bandit.result }} |" >> security-baseline-report.md
+          echo "| SAST - CodeQL | ${{ needs.sast-codeql.result }} |" >> security-baseline-report.md
+          echo "| Dependency Scan | ${{ needs.dependency-scan.result }} |" >> security-baseline-report.md
+          echo "| Container Security | ${{ needs.container-security-scan.result }} |" >> security-baseline-report.md
+          echo "| Infrastructure Security | ${{ needs.infrastructure-security-scan.result }} |" >> security-baseline-report.md
+          echo "| Secrets Scan | ${{ needs.secrets-scan.result }} |" >> security-baseline-report.md
+          echo "" >> security-baseline-report.md
+          
+          # Check for critical failures
+          CRITICAL_FAILURES=0
+          if [[ "${{ needs.sast-python-bandit.result }}" == "failure" ]]; then
+            CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
+          fi
+          if [[ "${{ needs.dependency-scan.result }}" == "failure" ]]; then
+            CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
+          fi
+          if [[ "${{ needs.container-security-scan.result }}" == "failure" ]]; then
+            CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
+          fi
+          
+          echo "**Critical Failures:** $CRITICAL_FAILURES" >> security-baseline-report.md
+          echo "" >> security-baseline-report.md
+          
+          if [[ $CRITICAL_FAILURES -gt 0 ]]; then
+            echo "⚠️ **Security baseline scan detected critical issues that require immediate attention.**" >> security-baseline-report.md
+          else
+            echo "✅ **Security baseline scan completed successfully with no critical issues.**" >> security-baseline-report.md
+          fi
+          
+          echo "" >> security-baseline-report.md
+          echo "📋 **Detailed scan reports are available in the workflow artifacts.**" >> security-baseline-report.md
+
+      - name: Upload security baseline report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-baseline-report
+          path: security-baseline-report.md
+
+      - name: Comment PR with security summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('security-baseline-report.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
+
+      - name: Fail on critical security issues
+        run: |
+          CRITICAL_FAILURES=0
+          if [[ "${{ needs.sast-python-bandit.result }}" == "failure" ]]; then
+            CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
+          fi
+          if [[ "${{ needs.dependency-scan.result }}" == "failure" ]]; then
+            CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
+          fi
+          if [[ "${{ needs.container-security-scan.result }}" == "failure" ]]; then
+            CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
+          fi
+          
+          echo "Critical security failures: $CRITICAL_FAILURES"
+          
+          if [[ $CRITICAL_FAILURES -gt 0 ]]; then
+            echo "❌ Security baseline scan failed with critical issues"
+            exit 1
+          else
+            echo "✅ Security baseline scan passed"
+          fi

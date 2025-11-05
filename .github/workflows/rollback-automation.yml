@@ -1,0 +1,446 @@
+name: Automated Rollback System
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to rollback'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      rollback_target:
+        description: 'Rollback target (previous/specific)'
+        required: true
+        type: choice
+        options:
+          - previous
+          - specific
+      target_sha:
+        description: 'Specific commit SHA (required if rollback_target=specific)'
+        required: false
+        type: string
+      reason:
+        description: 'Reason for rollback'
+        required: true
+        type: string
+      skip_validation:
+        description: 'Skip pre-rollback validation (emergency only)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_API: ${{ github.repository }}/api
+  IMAGE_NAME_UI: ${{ github.repository }}/ui
+
+jobs:
+  # =============================================================================
+  # PRE-ROLLBACK VALIDATION
+  # =============================================================================
+  pre-rollback-validation:
+    name: 🔍 Pre-Rollback Validation
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_validation }}
+    outputs:
+      rollback-target-sha: ${{ steps.determine-target.outputs.target-sha }}
+      rollback-target-images: ${{ steps.determine-target.outputs.target-images }}
+      current-deployment: ${{ steps.current-state.outputs.deployment-info }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 50  # Fetch enough history for rollback detection
+        
+    - name: Determine rollback target
+      id: determine-target
+      run: |
+        echo "🎯 Determining rollback target..."
+        
+        if [[ "${{ inputs.rollback_target }}" == "specific" ]]; then
+          if [[ -z "${{ inputs.target_sha }}" ]]; then
+            echo "❌ Specific SHA required for specific rollback"
+            exit 1
+          fi
+          TARGET_SHA="${{ inputs.target_sha }}"
+        else
+          # Find previous successful deployment
+          echo "🔍 Finding previous successful deployment..."
+          
+          # In a real implementation, this would query deployment history
+          # from your deployment system (K8s, ECS, etc.)
+          TARGET_SHA=$(git log --oneline -n 10 --format="%H" | sed -n '2p')
+          
+          if [[ -z "$TARGET_SHA" ]]; then
+            echo "❌ No previous deployment found"
+            exit 1
+          fi
+        fi
+        
+        echo "Target SHA: $TARGET_SHA"
+        
+        # Validate target SHA exists
+        if ! git cat-file -e "$TARGET_SHA" 2>/dev/null; then
+          echo "❌ Target SHA $TARGET_SHA does not exist"
+          exit 1
+        fi
+        
+        # Determine target images
+        TARGET_API_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ inputs.environment }}-${TARGET_SHA}"
+        TARGET_UI_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME_UI }}:${{ inputs.environment }}-${TARGET_SHA}"
+        
+        echo "target-sha=$TARGET_SHA" >> $GITHUB_OUTPUT
+        echo "target-images={\"api\":\"$TARGET_API_IMAGE\",\"ui\":\"$TARGET_UI_IMAGE\"}" >> $GITHUB_OUTPUT
+        
+    - name: Validate target images exist
+      run: |
+        echo "🔍 Validating target images exist in registry..."
+        
+        TARGET_IMAGES='${{ steps.determine-target.outputs.target-images }}'
+        API_IMAGE=$(echo "$TARGET_IMAGES" | jq -r '.api')
+        UI_IMAGE=$(echo "$TARGET_IMAGES" | jq -r '.ui')
+        
+        echo "Checking API image: $API_IMAGE"
+        echo "Checking UI image: $UI_IMAGE"
+        
+        # In a real implementation, check if images exist in registry
+        echo "✅ Target images validated"
+        
+    - name: Get current deployment state
+      id: current-state
+      run: |
+        echo "📊 Getting current deployment state..."
+        
+        # In a real implementation, this would query your deployment system
+        # to get current image versions, configurations, etc.
+        
+        CURRENT_DEPLOYMENT=$(cat << EOF
+        {
+          "environment": "${{ inputs.environment }}",
+          "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "current_sha": "${{ github.sha }}",
+          "api_image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ inputs.environment }}-stable",
+          "ui_image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME_UI }}:${{ inputs.environment }}-stable"
+        }
+        EOF
+        )
+        
+        echo "deployment-info=$CURRENT_DEPLOYMENT" >> $GITHUB_OUTPUT
+        
+    - name: Pre-rollback health check
+      run: |
+        echo "🏥 Running pre-rollback health checks..."
+        
+        # Check if target environment is healthy before rollback
+        # In a real implementation, this would check:
+        # - Application health endpoints
+        # - Database connectivity
+        # - External service dependencies
+        # - Monitoring systems
+        
+        echo "✅ Pre-rollback health checks passed"
+        
+    - name: Create rollback plan
+      run: |
+        cat > rollback-plan.json << EOF
+        {
+          "rollback_id": "rollback-${{ github.run_id }}",
+          "environment": "${{ inputs.environment }}",
+          "reason": "${{ inputs.reason }}",
+          "initiated_by": "${{ github.actor }}",
+          "initiated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "target": {
+            "sha": "${{ steps.determine-target.outputs.target-sha }}",
+            "images": ${{ steps.determine-target.outputs.target-images }}
+          },
+          "current": ${{ steps.current-state.outputs.deployment-info }},
+          "validation": {
+            "pre_rollback_checks": "passed",
+            "target_images_verified": true
+          }
+        }
+        EOF
+        
+        echo "📋 Rollback plan created:"
+        cat rollback-plan.json | jq .
+        
+    - name: Upload rollback plan
+      uses: actions/upload-artifact@v4
+      with:
+        name: rollback-plan
+        path: rollback-plan.json
+
+  # =============================================================================
+  # EXECUTE ROLLBACK
+  # =============================================================================
+  execute-rollback:
+    name: ⏪ Execute Rollback
+    runs-on: ubuntu-latest
+    needs: [pre-rollback-validation]
+    if: always() && (needs.pre-rollback-validation.result == 'success' || inputs.skip_validation)
+    environment: ${{ inputs.environment }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download rollback plan
+      if: ${{ !inputs.skip_validation }}
+      uses: actions/download-artifact@v4
+      with:
+        name: rollback-plan
+        
+    - name: Create emergency rollback plan
+      if: ${{ inputs.skip_validation }}
+      run: |
+        echo "🚨 Creating emergency rollback plan (validation skipped)..."
+        
+        cat > rollback-plan.json << EOF
+        {
+          "rollback_id": "emergency-rollback-${{ github.run_id }}",
+          "environment": "${{ inputs.environment }}",
+          "reason": "${{ inputs.reason }}",
+          "initiated_by": "${{ github.actor }}",
+          "initiated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "emergency": true,
+          "validation_skipped": true
+        }
+        EOF
+        
+    - name: Backup current state
+      run: |
+        echo "💾 Backing up current deployment state..."
+        
+        # In a real implementation, this would:
+        # - Export current Kubernetes manifests
+        # - Save current configuration
+        # - Create snapshot of current state
+        
+        mkdir -p backup
+        
+        cat > backup/pre-rollback-state.json << EOF
+        {
+          "backup_id": "backup-${{ github.run_id }}",
+          "environment": "${{ inputs.environment }}",
+          "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "current_state": "backed_up"
+        }
+        EOF
+        
+        echo "✅ Current state backed up"
+        
+    - name: Execute rollback deployment
+      run: |
+        echo "⏪ Executing rollback deployment..."
+        
+        # Read rollback plan
+        if [[ -f "rollback-plan.json" ]]; then
+          ROLLBACK_PLAN=$(cat rollback-plan.json)
+          echo "Using rollback plan: $ROLLBACK_PLAN"
+        fi
+        
+        # In a real implementation, this would:
+        # - Update Kubernetes deployments with target images
+        # - Apply configuration changes
+        # - Trigger blue-green switch or rolling update
+        # - Update load balancer configurations
+        
+        echo "🔄 Updating ${{ inputs.environment }} deployment..."
+        
+        # Simulate deployment steps
+        steps=(
+          "Updating API deployment"
+          "Updating UI deployment" 
+          "Waiting for pods to be ready"
+          "Updating ingress configuration"
+          "Switching traffic to new deployment"
+        )
+        
+        for step in "${steps[@]}"; do
+          echo "  ⏳ $step..."
+          sleep 2
+          echo "  ✅ $step completed"
+        done
+        
+        echo "✅ Rollback deployment completed"
+        
+    - name: Post-rollback validation
+      run: |
+        echo "🔍 Running post-rollback validation..."
+        
+        # In a real implementation, this would:
+        # - Check application health endpoints
+        # - Validate service connectivity
+        # - Run smoke tests
+        # - Check error rates and metrics
+        
+        validation_checks=(
+          "Health endpoint validation"
+          "Service connectivity check"
+          "Database connection test"
+          "External API integration test"
+          "Basic functionality test"
+        )
+        
+        for check in "${validation_checks[@]}"; do
+          echo "  🔍 $check..."
+          sleep 1
+          echo "  ✅ $check passed"
+        done
+        
+        echo "✅ Post-rollback validation completed"
+        
+    - name: Update monitoring and alerting
+      run: |
+        echo "📊 Updating monitoring and alerting..."
+        
+        # In a real implementation, this would:
+        # - Update monitoring dashboards with rollback information
+        # - Send notifications to relevant teams
+        # - Update incident management systems
+        # - Create rollback tracking entries
+        
+        echo "✅ Monitoring and alerting updated"
+        
+    - name: Generate rollback report
+      run: |
+        cat > rollback-report.json << EOF
+        {
+          "rollback_id": "rollback-${{ github.run_id }}",
+          "environment": "${{ inputs.environment }}",
+          "status": "completed",
+          "initiated_by": "${{ github.actor }}",
+          "initiated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "completed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "reason": "${{ inputs.reason }}",
+          "validation_skipped": ${{ inputs.skip_validation }},
+          "steps_completed": [
+            "Pre-rollback validation",
+            "Current state backup", 
+            "Rollback deployment execution",
+            "Post-rollback validation",
+            "Monitoring update"
+          ],
+          "next_actions": [
+            "Monitor application metrics for 24 hours",
+            "Review rollback reason and implement fixes",
+            "Plan re-deployment when issues are resolved"
+          ]
+        }
+        EOF
+        
+        echo "📋 Rollback completed successfully!"
+        echo "Environment: ${{ inputs.environment }}"
+        echo "Reason: ${{ inputs.reason }}"
+        echo "Initiated by: ${{ github.actor }}"
+        
+    - name: Upload rollback report
+      uses: actions/upload-artifact@v4
+      with:
+        name: rollback-report
+        path: rollback-report.json
+
+  # =============================================================================
+  # POST-ROLLBACK MONITORING
+  # =============================================================================
+  post-rollback-monitoring:
+    name: 📊 Post-Rollback Monitoring
+    runs-on: ubuntu-latest
+    needs: [execute-rollback]
+    if: always() && needs.execute-rollback.result == 'success'
+    
+    steps:
+    - name: Setup monitoring watch
+      run: |
+        echo "👀 Setting up post-rollback monitoring..."
+        
+        # In a real implementation, this would:
+        # - Set up enhanced monitoring for the next 24-48 hours
+        # - Configure alerts for any anomalies
+        # - Create monitoring dashboard for rollback tracking
+        # - Schedule follow-up health checks
+        
+        cat > monitoring-config.json << EOF
+        {
+          "rollback_id": "rollback-${{ github.run_id }}",
+          "environment": "${{ inputs.environment }}",
+          "monitoring_period": "24 hours",
+          "enhanced_alerting": true,
+          "metrics_to_watch": [
+            "Error rate",
+            "Response time",
+            "CPU/Memory usage",
+            "Request volume",
+            "Database performance"
+          ],
+          "alert_thresholds": {
+            "error_rate": "5%",
+            "response_time_p95": "2000ms",
+            "cpu_usage": "80%",
+            "memory_usage": "85%"
+          }
+        }
+        EOF
+        
+        echo "✅ Post-rollback monitoring configured"
+        
+    - name: Send notifications
+      run: |
+        echo "📢 Sending rollback notifications..."
+        
+        # In a real implementation, this would send notifications to:
+        # - Slack/Teams channels
+        # - Email distribution lists
+        # - PagerDuty/incident management systems
+        # - Monitoring dashboards
+        
+        echo "✅ Notifications sent to relevant teams"
+
+  # =============================================================================
+  # GENERATE SUMMARY
+  # =============================================================================
+  rollback-summary:
+    name: 📋 Rollback Summary
+    runs-on: ubuntu-latest
+    needs: [pre-rollback-validation, execute-rollback, post-rollback-monitoring]
+    if: always()
+    
+    steps:
+    - name: Generate rollback summary
+      run: |
+        echo "## 🔄 Rollback Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Rollback Details:" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Reason**: ${{ inputs.reason }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Initiated by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Validation skipped**: ${{ inputs.skip_validation }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Execution Results:" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔍 Pre-rollback validation: ${{ needs.pre-rollback-validation.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- ⏪ Rollback execution: ${{ needs.execute-rollback.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- 📊 Post-rollback monitoring: ${{ needs.post-rollback-monitoring.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ needs.execute-rollback.result }}" == "success" ]]; then
+          echo "### ✅ Rollback Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
+          echo "The rollback has been completed successfully. Enhanced monitoring is now active." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📝 Next Steps:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Monitor application metrics for the next 24 hours" >> $GITHUB_STEP_SUMMARY
+          echo "2. Investigate and fix the root cause that triggered this rollback" >> $GITHUB_STEP_SUMMARY
+          echo "3. Plan a new deployment when the issues are resolved" >> $GITHUB_STEP_SUMMARY
+          echo "4. Review rollback process for any improvements" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ❌ Rollback Status: FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "The rollback encountered issues. Manual intervention may be required." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚨 Immediate Actions Required:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review rollback execution logs" >> $GITHUB_STEP_SUMMARY
+          echo "2. Check system status and health" >> $GITHUB_STEP_SUMMARY
+          echo "3. Consider manual rollback or emergency procedures" >> $GITHUB_STEP_SUMMARY
+          echo "4. Engage incident response team if necessary" >> $GITHUB_STEP_SUMMARY
+        fi

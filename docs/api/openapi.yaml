@@ -1,0 +1,1834 @@
+openapi: 3.0.3
+info:
+  title: Adelaide Weather Forecasting API
+  description: |
+    Production-ready analog ensemble weather forecasting system for Adelaide, Australia.
+    
+    This API provides real-time weather forecasts using advanced machine learning and 
+    historical pattern matching. The system uses analog ensemble methods to generate
+    probabilistic forecasts with uncertainty quantification.
+    
+    ## Features
+    - **Real-time forecasting** with 6h, 12h, 24h, and 48h horizons
+    - **Uncertainty quantification** with confidence intervals
+    - **Risk assessment** for weather hazards
+    - **Historical analog analysis** showing similar past patterns
+    - **High performance** with <150ms response times
+    - **Production monitoring** with health checks and metrics
+    
+    ## Quick Start
+    1. Obtain your API token from the system administrator
+    2. Make requests to `/forecast` with your token in the Authorization header
+    3. Specify forecast horizon and variables as query parameters
+    
+    ## Rate Limits
+    - Forecast endpoint: 60 requests per minute
+    - Health endpoints: 30 requests per minute  
+    - Admin endpoints: 20 requests per minute (authenticated)
+    - Metrics endpoint: 10 requests per minute (authenticated)
+    - Monitor endpoints: 15 requests per minute (authenticated)
+    
+    ## New Features in v2.0.0
+    - **Enhanced Health Monitoring**: Comprehensive health checks with Kubernetes probe support
+    - **FAISS Integration**: Real-time FAISS index health monitoring and performance metrics
+    - **Security Hardening**: Advanced token management and security monitoring
+    - **Performance Optimization**: Intelligent caching and compression middleware
+    - **Configuration Management**: Multi-environment configuration with drift detection
+    - **Operational Excellence**: Complete monitoring, alerting, and observability stack
+    
+    ## Support
+    For questions or issues, contact the development team.
+  version: "2.0.0"
+  contact:
+    name: Adelaide Weather API Support
+    email: support@adelaideweather.example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://adelaideweather.example.com/terms
+
+servers:
+  - url: https://api.adelaideweather.example.com
+    description: Production server
+  - url: https://staging-api.adelaideweather.example.com
+    description: Staging server
+  - url: http://localhost:8000
+    description: Development server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /forecast:
+    get:
+      summary: Get weather forecast
+      description: |
+        Generate weather forecast for specified horizon and variables using analog ensemble methods.
+        
+        Returns probabilistic forecasts with uncertainty bounds, risk assessment, and historical 
+        analog analysis. The forecast includes both point estimates and confidence intervals.
+        
+        **Performance**: Response times typically under 150ms.
+        **Caching**: Results are cached for 5 minutes for identical requests.
+      operationId: getForecast
+      tags:
+        - Forecasting
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: horizon
+          in: query
+          description: Forecast time horizon
+          required: false
+          schema:
+            type: string
+            enum: ["6h", "12h", "24h", "48h"]
+            default: "24h"
+          examples:
+            short_term:
+              value: "6h"
+              summary: Short-term forecast
+            standard:
+              value: "24h"
+              summary: Standard daily forecast
+            extended:
+              value: "48h"
+              summary: Extended forecast
+        - name: vars
+          in: query
+          description: |
+            Comma-separated list of weather variables to forecast.
+            Default: t2m,u10,v10,msl (temperature, wind components, pressure)
+          required: false
+          schema:
+            type: string
+            pattern: '^[a-z0-9,_]+$'
+            maxLength: 500
+          examples:
+            default:
+              value: "t2m,u10,v10,msl"
+              summary: Default variables (temperature, wind, pressure)
+            comprehensive:
+              value: "t2m,u10,v10,msl,cape,tp6h"
+              summary: Include convection and precipitation
+            minimal:
+              value: "t2m,msl"
+              summary: Temperature and pressure only
+      responses:
+        '200':
+          description: Forecast successfully generated
+          headers:
+            Cache-Control:
+              description: Caching policy for the response
+              schema:
+                type: string
+                example: "public, max-age=300"
+            X-Request-ID:
+              description: Unique request identifier for debugging
+              schema:
+                type: string
+                format: uuid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForecastResponse'
+              examples:
+                typical_forecast:
+                  summary: Typical 24h forecast
+                  value:
+                    horizon: "24h"
+                    generated_at: "2024-01-15T12:00:00Z"
+                    variables:
+                      t2m:
+                        value: 25.3
+                        p05: 22.1
+                        p95: 28.5
+                        confidence: 0.82
+                        available: true
+                        analog_count: 45
+                      u10:
+                        value: 3.2
+                        p05: 1.8
+                        p95: 5.1
+                        confidence: 0.75
+                        available: true
+                        analog_count: 45
+                      v10:
+                        value: -1.8
+                        p05: -3.4
+                        p95: 0.2
+                        confidence: 0.75
+                        available: true
+                        analog_count: 45
+                      msl:
+                        value: 1015.2
+                        p05: 1012.8
+                        p95: 1017.6
+                        confidence: 0.88
+                        available: true
+                        analog_count: 45
+                    wind10m:
+                      speed: 3.7
+                      direction: 209
+                      gust: null
+                      available: true
+                    narrative: "Forecast for 24h: warm conditions with temperature around 25.3°C, light winds at 3.7 m/s from 209°, normal pressure system (1015 hPa)."
+                    risk_assessment:
+                      thunderstorm: "low"
+                      heat_stress: "low"
+                      wind_damage: "minimal"
+                      precipitation: "low"
+                    analogs_summary:
+                      most_similar_date: "2023-03-15T12:00:00Z"
+                      similarity_score: 0.82
+                      analog_count: 45
+                      outcome_description: "Strong pattern match with typical seasonal conditions"
+                      confidence_explanation: "Based on 45 historical analog patterns"
+                    confidence_explanation: "High confidence (82.0%) with 45 strong analog matches"
+                    versions:
+                      model: "v1.0.0"
+                      index: "v1.0.0"
+                      datasets: "v1.0.0"
+                      api_schema: "v1.1.0"
+                    hashes:
+                      model: "a7c3f92"
+                      index: "2e8b4d1"
+                      datasets: "d4f8a91"
+                    latency_ms: 127.5
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_horizon:
+                  summary: Invalid horizon parameter
+                  value:
+                    error:
+                      code: 400
+                      message: "Invalid horizon. Must be one of: 6h, 12h, 24h, 48h"
+                      timestamp: "2024-01-15T12:00:00Z"
+                      correlation_id: "req_123456"
+                invalid_variables:
+                  summary: Invalid variables parameter
+                  value:
+                    error:
+                      code: 400
+                      message: "Invalid variables: invalid_var. Valid variables: t2m,u10,v10,msl,r850,tp6h,cape,t850,z500"
+                      timestamp: "2024-01-15T12:00:00Z"
+                      correlation_id: "req_123456"
+        '401':
+          description: Authentication required
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+                example: "Bearer"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: 401
+                  message: "Invalid authentication token"
+                  timestamp: "2024-01-15T12:00:00Z"
+                  correlation_id: "req_123456"
+        '403':
+          description: Access forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: 403
+                  message: "Not authenticated"
+                  timestamp: "2024-01-15T12:00:00Z"
+                  correlation_id: "req_123456"
+        '429':
+          description: Rate limit exceeded
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+                example: 60
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: 429
+                  message: "Rate limit exceeded. Please try again later."
+                  timestamp: "2024-01-15T12:00:00Z"
+                  correlation_id: "req_123456"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: 500
+                  message: "Internal server error"
+                  timestamp: "2024-01-15T12:00:00Z"
+                  correlation_id: "req_123456"
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: 503
+                  message: "Forecasting system not ready"
+                  timestamp: "2024-01-15T12:00:00Z"
+                  correlation_id: "req_123456"
+
+  /health:
+    get:
+      summary: Get system health status
+      description: |
+        Comprehensive health check of all system components including model, indices, 
+        datasets, and dependencies. Use this endpoint to monitor system readiness 
+        and diagnose issues.
+        
+        **Monitoring**: Suitable for automated health monitoring and alerting.
+        **Response time**: Typically under 50ms.
+      operationId: getHealth
+      tags:
+        - Monitoring
+      responses:
+        '200':
+          description: Health status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                healthy_system:
+                  summary: Healthy system
+                  value:
+                    ready: true
+                    checks:
+                      - name: "startup_validation"
+                        status: "pass"
+                        message: "Expert startup validation passed"
+                      - name: "forecast_adapter"
+                        status: "pass"
+                        message: "ForecastAdapter operational"
+                    model:
+                      version: "v1.0.0"
+                      hash: "a7c3f92"
+                      matched_ratio: 1.0
+                    index:
+                      ntotal: 13148
+                      dim: 256
+                      metric: "L2"
+                      hash: "2e8b4d1"
+                      dataset_hash: "d4f8a91"
+                    datasets:
+                      - horizon: "6h"
+                        valid_pct_by_var:
+                          t2m: 99.5
+                          u10: 99.2
+                          v10: 99.2
+                          msl: 99.8
+                        hash: "d4f8a91"
+                        schema_version: "v1.0.0"
+                    deps:
+                      fastapi: "0.104.1"
+                      torch: "2.0.1"
+                      faiss: "1.7.4"
+                    preprocessing_version: "v1.0.0"
+                    uptime_seconds: 3600.5
+                unhealthy_system:
+                  summary: System with failures
+                  value:
+                    ready: false
+                    checks:
+                      - name: "startup_validation"
+                        status: "fail"
+                        message: "Validation failed"
+                      - name: "forecast_adapter"
+                        status: "fail"
+                        message: "Adapter not ready"
+                    model:
+                      version: "unknown"
+                      hash: "unknown"
+                      matched_ratio: 0.0
+                    index:
+                      ntotal: 0
+                      dim: 0
+                      metric: "unknown"
+                      hash: "unknown"
+                      dataset_hash: "unknown"
+                    datasets: []
+                    deps: {}
+                    preprocessing_version: "unknown"
+                    uptime_seconds: 0.0
+        '500':
+          description: Health check failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /metrics:
+    get:
+      summary: Get Prometheus metrics
+      description: |
+        Retrieve Prometheus-compatible metrics for monitoring system performance,
+        request rates, and error rates.
+        
+        **Authentication**: Requires valid API token.
+        **Format**: Prometheus text format.
+        **Use case**: Integrate with monitoring systems like Grafana/Prometheus.
+      operationId: getMetrics
+      tags:
+        - Monitoring
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Metrics retrieved successfully
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  # HELP forecast_requests_total Total forecast requests
+                  # TYPE forecast_requests_total counter
+                  forecast_requests_total 1234.0
+                  # HELP response_duration_seconds Forecast request duration
+                  # TYPE response_duration_seconds histogram
+                  response_duration_seconds_bucket{le="0.1"} 891.0
+                  response_duration_seconds_bucket{le="0.25"} 1198.0
+                  response_duration_seconds_bucket{le="0.5"} 1232.0
+                  response_duration_seconds_bucket{le="+Inf"} 1234.0
+                  response_duration_seconds_count 1234.0
+                  response_duration_seconds_sum 156.78
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Metrics generation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /analogs:
+    get:
+      summary: Get detailed analog patterns
+      description: |
+        Retrieve detailed historical analog patterns for the current atmospheric state.
+        Shows the top 5 most similar historical weather patterns with timelines of
+        what happened after each pattern.
+        
+        **Use case**: Research, pattern analysis, forecast explanation.
+        **Response time**: May take 1-2 seconds due to complex analysis.
+      operationId: getAnalogs
+      tags:
+        - Analysis
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: horizon
+          in: query
+          description: Forecast horizon to analyze
+          required: false
+          schema:
+            type: string
+            enum: ["6h", "12h", "24h", "48h"]
+            default: "24h"
+      responses:
+        '200':
+          description: Analog patterns retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalogExplorerData'
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Enhanced Health Monitoring Endpoints
+  /health/live:
+    get:
+      summary: Kubernetes liveness probe
+      description: |
+        Kubernetes liveness probe endpoint for container orchestration.
+        Returns 200 if the application process is alive and responsive.
+        Should only return 503/500 if the application needs to be restarted.
+      operationId: getLivenessProbe
+      tags:
+        - Health Monitoring
+      responses:
+        '200':
+          description: Application is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "alive"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime_seconds:
+                    type: number
+        '503':
+          description: Application is failing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health/ready:
+    get:
+      summary: Kubernetes readiness probe
+      description: |
+        Kubernetes readiness probe endpoint for load balancer integration.
+        Returns 200 when the application is ready to serve traffic.
+        Returns 503 when the application is starting up or dependencies are unavailable.
+      operationId: getReadinessProbe
+      tags:
+        - Health Monitoring
+      responses:
+        '200':
+          description: Application is ready to serve traffic
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ready"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  components:
+                    type: object
+                    description: Component readiness status
+        '503':
+          description: Application is not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health/detailed:
+    get:
+      summary: Comprehensive health report
+      description: |
+        Detailed health check with comprehensive system status including
+        startup validation, FAISS indices, configuration, security, and performance.
+      operationId: getDetailedHealth
+      tags:
+        - Health Monitoring
+      responses:
+        '200':
+          description: Detailed health information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  detailed_status:
+                    type: object
+                    properties:
+                      startup_validation:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                          components_validated:
+                            type: integer
+                          validation_time_ms:
+                            type: number
+                      faiss_indices:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                          indices_loaded:
+                            type: integer
+                          total_vectors:
+                            type: integer
+                          avg_search_time_ms:
+                            type: number
+                      configuration:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                          last_drift_check:
+                            type: string
+                            format: date-time
+                          drift_events:
+                            type: integer
+                      security:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                          token_strength:
+                            type: string
+                          last_rotation:
+                            type: string
+                            format: date-time
+                          auth_failures_24h:
+                            type: integer
+                      performance:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                          sla_compliance:
+                            type: number
+                          resource_usage:
+                            type: object
+
+  /health/dependencies:
+    get:
+      summary: External dependency status
+      description: Check the status of external dependencies and services
+      operationId: getDependencyHealth
+      tags:
+        - Health Monitoring
+      responses:
+        '200':
+          description: Dependency status information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  dependencies:
+                    type: object
+                    description: Status of each dependency
+
+  /health/performance:
+    get:
+      summary: Performance metrics and SLA compliance
+      description: Performance health check with SLA compliance metrics
+      operationId: getPerformanceHealth
+      tags:
+        - Health Monitoring
+      responses:
+        '200':
+          description: Performance health information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  sla_compliance:
+                    type: number
+                  metrics:
+                    type: object
+
+  /health/security:
+    get:
+      summary: Security status and audit summary
+      description: Security health check with audit summary
+      operationId: getSecurityHealth
+      tags:
+        - Health Monitoring
+      responses:
+        '200':
+          description: Security health information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  security_events:
+                    type: object
+                  audit_summary:
+                    type: object
+
+  # FAISS Health Monitoring
+  /health/faiss:
+    get:
+      summary: FAISS index health monitoring
+      description: |
+        Real-time FAISS performance monitoring including index status,
+        search performance, memory usage, and health scoring.
+      operationId: getFAISSHealth
+      tags:
+        - FAISS Monitoring
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: FAISS health information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  faiss_version:
+                    type: string
+                    example: "1.7.4"
+                  indices:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                        vectors:
+                          type: integer
+                        size_mb:
+                          type: number
+                        last_search_ms:
+                          type: number
+                  performance:
+                    type: object
+                    properties:
+                      avg_search_time_ms:
+                        type: number
+                      cache_hit_rate:
+                        type: number
+                      searches_per_second:
+                        type: number
+                      memory_usage_mb:
+                        type: number
+                  health_score:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health/startup:
+    get:
+      summary: Startup validation status
+      description: Comprehensive startup validation status and results
+      operationId: getStartupHealth
+      tags:
+        - Health Monitoring
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Startup validation information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  validation_results:
+                    type: object
+                  components_status:
+                    type: object
+
+  /health/config:
+    get:
+      summary: Configuration health and drift detection
+      description: Configuration consistency and drift detection status
+      operationId: getConfigHealth
+      tags:
+        - Health Monitoring
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Configuration health information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  drift_events:
+                    type: array
+                    items:
+                      type: object
+                  security_compliance:
+                    type: object
+
+  # System Information Endpoints
+  /info:
+    get:
+      summary: System information
+      description: System version, build info, and capabilities
+      operationId: getSystemInfo
+      tags:
+        - System Information
+      responses:
+        '200':
+          description: System information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                  build_info:
+                    type: object
+                  capabilities:
+                    type: array
+                    items:
+                      type: string
+
+  /version:
+    get:
+      summary: API version information
+      description: API version and compatibility information
+      operationId: getVersionInfo
+      tags:
+        - System Information
+      responses:
+        '200':
+          description: Version information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  api_version:
+                    type: string
+                  compatibility:
+                    type: object
+                  schema_version:
+                    type: string
+
+  # Administrative Endpoints
+  /admin/status:
+    get:
+      summary: Administrative system overview
+      description: Comprehensive administrative system status and overview
+      operationId: getAdminStatus
+      tags:
+        - Administration
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Administrative status information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  system_status:
+                    type: object
+                  operational_metrics:
+                    type: object
+                  recent_events:
+                    type: array
+
+  /admin/config:
+    get:
+      summary: Configuration validation and status
+      description: Administrative configuration validation and status
+      operationId: getAdminConfig
+      tags:
+        - Administration
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Configuration status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configuration_status:
+                    type: object
+                  validation_results:
+                    type: object
+
+  /admin/security:
+    get:
+      summary: Security audit summary
+      description: Administrative security audit summary and status
+      operationId: getAdminSecurity
+      tags:
+        - Administration
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Security audit information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  security_status:
+                    type: object
+                  audit_summary:
+                    type: object
+                  recent_events:
+                    type: array
+
+  /admin/performance:
+    get:
+      summary: Performance analytics and recommendations
+      description: Detailed performance analytics with optimization recommendations
+      operationId: getAdminPerformance
+      tags:
+        - Administration
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Performance analytics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  performance_metrics:
+                    type: object
+                  recommendations:
+                    type: array
+                  resource_usage:
+                    type: object
+
+  # Token Management Endpoints
+  /admin/token/validate:
+    post:
+      summary: Validate current token strength
+      description: Validate the current authentication token strength and security
+      operationId: validateToken
+      tags:
+        - Token Management
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Token validation results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  strength:
+                    type: string
+                  recommendations:
+                    type: array
+
+  /admin/token/status:
+    get:
+      summary: Token status and rotation history
+      description: Get current token status and rotation history
+      operationId: getTokenStatus
+      tags:
+        - Token Management
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Token status information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token_status:
+                    type: object
+                  rotation_history:
+                    type: array
+                  next_rotation:
+                    type: string
+                    format: date-time
+
+  /admin/token/rotate:
+    post:
+      summary: Initiate token rotation
+      description: Initiate authentication token rotation (if enabled)
+      operationId: rotateToken
+      tags:
+        - Token Management
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Token rotation initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rotation_id:
+                    type: string
+                  status:
+                    type: string
+                  estimated_completion:
+                    type: string
+                    format: date-time
+
+  # Real-time Monitoring Endpoints
+  /monitor/live:
+    get:
+      summary: Live system metrics stream
+      description: Real-time system metrics and status updates
+      operationId: getLiveMonitoring
+      tags:
+        - Real-time Monitoring
+      responses:
+        '200':
+          description: Live monitoring data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timestamp:
+                    type: string
+                    format: date-time
+                  metrics:
+                    type: object
+                  status:
+                    type: string
+
+  /monitor/faiss:
+    get:
+      summary: Real-time FAISS performance metrics
+      description: Real-time FAISS performance monitoring and metrics
+      operationId: getFAISSMonitoring
+      tags:
+        - Real-time Monitoring
+      responses:
+        '200':
+          description: FAISS monitoring data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  performance_metrics:
+                    type: object
+                  index_status:
+                    type: object
+                  recent_operations:
+                    type: array
+
+  /monitor/config:
+    get:
+      summary: Configuration drift monitoring
+      description: Real-time configuration drift monitoring and alerts
+      operationId: getConfigMonitoring
+      tags:
+        - Real-time Monitoring
+      responses:
+        '200':
+          description: Configuration monitoring data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  drift_events:
+                    type: array
+                  monitoring_status:
+                    type: object
+
+  /monitor/security:
+    get:
+      summary: Security event monitoring
+      description: Real-time security event monitoring and alerts
+      operationId: getSecurityMonitoring
+      tags:
+        - Real-time Monitoring
+      responses:
+        '200':
+          description: Security monitoring data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  security_events:
+                    type: array
+                  threat_level:
+                    type: string
+                  recent_incidents:
+                    type: array
+
+  # Historical Analytics Endpoints
+  /analytics/performance:
+    get:
+      summary: Historical performance data
+      description: Historical performance analytics and trends
+      operationId: getPerformanceAnalytics
+      tags:
+        - Historical Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: timerange
+          in: query
+          description: Time range for analytics (1h, 24h, 7d, 30d)
+          required: false
+          schema:
+            type: string
+            enum: ["1h", "24h", "7d", "30d"]
+            default: "24h"
+      responses:
+        '200':
+          description: Performance analytics data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timerange:
+                    type: string
+                  metrics:
+                    type: object
+                  trends:
+                    type: array
+
+  /analytics/usage:
+    get:
+      summary: API usage patterns and trends
+      description: API usage analytics including patterns and trends
+      operationId: getUsageAnalytics
+      tags:
+        - Historical Analytics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Usage analytics data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  usage_patterns:
+                    type: object
+                  trends:
+                    type: array
+                  top_endpoints:
+                    type: array
+
+  /analytics/errors:
+    get:
+      summary: Error analysis and patterns
+      description: Error analytics including patterns and root cause analysis
+      operationId: getErrorAnalytics
+      tags:
+        - Historical Analytics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Error analytics data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error_patterns:
+                    type: object
+                  error_trends:
+                    type: array
+                  root_causes:
+                    type: array
+
+  # Enhanced Metrics Endpoint
+  /metrics/summary:
+    get:
+      summary: Human-readable metrics summary
+      description: Human-readable metrics summary for operational monitoring
+      operationId: getMetricsSummary
+      tags:
+        - Metrics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Metrics summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    type: object
+                  key_metrics:
+                    type: object
+                  alerts:
+                    type: array
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        API token authentication. Include your token in the Authorization header:
+        `Authorization: Bearer YOUR_TOKEN_HERE`
+
+  schemas:
+    WeatherVariable:
+      type: string
+      enum: [t2m, u10, v10, msl, r850, tp6h, cape, t850, z500]
+      description: |
+        Available weather variables:
+        - `t2m`: 2-meter temperature (°C)
+        - `u10`: 10-meter U wind component (m/s)
+        - `v10`: 10-meter V wind component (m/s)  
+        - `msl`: Mean sea level pressure (hPa)
+        - `r850`: 850hPa relative humidity (%)
+        - `tp6h`: 6-hour total precipitation (mm)
+        - `cape`: Convective available potential energy (J/kg)
+        - `t850`: 850hPa temperature (°C)
+        - `z500`: 500hPa geopotential height (m)
+
+    ForecastHorizon:
+      type: string
+      enum: ["6h", "12h", "24h", "48h"]
+      description: Forecast time horizon
+
+    RiskLevel:
+      type: string
+      enum: [minimal, low, moderate, high, extreme]
+      description: Weather risk level classification
+
+    VariableResult:
+      type: object
+      description: Individual variable forecast with uncertainty quantification
+      required: [value, p05, p95, confidence, available, analog_count]
+      properties:
+        value:
+          type: number
+          nullable: true
+          description: Point estimate value
+          example: 25.3
+        p05:
+          type: number
+          nullable: true
+          description: 5th percentile (lower bound)
+          example: 22.1
+        p95:
+          type: number
+          nullable: true
+          description: 95th percentile (upper bound)
+          example: 28.5
+        confidence:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: Confidence level (0-1)
+          example: 0.82
+        available:
+          type: boolean
+          description: Whether forecast is available
+          example: true
+        analog_count:
+          type: integer
+          nullable: true
+          minimum: 0
+          description: Number of analog patterns used
+          example: 45
+
+    WindResult:
+      type: object
+      description: Wind forecast with speed and direction
+      required: [speed, direction, gust, available]
+      properties:
+        speed:
+          type: number
+          nullable: true
+          minimum: 0
+          description: Wind speed in m/s
+          example: 3.7
+        direction:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 360
+          description: Wind direction in degrees (0-360)
+          example: 209
+        gust:
+          type: number
+          nullable: true
+          minimum: 0
+          description: Wind gust speed in m/s
+          example: null
+        available:
+          type: boolean
+          description: Whether wind forecast is available
+          example: true
+
+    RiskAssessment:
+      type: object
+      description: Weather risk assessment for various hazards
+      required: [thunderstorm, heat_stress, wind_damage, precipitation]
+      properties:
+        thunderstorm:
+          $ref: '#/components/schemas/RiskLevel'
+          description: Thunderstorm development risk
+          example: "low"
+        heat_stress:
+          $ref: '#/components/schemas/RiskLevel'
+          description: Heat stress risk for humans/agriculture
+          example: "low"
+        wind_damage:
+          $ref: '#/components/schemas/RiskLevel'
+          description: Wind damage potential to structures
+          example: "minimal"
+        precipitation:
+          $ref: '#/components/schemas/RiskLevel'
+          description: Heavy precipitation/flooding risk
+          example: "low"
+
+    AnalogsSummary:
+      type: object
+      description: Summary of historical analog pattern matching
+      required: [most_similar_date, similarity_score, analog_count, outcome_description, confidence_explanation]
+      properties:
+        most_similar_date:
+          type: string
+          format: date-time
+          description: Date of most similar historical pattern
+          example: "2023-03-15T12:00:00Z"
+        similarity_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Similarity score (0-1)
+          example: 0.82
+        analog_count:
+          type: integer
+          minimum: 0
+          description: Number of analog patterns used
+          example: 45
+        outcome_description:
+          type: string
+          description: What happened in similar historical cases
+          example: "Strong pattern match with typical seasonal conditions"
+        confidence_explanation:
+          type: string
+          description: Explanation of confidence level
+          example: "Based on 45 historical analog patterns"
+
+    VersionInfo:
+      type: object
+      description: System version information
+      required: [model, index, datasets, api_schema]
+      properties:
+        model:
+          type: string
+          description: Model version
+          example: "v1.0.0"
+        index:
+          type: string
+          description: FAISS index version
+          example: "v1.0.0"
+        datasets:
+          type: string
+          description: Training datasets version
+          example: "v1.0.0"
+        api_schema:
+          type: string
+          description: API schema version
+          example: "v1.1.0"
+
+    HashInfo:
+      type: object
+      description: System hash information for integrity
+      required: [model, index, datasets]
+      properties:
+        model:
+          type: string
+          description: Model file hash
+          example: "a7c3f92"
+        index:
+          type: string
+          description: Index file hash
+          example: "2e8b4d1"
+        datasets:
+          type: string
+          description: Dataset hash
+          example: "d4f8a91"
+
+    ForecastResponse:
+      type: object
+      description: Complete forecast response with narrative and risk assessment
+      required: [horizon, generated_at, variables, wind10m, narrative, risk_assessment, analogs_summary, confidence_explanation, versions, hashes, latency_ms]
+      properties:
+        horizon:
+          $ref: '#/components/schemas/ForecastHorizon'
+        generated_at:
+          type: string
+          format: date-time
+          description: Forecast generation timestamp
+          example: "2024-01-15T12:00:00Z"
+        variables:
+          type: object
+          description: Forecast results for each variable
+          additionalProperties:
+            $ref: '#/components/schemas/VariableResult'
+        wind10m:
+          $ref: '#/components/schemas/WindResult'
+          nullable: true
+          description: Combined 10m wind forecast
+        narrative:
+          type: string
+          description: Human-readable forecast narrative
+          example: "Forecast for 24h: warm conditions with temperature around 25.3°C, light winds at 3.7 m/s from 209°, normal pressure system (1015 hPa)."
+        risk_assessment:
+          $ref: '#/components/schemas/RiskAssessment'
+        analogs_summary:
+          $ref: '#/components/schemas/AnalogsSummary'
+        confidence_explanation:
+          type: string
+          description: Overall forecast confidence explanation
+          example: "High confidence (82.0%) with 45 strong analog matches"
+        versions:
+          $ref: '#/components/schemas/VersionInfo'
+        hashes:
+          $ref: '#/components/schemas/HashInfo'
+        latency_ms:
+          type: number
+          minimum: 0
+          description: Response generation time in milliseconds
+          example: 127.5
+
+    HealthCheck:
+      type: object
+      description: Individual health check result
+      required: [name, status, message]
+      properties:
+        name:
+          type: string
+          description: Name of the health check
+          example: "startup_validation"
+        status:
+          type: string
+          enum: [pass, fail]
+          description: Check status
+          example: "pass"
+        message:
+          type: string
+          description: Detailed check message
+          example: "Expert startup validation passed"
+
+    ModelInfo:
+      type: object
+      description: Model health information
+      required: [version, hash, matched_ratio]
+      properties:
+        version:
+          type: string
+          description: Model version
+          example: "v1.0.0"
+        hash:
+          type: string
+          description: Model file hash
+          example: "a7c3f92"
+        matched_ratio:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Parameter matching ratio
+          example: 1.0
+
+    IndexInfo:
+      type: object
+      description: FAISS index health information
+      required: [ntotal, dim, metric, hash, dataset_hash]
+      properties:
+        ntotal:
+          type: integer
+          minimum: 0
+          description: Total vectors in index
+          example: 13148
+        dim:
+          type: integer
+          minimum: 0
+          description: Vector dimension
+          example: 256
+        metric:
+          type: string
+          description: Distance metric used
+          example: "L2"
+        hash:
+          type: string
+          description: Index file hash
+          example: "2e8b4d1"
+        dataset_hash:
+          type: string
+          description: Source dataset hash
+          example: "d4f8a91"
+
+    DatasetInfo:
+      type: object
+      description: Dataset health information
+      required: [horizon, valid_pct_by_var, hash, schema_version]
+      properties:
+        horizon:
+          $ref: '#/components/schemas/ForecastHorizon'
+        valid_pct_by_var:
+          type: object
+          description: Percentage of valid data by variable
+          additionalProperties:
+            type: number
+            minimum: 0
+            maximum: 100
+          example:
+            t2m: 99.5
+            u10: 99.2
+            v10: 99.2
+            msl: 99.8
+        hash:
+          type: string
+          description: Dataset file hash
+          example: "d4f8a91"
+        schema_version:
+          type: string
+          description: Dataset schema version
+          example: "v1.0.0"
+
+    HealthResponse:
+      type: object
+      description: Complete system health response
+      required: [ready, checks, model, index, datasets, deps, preprocessing_version, uptime_seconds]
+      properties:
+        ready:
+          type: boolean
+          description: Overall system readiness
+          example: true
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealthCheck'
+          description: Individual health check results
+        model:
+          $ref: '#/components/schemas/ModelInfo'
+        index:
+          $ref: '#/components/schemas/IndexInfo'
+        datasets:
+          type: array
+          items:
+            $ref: '#/components/schemas/DatasetInfo'
+          description: Dataset health for each horizon
+        deps:
+          type: object
+          description: Dependency versions
+          additionalProperties:
+            type: string
+          example:
+            fastapi: "0.104.1"
+            torch: "2.0.1"
+            faiss: "1.7.4"
+        preprocessing_version:
+          type: string
+          description: Preprocessing pipeline version
+          example: "v1.0.0"
+        uptime_seconds:
+          type: number
+          minimum: 0
+          description: System uptime in seconds
+          example: 3600.5
+
+    AnalogPattern:
+      type: object
+      description: Individual historical analog pattern
+      required: [date, similarity_score, initial_conditions, timeline, outcome_narrative, season_info]
+      properties:
+        date:
+          type: string
+          format: date-time
+          description: Date of historical pattern
+          example: "2023-03-15T12:00:00Z"
+        similarity_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Similarity to current conditions
+          example: 0.85
+        initial_conditions:
+          type: object
+          description: Weather conditions at pattern start
+          additionalProperties:
+            type: number
+            nullable: true
+        timeline:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalogTimelinePoint'
+          description: Timeline of what happened
+        outcome_narrative:
+          type: string
+          description: What actually happened
+          example: "Clear conditions continued with gradual temperature rise"
+        location:
+          type: object
+          nullable: true
+          properties:
+            latitude:
+              type: number
+              example: -34.93
+            longitude:
+              type: number
+              example: 138.60
+            name:
+              type: string
+              example: "Adelaide"
+        season_info:
+          type: object
+          required: [month, season]
+          properties:
+            month:
+              type: integer
+              minimum: 1
+              maximum: 12
+              example: 3
+            season:
+              type: string
+              enum: [summer, autumn, winter, spring]
+              example: "autumn"
+
+    AnalogTimelinePoint:
+      type: object
+      description: Point in analog timeline
+      required: [hours_offset, values]
+      properties:
+        hours_offset:
+          type: integer
+          minimum: 0
+          description: Hours from pattern start
+          example: 24
+        values:
+          type: object
+          description: Variable values at this time
+          additionalProperties:
+            type: number
+            nullable: true
+        events:
+          type: array
+          items:
+            type: string
+          description: Weather events at this time
+          example: ["light_rain", "temperature_drop"]
+        temperature_trend:
+          type: string
+          enum: [rising, falling, stable]
+          nullable: true
+          example: "rising"
+        pressure_trend:
+          type: string
+          enum: [rising, falling, stable]
+          nullable: true
+          example: "stable"
+
+    AnalogExplorerData:
+      type: object
+      description: Complete analog explorer response
+      required: [forecast_horizon, top_analogs, ensemble_stats, generated_at]
+      properties:
+        forecast_horizon:
+          $ref: '#/components/schemas/ForecastHorizon'
+        top_analogs:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalogPattern'
+          maxItems: 5
+          description: Top 5 most similar patterns
+        ensemble_stats:
+          type: object
+          required: [mean_outcomes, outcome_uncertainty, common_events]
+          properties:
+            mean_outcomes:
+              type: object
+              description: Mean outcome for each variable
+              additionalProperties:
+                type: number
+                nullable: true
+            outcome_uncertainty:
+              type: object
+              description: Standard deviation of outcomes
+              additionalProperties:
+                type: number
+                nullable: true
+            common_events:
+              type: array
+              items:
+                type: string
+              description: Most common weather events
+              example: ["clear_skies", "light_winds"]
+        generated_at:
+          type: string
+          format: date-time
+          description: Analysis generation timestamp
+          example: "2024-01-15T12:00:00Z"
+
+    ErrorResponse:
+      type: object
+      description: Standard error response format
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, timestamp]
+          properties:
+            code:
+              type: integer
+              description: HTTP status code
+              example: 400
+            message:
+              type: string
+              description: Error message
+              example: "Invalid request parameters"
+            timestamp:
+              type: string
+              format: date-time
+              description: Error timestamp
+              example: "2024-01-15T12:00:00Z"
+            correlation_id:
+              type: string
+              description: Request correlation ID for debugging
+              example: "req_123456"
+          additionalProperties: false
+        details:
+          type: string
+          description: Additional error details
+          example: "Invalid horizon parameter: must be one of 6h, 12h, 24h, 48h"
+
+tags:
+  - name: Forecasting
+    description: Weather forecast generation endpoints
+  - name: Monitoring
+    description: System health and metrics endpoints
+  - name: Analysis
+    description: Advanced analysis and research endpoints
+
+x-code-samples:
+  - lang: curl
+    source: |
+      # Get 24h forecast for default variables
+      curl -X GET "https://api.adelaideweather.example.com/forecast?horizon=24h" \
+        -H "Authorization: Bearer YOUR_TOKEN" \
+        -H "Accept: application/json"
+      
+      # Get extended forecast with additional variables
+      curl -X GET "https://api.adelaideweather.example.com/forecast?horizon=48h&vars=t2m,u10,v10,msl,cape,tp6h" \
+        -H "Authorization: Bearer YOUR_TOKEN" \
+        -H "Accept: application/json"
+      
+      # Check system health
+      curl -X GET "https://api.adelaideweather.example.com/health" \
+        -H "Accept: application/json"
+  
+  - lang: python
+    source: |
+      import requests
+      
+      # Configuration
+      api_token = "YOUR_TOKEN"
+      base_url = "https://api.adelaideweather.example.com"
+      
+      headers = {
+          "Authorization": f"Bearer {api_token}",
+          "Accept": "application/json"
+      }
+      
+      # Get forecast
+      response = requests.get(
+          f"{base_url}/forecast",
+          params={"horizon": "24h", "vars": "t2m,u10,v10,msl"},
+          headers=headers
+      )
+      
+      if response.status_code == 200:
+          forecast = response.json()
+          print(f"Temperature: {forecast['variables']['t2m']['value']}°C")
+          print(f"Confidence: {forecast['variables']['t2m']['confidence']:.1%}")
+      else:
+          print(f"Error: {response.status_code}")
+  
+  - lang: javascript
+    source: |
+      // Using fetch API
+      const apiToken = 'YOUR_TOKEN';
+      const baseURL = 'https://api.adelaideweather.example.com';
+      
+      async function getForecast(horizon = '24h', variables = 't2m,u10,v10,msl') {
+        try {
+          const response = await fetch(
+            `${baseURL}/forecast?horizon=${horizon}&vars=${variables}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${apiToken}`,
+                'Accept': 'application/json'
+              }
+            }
+          );
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const forecast = await response.json();
+          return forecast;
+        } catch (error) {
+          console.error('Forecast request failed:', error);
+          throw error;
+        }
+      }
+      
+      // Usage
+      getForecast('24h', 't2m,u10,v10,msl,cape')
+        .then(forecast => {
+          console.log('Narrative:', forecast.narrative);
+          console.log('Risk Assessment:', forecast.risk_assessment);
+        })
+        .catch(error => console.error(error));

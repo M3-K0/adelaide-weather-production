@@ -1,0 +1,18 @@
+# Development Data Configuration Overrides
+# Reduced dataset for faster development iteration
+
+era5:
+  # Reduced temporal range for development
+  years: [2018, 2020]  # Smaller dataset
+  
+  # Reduced spatial domain for faster processing
+  area: [-33.9, 137.6, -35.9, 139.6]  # Smaller 20°×20° box around Adelaide
+  
+preprocessing:
+  # Simplified preprocessing for development
+  normalize_method: 'minmax'  # Faster normalization
+  fill_method: 'forward_fill'  # Simple fill method
+
+gfs:
+  # Fewer lead times for development
+  lead_times: [6, 24]  # Only 6h and 24h forecasts

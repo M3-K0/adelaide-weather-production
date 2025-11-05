@@ -1,0 +1,371 @@
+# Default values for adelaide-weather-forecast
+# This is a YAML-formatted file.
+
+global:
+  imageRegistry: ghcr.io
+  imagePullSecrets: []
+  storageClass: ""
+
+# Common labels
+commonLabels: {}
+commonAnnotations: {}
+
+# Environment configuration
+environment: staging
+
+# API Configuration
+api:
+  enabled: true
+  name: api
+  
+  image:
+    registry: ghcr.io
+    repository: adelaide-weather/api
+    tag: latest
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+  
+  replicaCount: 2
+  
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+    annotations: {}
+  
+  ingress:
+    enabled: true
+    className: alb
+    annotations:
+      kubernetes.io/ingress.class: alb
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/ssl-redirect: '443'
+    hosts:
+      - host: adelaide-weather.example.com
+        paths:
+          - path: /api
+            pathType: Prefix
+    tls: []
+  
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+  
+  env:
+    LOG_LEVEL: INFO
+    RATE_LIMIT_PER_MINUTE: 60
+    PERFORMANCE_CACHE_TTL: 300
+    ENABLE_SWAGGER_UI: false
+  
+  envFrom: []
+  
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 2
+  
+  startupProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+  
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+    maxUnavailable: ""
+
+# Frontend Configuration
+frontend:
+  enabled: true
+  name: frontend
+  
+  image:
+    registry: ghcr.io
+    repository: adelaide-weather/frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+  
+  replicaCount: 2
+  
+  service:
+    type: ClusterIP
+    port: 3000
+    targetPort: 3000
+    annotations: {}
+  
+  ingress:
+    enabled: true
+    className: alb
+    annotations:
+      kubernetes.io/ingress.class: alb
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/ssl-redirect: '443'
+    hosts:
+      - host: adelaide-weather.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+  
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  
+  env:
+    NODE_ENV: production
+    NEXT_TELEMETRY_DISABLED: "1"
+  
+  envFrom: []
+  
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    fsGroup: 1001
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  
+  livenessProbe:
+    httpGet:
+      path: /api/health
+      port: 3000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  
+  readinessProbe:
+    httpGet:
+      path: /api/health
+      port: 3000
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 2
+  
+  startupProbe:
+    httpGet:
+      path: /api/health
+      port: 3000
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+  
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+    maxUnavailable: ""
+
+# Redis Configuration
+redis:
+  enabled: true
+  name: redis
+  
+  image:
+    registry: docker.io
+    repository: redis
+    tag: 7-alpine
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 1
+  
+  service:
+    type: ClusterIP
+    port: 6379
+    targetPort: 6379
+  
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    fsGroup: 999
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop:
+        - ALL
+  
+  args:
+    - redis-server
+    - --appendonly
+    - "yes"
+    - --maxmemory
+    - "256mb"
+    - --maxmemory-policy
+    - "allkeys-lru"
+  
+  persistence:
+    enabled: false
+    storageClass: ""
+    size: 1Gi
+    accessModes:
+      - ReadWriteOnce
+  
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Auto Scaling Configuration
+autoscaling:
+  api:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  frontend:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# RBAC
+rbac:
+  create: true
+
+# Network Policy
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+    - Egress
+
+# Monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+  
+  prometheusRule:
+    enabled: true
+    namespace: ""
+    labels: {}
+    rules: []
+
+# Security
+security:
+  podSecurityPolicy:
+    enabled: false
+  
+  networkPolicy:
+    enabled: false
+
+# Secrets
+secrets:
+  apiToken:
+    name: api-token
+    key: token
+    value: ""
+    existingSecret: ""
+    existingSecretKey: ""
+
+# Config Maps
+configMaps:
+  app:
+    name: app-config
+    data: {}
+
+# Blue-Green Deployment
+blueGreen:
+  enabled: false
+  activeSlot: blue
+  blueSlot:
+    weight: 100
+  greenSlot:
+    weight: 0
+
+# External Dependencies
+external:
+  database:
+    enabled: false
+    host: ""
+    port: 5432
+    name: adelaide_weather
+    user: admin
+    passwordSecret:
+      name: ""
+      key: ""
+  
+  cache:
+    enabled: false
+    host: ""
+    port: 6379
+    passwordSecret:
+      name: ""
+      key: ""
+
+# Tests
+tests:
+  enabled: true
+  image:
+    registry: ghcr.io
+    repository: adelaide-weather/test
+    tag: latest

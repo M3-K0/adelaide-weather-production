@@ -1,0 +1,261 @@
+# Alertmanager Configuration for Adelaide Weather Forecasting
+# Handles SLO alerts, escalation policies, and notification routing
+
+global:
+  smtp_smarthost: '${SMTP_SERVER}:587'
+  smtp_from: 'alerts@weather-forecast.com'
+  smtp_auth_username: '${SMTP_USERNAME}'
+  smtp_auth_password: '${SMTP_PASSWORD}'
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+
+# Alert routing tree
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'default'
+  
+  routes:
+    # Critical SLO breaches - immediate escalation
+    - match:
+        severity: critical
+      group_wait: 0s
+      repeat_interval: 15m
+      receiver: 'critical-escalation'
+      routes:
+        # API availability critical issues
+        - match:
+            slo: availability
+            error_budget_policy: fast_burn
+        receiver: 'slo-critical-immediate'
+        
+        # Data quality critical issues  
+        - match:
+            slo: data_quality
+        receiver: 'data-quality-critical'
+    
+    # Warning level SLO issues
+    - match:
+        severity: warning
+      group_wait: 5m
+      repeat_interval: 30m
+      receiver: 'warning-escalation'
+      routes:
+        # Error budget burn warnings
+        - match:
+            error_budget_policy: medium_burn
+        receiver: 'slo-warning-burn'
+        
+        - match:
+            error_budget_policy: slow_burn
+        receiver: 'slo-warning-slow'
+    
+    # Synthetic monitoring alerts
+    - match:
+        component: synthetic_monitoring
+      receiver: 'synthetic-monitoring-team'
+      group_wait: 5m
+      repeat_interval: 30m
+    
+    # Infrastructure alerts
+    - match:
+        alertname: HighMemoryUsage
+      receiver: 'infrastructure-team'
+      group_wait: 10m
+      repeat_interval: 1h
+    
+    - match:
+        alertname: HighDiskUsage  
+      receiver: 'infrastructure-team'
+      group_wait: 10m
+      repeat_interval: 1h
+
+# Notification receivers
+receivers:
+  # Default receiver for unmatched alerts
+  - name: 'default'
+    slack_configs:
+      - channel: '#weather-alerts'
+        title: 'Adelaide Weather Alert'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Status:* {{ .Status }}
+          *Labels:* {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+          {{ end }}
+
+  # Critical escalation chain
+  - name: 'critical-escalation'
+    pagerduty_configs:
+      - service_key: '${PAGERDUTY_ROUTING_KEY}'
+        description: 'Adelaide Weather Critical Alert: {{ .GroupLabels.alertname }}'
+        details:
+          alert_count: '{{ len .Alerts }}'
+          alerts: |
+            {{ range .Alerts }}
+            - {{ .Annotations.summary }}
+              Status: {{ .Status }}
+              Labels: {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+            {{ end }}
+    
+    slack_configs:
+      - channel: '#weather-critical'
+        title: '🚨 CRITICAL: Adelaide Weather Alert'
+        text: |
+          {{ range .Alerts }}
+          *CRITICAL ALERT:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Runbook:* {{ .Annotations.runbook_url }}
+          *Dashboard:* {{ .Annotations.dashboard_url }}
+          *Status:* {{ .Status }}
+          {{ end }}
+        send_resolved: true
+    
+    email_configs:
+      - to: 'sre-team@weather-forecast.com'
+        subject: 'CRITICAL: Adelaide Weather Alert - {{ .GroupLabels.alertname }}'
+        body: |
+          Critical alert triggered for Adelaide Weather Forecasting System.
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Runbook: {{ .Annotations.runbook_url }}
+          Status: {{ .Status }}
+          
+          Labels:
+          {{ range .Labels.SortedPairs }}  {{ .Name }}: {{ .Value }}
+          {{ end }}
+          {{ end }}
+
+  # SLO Critical - Immediate response required
+  - name: 'slo-critical-immediate'
+    pagerduty_configs:
+      - service_key: '${PAGERDUTY_ROUTING_KEY}'
+        description: 'SLO BREACH: {{ .GroupLabels.slo }} - {{ .GroupLabels.service }}'
+        details:
+          slo_name: '{{ .GroupLabels.slo }}'
+          service: '{{ .GroupLabels.service }}'
+          error_budget_policy: '{{ .GroupLabels.error_budget_policy }}'
+    
+    slack_configs:
+      - channel: '#slo-alerts'
+        title: '💥 SLO CRITICAL BREACH'
+        text: |
+          {{ range .Alerts }}
+          *SLO:* {{ .Labels.slo }}
+          *Service:* {{ .Labels.service }}
+          *Issue:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          *Runbook:* {{ .Annotations.runbook_url }}
+          {{ end }}
+        send_resolved: true
+
+  # Data Quality Critical
+  - name: 'data-quality-critical'
+    slack_configs:
+      - channel: '#data-engineering'
+        title: '⚠️ Critical Data Quality Issue'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Service:* {{ .Labels.service }}
+          *Runbook:* {{ .Annotations.runbook_url }}
+          {{ end }}
+    
+    email_configs:
+      - to: 'data-team@weather-forecast.com'
+        subject: 'CRITICAL: Data Quality Issue - {{ .GroupLabels.alertname }}'
+
+  # Warning level escalation
+  - name: 'warning-escalation'
+    slack_configs:
+      - channel: '#weather-alerts'
+        title: '⚠️ Adelaide Weather Warning'
+        text: |
+          {{ range .Alerts }}
+          *Warning:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Service:* {{ .Labels.service }}
+          *Runbook:* {{ .Annotations.runbook_url }}
+          {{ end }}
+
+  # SLO Warning - Error budget burn
+  - name: 'slo-warning-burn'
+    slack_configs:
+      - channel: '#slo-alerts'
+        title: '🔥 Error Budget Burning'
+        text: |
+          {{ range .Alerts }}
+          *SLO:* {{ .Labels.slo }}
+          *Service:* {{ .Labels.service }}
+          *Issue:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          *Policy:* {{ .Labels.error_budget_policy }}
+          {{ end }}
+
+  # SLO Warning - Slow burn
+  - name: 'slo-warning-slow'
+    slack_configs:
+      - channel: '#slo-monitoring'
+        title: '📊 SLO Monitoring Alert'
+        text: |
+          {{ range .Alerts }}
+          *SLO:* {{ .Labels.slo }}
+          *Issue:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          {{ end }}
+
+  # Synthetic monitoring team
+  - name: 'synthetic-monitoring-team'
+    slack_configs:
+      - channel: '#monitoring'
+        title: '🔍 Synthetic Monitoring Alert'
+        text: |
+          {{ range .Alerts }}
+          *Check:* {{ .Labels.check_name }}
+          *Issue:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          {{ end }}
+
+  # Infrastructure team
+  - name: 'infrastructure-team'
+    slack_configs:
+      - channel: '#infrastructure'
+        title: '🖥️ Infrastructure Alert'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          *Service:* {{ .Labels.service }}
+          {{ end }}
+
+# Inhibition rules - suppress redundant alerts
+inhibit_rules:
+  # Suppress warning alerts when critical alerts are firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'service', 'instance']
+
+  # Suppress individual check failures when all checks are down
+  - source_match:
+      alertname: 'SyntheticChecksDown'
+    target_match:
+      component: 'synthetic_monitoring'
+    equal: ['service']
+
+  # Suppress latency alerts when API is completely down
+  - source_match:
+      alertname: 'APIDown'
+    target_match:
+      slo: 'latency'
+    equal: ['service']
+
+# Templates for message formatting
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'

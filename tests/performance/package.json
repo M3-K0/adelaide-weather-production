@@ -1,0 +1,86 @@
+{
+  "name": "adelaide-weather-performance-tests",
+  "version": "1.0.0",
+  "description": "Comprehensive performance testing suite for Adelaide Weather Forecasting System",
+  "private": true,
+  "scripts": {
+    "test": "npm run test:benchmarks",
+    "test:benchmarks": "node scripts/performance-benchmarks.js",
+    "test:memory": "node --expose-gc scripts/memory-leak-detection.js",
+    "test:frontend": "node load-tests/frontend-load-test.js",
+    "test:api": "artillery run load-tests/api-load-test.yml",
+    "test:lighthouse": "lhci autorun --config=lighthouse.config.js",
+    "test:quick": "npm run test:benchmarks && npm run test:frontend",
+    "test:full": "npm run test:api && npm run test:frontend && npm run test:lighthouse && npm run test:memory",
+    "test:stress": "artillery quick --count 500 --num 1000 http://localhost:8000/forecast",
+    "test:soak": "SESSION_DURATION=86400000 npm run test:memory",
+    "analyze": "node scripts/analyze-performance-results.js",
+    "report": "node scripts/generate-comprehensive-report.js",
+    "baseline:update": "node scripts/update-baseline.js",
+    "monitor": "node scripts/performance-monitor.js",
+    "setup": "npm install && npx playwright install chromium",
+    "health-check": "node scripts/health-check.js",
+    "warm-up": "node scripts/warm-up-system.js"
+  },
+  "dependencies": {
+    "artillery": "^2.0.0",
+    "axios": "^1.6.0",
+    "playwright": "^1.40.0",
+    "lighthouse": "^11.3.0",
+    "@lhci/cli": "^0.12.0",
+    "prom-client": "^15.1.0",
+    "express": "^4.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.17.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [
+    "performance",
+    "testing",
+    "weather",
+    "forecasting",
+    "lighthouse",
+    "artillery",
+    "load-testing",
+    "benchmarking"
+  ],
+  "author": "Performance Specialist Team",
+  "license": "MIT",
+  "config": {
+    "artillery": {
+      "processor": "./utils/performance-processor.js"
+    }
+  },
+  "eslintConfig": {
+    "extends": [
+      "@typescript-eslint/recommended"
+    ],
+    "parser": "@typescript-eslint/parser",
+    "plugins": [
+      "@typescript-eslint"
+    ],
+    "rules": {
+      "@typescript-eslint/no-unused-vars": "error",
+      "@typescript-eslint/no-explicit-any": "warn",
+      "prefer-const": "error",
+      "no-console": "off"
+    }
+  },
+  "prettier": {
+    "semi": true,
+    "trailingComma": "es5",
+    "singleQuote": true,
+    "printWidth": 100,
+    "tabWidth": 2
+  }
+}

@@ -1,0 +1,26 @@
+# Development Model Configuration Overrides
+# Optimized for rapid development and testing
+
+# Simplified encoder for faster training during development
+encoder:
+  embedding_dim: 128  # Smaller embedding for faster iteration
+  
+# Reduced training configuration for development
+training:
+  batch_size: 32
+  max_epochs: 10
+  
+# Fast FAISS configuration
+faiss:
+  num_analogs: 10  # Fewer analogs for faster development
+  
+# Enable debug features
+device:
+  use_gpu: false  # Allow CPU-only development
+  mixed_precision: false
+
+# Development-specific logging
+logging:
+  use_wandb: false
+  use_tensorboard: true
+  log_every_n_steps: 10  # More frequent logging for debugging

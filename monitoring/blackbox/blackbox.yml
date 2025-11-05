@@ -1,0 +1,116 @@
+# Blackbox Exporter Configuration
+# Additional endpoint monitoring and network connectivity checks
+
+modules:
+  # HTTP GET check with basic validation
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      follow_redirects: true
+      preferred_ip_protocol: "ip4"
+
+  # HTTP POST check for API endpoints
+  http_post_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: POST
+      headers:
+        Content-Type: application/json
+      body: '{"test": true}'
+
+  # HTTPS check with TLS validation
+  https_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      tls_config:
+        insecure_skip_verify: false
+      preferred_ip_protocol: "ip4"
+
+  # HTTP check that expects specific content
+  http_content_check:
+    prober: http
+    timeout: 5s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      fail_if_body_not_matches_regexp:
+        - "Adelaide Weather"
+      preferred_ip_protocol: "ip4"
+
+  # API health check with JSON validation
+  api_health_check:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      headers:
+        Accept: application/json
+      fail_if_body_not_matches_regexp:
+        - '"ready":\s*true'
+        - '"status":\s*"pass"'
+      preferred_ip_protocol: "ip4"
+
+  # TCP connectivity check
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: "ip4"
+
+  # ICMP ping check
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: "ip4"
+
+  # DNS resolution check
+  dns_query:
+    prober: dns
+    timeout: 5s
+    dns:
+      query_name: "example.com"
+      query_type: "A"
+      valid_rcodes:
+        - NOERROR
+      preferred_ip_protocol: "ip4"
+
+  # HTTP check with custom headers (for authenticated endpoints)
+  http_auth_check:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      headers:
+        Authorization: "Bearer ${API_TOKEN}"
+        Accept: application/json
+      preferred_ip_protocol: "ip4"
+
+  # Performance-focused HTTP check
+  http_performance:
+    prober: http
+    timeout: 3s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      fail_if_header_not_matches_regexp:
+        - header: "Content-Type"
+          regexp: "application/json.*"
+      preferred_ip_protocol: "ip4"

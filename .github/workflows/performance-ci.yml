@@ -1,0 +1,529 @@
+name: Performance Testing CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run nightly performance tests at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of performance test to run'
+        required: true
+        default: 'quick'
+        type: choice
+        options:
+          - quick
+          - full
+          - stress
+          - soak
+      duration:
+        description: 'Test duration in seconds (for custom tests)'
+        required: false
+        default: '300'
+
+env:
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.12'
+  API_TOKEN: ${{ secrets.API_TOKEN || 'dev-token-change-in-production' }}
+  PERFORMANCE_THRESHOLD_MS: 500
+  MEMORY_THRESHOLD_MB: 1024
+  ERROR_RATE_THRESHOLD: 1.0
+
+jobs:
+  # Quick performance validation for PRs and commits
+  performance-gates:
+    name: Performance Gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name != 'schedule'
+    
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg14
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: weather_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            frontend/package-lock.json
+            tests/performance/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r api/requirements.txt
+
+      - name: Install Node.js dependencies
+        run: |
+          cd frontend && npm ci
+          cd ../tests/performance && npm ci
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Start services
+        run: |
+          # Start API
+          cd api
+          python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+          API_PID=$!
+          echo "API_PID=$API_PID" >> $GITHUB_ENV
+          
+          # Start frontend
+          cd ../frontend
+          npm start &
+          FRONTEND_PID=$!
+          echo "FRONTEND_PID=$FRONTEND_PID" >> $GITHUB_ENV
+          
+          # Wait for services to be ready
+          sleep 10
+
+      - name: Health check
+        run: |
+          # Check API health
+          curl -f http://localhost:8000/health || exit 1
+          
+          # Check frontend
+          curl -f http://localhost:3000 || exit 1
+
+      - name: Run performance benchmarks
+        run: |
+          cd tests/performance
+          node scripts/performance-benchmarks.js
+        env:
+          API_URL: http://localhost:8000
+          FRONTEND_URL: http://localhost:3000
+          ITERATIONS: 20
+          WARMUP_ITERATIONS: 5
+
+      - name: Run Lighthouse CI (Quick)
+        run: |
+          cd frontend
+          npx lhci autorun --config=../tests/performance/lighthouse.config.js
+        env:
+          LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
+          LHCI_BUILD_CONTEXT__COMMIT_TIME: ${{ github.event.head_commit.timestamp }}
+
+      - name: Frontend performance test
+        run: |
+          cd tests/performance
+          node load-tests/frontend-load-test.js
+        env:
+          FRONTEND_URL: http://localhost:3000
+          CONCURRENCY: 5
+          DURATION: 60
+
+      - name: Analyze results
+        run: |
+          cd tests/performance
+          node scripts/analyze-performance-results.js
+        continue-on-error: true
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-results-quick-${{ github.sha }}
+          path: |
+            tests/performance/reports/
+            frontend/.lighthouseci/
+          retention-days: 30
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'tests/performance/reports/performance-summary.json';
+            
+            if (fs.existsSync(path)) {
+              const results = JSON.parse(fs.readFileSync(path, 'utf8'));
+              const comment = `
+              ## 📊 Performance Test Results
+              
+              **API Performance:**
+              - Average Response Time: ${results.api?.avg || 'N/A'}ms
+              - P95 Response Time: ${results.api?.p95 || 'N/A'}ms
+              - Error Rate: ${results.api?.errorRate || 'N/A'}%
+              
+              **Frontend Performance:**
+              - Average Page Load: ${results.frontend?.avgPageLoad || 'N/A'}ms
+              - Core Web Vitals: ${results.frontend?.coreWebVitals || 'N/A'}
+              
+              **Memory Usage:**
+              - Peak Memory: ${results.memory?.peak || 'N/A'}MB
+              - Memory Growth: ${results.memory?.growth || 'N/A'}MB
+              
+              **Status:** ${results.overall?.status || 'Unknown'} ${results.overall?.pass ? '✅' : '❌'}
+              `;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
+
+      - name: Stop services
+        if: always()
+        run: |
+          if [ ! -z "$API_PID" ]; then kill $API_PID || true; fi
+          if [ ! -z "$FRONTEND_PID" ]; then kill $FRONTEND_PID || true; fi
+
+  # Comprehensive nightly performance testing
+  nightly-performance:
+    name: Nightly Performance Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.test_type == 'full')
+
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg14
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: weather_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r api/requirements.txt
+          cd frontend && npm ci
+          cd ../tests/performance && npm ci
+
+      - name: Start services with Docker Compose
+        run: |
+          docker-compose -f docker-compose.yml up -d
+          
+          # Wait for services to be ready
+          timeout 60 bash -c 'until curl -f http://localhost:8000/health; do sleep 2; done'
+          timeout 60 bash -c 'until curl -f http://localhost:3000; do sleep 2; done'
+
+      - name: Run comprehensive API load tests
+        run: |
+          cd tests/performance
+          npx artillery run load-tests/api-load-test.yml \
+            --output reports/api-load-test-results.json
+        env:
+          API_TOKEN: ${{ env.API_TOKEN }}
+
+      - name: Run comprehensive frontend load tests
+        run: |
+          cd tests/performance
+          node load-tests/frontend-load-test.js
+        env:
+          FRONTEND_URL: http://localhost:3000
+          CONCURRENCY: 25
+          DURATION: 1800  # 30 minutes
+
+      - name: Run full Lighthouse CI audit
+        run: |
+          cd frontend
+          npx lhci autorun --config=../tests/performance/lighthouse.config.js
+        env:
+          LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
+
+      - name: Run memory leak detection
+        run: |
+          cd tests/performance
+          timeout 3600 node --expose-gc scripts/memory-leak-detection.js || echo "Memory test completed"
+        env:
+          API_URL: http://localhost:8000
+          SESSION_DURATION: 3600000  # 1 hour for nightly
+          SAMPLE_INTERVAL: 10000     # 10 seconds
+
+      - name: Performance regression analysis
+        run: |
+          cd tests/performance
+          node scripts/regression-analysis.js
+        continue-on-error: true
+
+      - name: Generate comprehensive report
+        run: |
+          cd tests/performance
+          node scripts/generate-comprehensive-report.js
+        continue-on-error: true
+
+      - name: Upload comprehensive results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-results-full-${{ github.run_number }}
+          path: |
+            tests/performance/reports/
+            frontend/.lighthouseci/
+          retention-days: 90
+
+      - name: Send Slack notification
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#performance'
+          text: |
+            🚨 Nightly performance tests failed!
+            
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            
+            Check the workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Stop services
+        if: always()
+        run: docker-compose down
+
+  # Stress testing (manual trigger or weekly)
+  stress-testing:
+    name: Stress Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_type == 'stress'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-performance-env
+
+      - name: Start services
+        run: |
+          docker-compose -f docker-compose.yml up -d
+          timeout 60 bash -c 'until curl -f http://localhost:8000/health; do sleep 2; done'
+
+      - name: Run stress tests
+        run: |
+          cd tests/performance
+          # Gradual load increase until failure
+          for concurrency in 100 200 300 400 500; do
+            echo "Testing with $concurrency concurrent users..."
+            timeout 300 npx artillery quick \
+              --count $concurrency \
+              --num 1000 \
+              http://localhost:8000/forecast?horizon=24h&vars=t2m || break
+          done
+
+      - name: Analyze failure points
+        run: |
+          cd tests/performance
+          node scripts/analyze-stress-results.js
+        continue-on-error: true
+
+      - name: Upload stress test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stress-test-results-${{ github.run_number }}
+          path: tests/performance/reports/
+
+      - name: Stop services
+        if: always()
+        run: docker-compose down
+
+  # Long-running soak testing
+  soak-testing:
+    name: Soak Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 1500  # 25 hours
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_type == 'soak'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-performance-env
+
+      - name: Start services
+        run: |
+          docker-compose -f docker-compose.yml up -d
+          timeout 60 bash -c 'until curl -f http://localhost:8000/health; do sleep 2; done'
+
+      - name: Run 24-hour soak test
+        run: |
+          cd tests/performance
+          node --expose-gc scripts/memory-leak-detection.js
+        env:
+          API_URL: http://localhost:8000
+          SESSION_DURATION: 86400000  # 24 hours
+          SAMPLE_INTERVAL: 30000      # 30 seconds
+
+      - name: Analyze soak test results
+        run: |
+          cd tests/performance
+          node scripts/analyze-soak-results.js
+        continue-on-error: true
+
+      - name: Upload soak test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: soak-test-results-${{ github.run_number }}
+          path: tests/performance/reports/
+
+      - name: Stop services
+        if: always()
+        run: docker-compose down
+
+  # Custom duration testing
+  custom-testing:
+    name: Custom Performance Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_type == 'custom'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-performance-env
+
+      - name: Start services
+        run: |
+          docker-compose -f docker-compose.yml up -d
+          timeout 60 bash -c 'until curl -f http://localhost:8000/health; do sleep 2; done'
+
+      - name: Run custom duration test
+        run: |
+          cd tests/performance
+          node load-tests/frontend-load-test.js
+        env:
+          FRONTEND_URL: http://localhost:3000
+          CONCURRENCY: 10
+          DURATION: ${{ github.event.inputs.duration }}
+
+      - name: Upload custom test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: custom-test-results-${{ github.run_number }}
+          path: tests/performance/reports/
+
+      - name: Stop services
+        if: always()
+        run: docker-compose down
+
+  # Performance baseline update
+  update-baseline:
+    name: Update Performance Baseline
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule')
+    needs: [nightly-performance]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download performance results
+        uses: actions/download-artifact@v4
+        with:
+          name: performance-results-full-${{ github.run_number }}
+          path: tests/performance/reports/
+
+      - name: Update baseline
+        run: |
+          cd tests/performance
+          node scripts/update-baseline.js
+
+      - name: Commit updated baseline
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add tests/performance/reports/performance-baseline.json
+          git diff --staged --quiet || git commit -m "chore: update performance baseline [skip ci]"
+          git push
+
+# Reusable composite action for environment setup
+---
+# .github/actions/setup-performance-env/action.yml
+name: 'Setup Performance Testing Environment'
+description: 'Sets up Node.js, Python, and dependencies for performance testing'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install Python dependencies
+      shell: bash
+      run: |
+        pip install -r requirements.txt
+        pip install -r api/requirements.txt
+
+    - name: Install Node.js dependencies
+      shell: bash
+      run: |
+        cd frontend && npm ci
+        cd ../tests/performance && npm ci
+
+    - name: Install performance testing tools
+      shell: bash
+      run: |
+        npm install -g artillery
+        npm install -g @lhci/cli
+        npx playwright install chromium

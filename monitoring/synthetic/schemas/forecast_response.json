@@ -1,0 +1,212 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Forecast Response Schema",
+  "description": "Schema validation for Adelaide Weather Forecast API responses",
+  "type": "object",
+  "required": [
+    "horizon",
+    "generated_at",
+    "variables",
+    "narrative",
+    "risk_assessment",
+    "analogs_summary",
+    "confidence_explanation",
+    "versions",
+    "hashes",
+    "latency_ms"
+  ],
+  "properties": {
+    "horizon": {
+      "type": "string",
+      "enum": ["6h", "12h", "24h", "48h"]
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "variables": {
+      "type": "object",
+      "patternProperties": {
+        "^(t2m|u10|v10|msl|cape|tcwv|tp)$": {
+          "type": "object",
+          "required": ["value", "p05", "p95", "confidence", "available"],
+          "properties": {
+            "value": {
+              "oneOf": [
+                {"type": "number"},
+                {"type": "null"}
+              ]
+            },
+            "p05": {
+              "oneOf": [
+                {"type": "number"},
+                {"type": "null"}
+              ]
+            },
+            "p95": {
+              "oneOf": [
+                {"type": "number"},
+                {"type": "null"}
+              ]
+            },
+            "confidence": {
+              "oneOf": [
+                {"type": "number", "minimum": 0, "maximum": 1},
+                {"type": "null"}
+              ]
+            },
+            "available": {
+              "type": "boolean"
+            },
+            "analog_count": {
+              "oneOf": [
+                {"type": "integer", "minimum": 0},
+                {"type": "null"}
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "wind10m": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["speed", "direction", "available"],
+          "properties": {
+            "speed": {
+              "oneOf": [
+                {"type": "number", "minimum": 0},
+                {"type": "null"}
+              ]
+            },
+            "direction": {
+              "oneOf": [
+                {"type": "number", "minimum": 0, "maximum": 360},
+                {"type": "null"}
+              ]
+            },
+            "gust": {
+              "oneOf": [
+                {"type": "number", "minimum": 0},
+                {"type": "null"}
+              ]
+            },
+            "available": {
+              "type": "boolean"
+            }
+          }
+        },
+        {"type": "null"}
+      ]
+    },
+    "narrative": {
+      "type": "string",
+      "minLength": 10
+    },
+    "risk_assessment": {
+      "type": "object",
+      "required": ["thunderstorm", "heat_stress", "wind_damage", "precipitation"],
+      "properties": {
+        "thunderstorm": {
+          "type": "string",
+          "enum": ["minimal", "low", "moderate", "high", "extreme"]
+        },
+        "heat_stress": {
+          "type": "string",
+          "enum": ["minimal", "low", "moderate", "high", "extreme"]
+        },
+        "wind_damage": {
+          "type": "string",
+          "enum": ["minimal", "low", "moderate", "high", "extreme"]
+        },
+        "precipitation": {
+          "type": "string",
+          "enum": ["minimal", "low", "moderate", "high", "extreme"]
+        }
+      }
+    },
+    "analogs_summary": {
+      "type": "object",
+      "required": [
+        "most_similar_date",
+        "similarity_score",
+        "analog_count",
+        "outcome_description",
+        "confidence_explanation"
+      ],
+      "properties": {
+        "most_similar_date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "similarity_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "analog_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outcome_description": {
+          "type": "string",
+          "minLength": 10
+        },
+        "confidence_explanation": {
+          "type": "string",
+          "minLength": 10
+        }
+      }
+    },
+    "confidence_explanation": {
+      "type": "string",
+      "minLength": 10
+    },
+    "versions": {
+      "type": "object",
+      "required": ["model", "index", "datasets", "api_schema"],
+      "properties": {
+        "model": {
+          "type": "string",
+          "pattern": "^v\\d+\\.\\d+\\.\\d+$"
+        },
+        "index": {
+          "type": "string",
+          "pattern": "^v\\d+\\.\\d+\\.\\d+$"
+        },
+        "datasets": {
+          "type": "string",
+          "pattern": "^v\\d+\\.\\d+\\.\\d+$"
+        },
+        "api_schema": {
+          "type": "string",
+          "pattern": "^v\\d+\\.\\d+\\.\\d+$"
+        }
+      }
+    },
+    "hashes": {
+      "type": "object",
+      "required": ["model", "index", "datasets"],
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 6
+        },
+        "index": {
+          "type": "string",
+          "minLength": 6
+        },
+        "datasets": {
+          "type": "string",
+          "minLength": 6
+        }
+      }
+    },
+    "latency_ms": {
+      "type": "number",
+      "minimum": 0
+    }
+  }
+}

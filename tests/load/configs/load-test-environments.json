@@ -1,0 +1,517 @@
+{
+  "environments": {
+    "development": {
+      "name": "Development Environment",
+      "description": "Local development setup for testing load testing framework",
+      "endpoints": {
+        "api_base": "http://localhost:8000",
+        "frontend_base": "http://localhost:3000",
+        "metrics_endpoint": "http://localhost:8000/metrics",
+        "health_endpoint": "http://localhost:8000/health"
+      },
+      "authentication": {
+        "api_token": "dev-token-change-in-production",
+        "token_header": "Authorization",
+        "token_prefix": "Bearer"
+      },
+      "load_profiles": {
+        "light": {
+          "concurrent_users": 5,
+          "duration": "2m",
+          "ramp_time": "30s"
+        },
+        "normal": {
+          "concurrent_users": 10,
+          "duration": "5m", 
+          "ramp_time": "1m"
+        },
+        "stress": {
+          "concurrent_users": 20,
+          "duration": "3m",
+          "ramp_time": "30s"
+        }
+      },
+      "thresholds": {
+        "response_time_p95": 3000,
+        "response_time_p99": 5000,
+        "error_rate_max": 5,
+        "throughput_min": 1
+      },
+      "monitoring": {
+        "prometheus_url": "http://localhost:9090",
+        "grafana_url": "http://localhost:3001",
+        "enabled": true
+      }
+    },
+    "staging": {
+      "name": "Staging Environment", 
+      "description": "Pre-production staging environment for comprehensive load testing",
+      "endpoints": {
+        "api_base": "http://staging-api:8000",
+        "frontend_base": "http://staging-frontend:3000",
+        "metrics_endpoint": "http://staging-api:8000/metrics",
+        "health_endpoint": "http://staging-api:8000/health"
+      },
+      "authentication": {
+        "api_token": "${STAGING_API_TOKEN}",
+        "token_header": "Authorization",
+        "token_prefix": "Bearer"
+      },
+      "load_profiles": {
+        "baseline": {
+          "concurrent_users": 10,
+          "duration": "5m",
+          "ramp_time": "1m"
+        },
+        "target": {
+          "concurrent_users": 50,
+          "duration": "10m",
+          "ramp_time": "2m" 
+        },
+        "stress": {
+          "concurrent_users": 100,
+          "duration": "5m",
+          "ramp_time": "1m"
+        },
+        "spike": {
+          "concurrent_users": 200,
+          "duration": "3m",
+          "ramp_time": "30s"
+        },
+        "endurance": {
+          "concurrent_users": 75,
+          "duration": "30m",
+          "ramp_time": "5m"
+        }
+      },
+      "thresholds": {
+        "response_time_p95": 2000,
+        "response_time_p99": 4000,
+        "error_rate_max": 1,
+        "throughput_min": 10
+      },
+      "monitoring": {
+        "prometheus_url": "http://staging-prometheus:9090",
+        "grafana_url": "http://staging-grafana:3000",
+        "enabled": true
+      },
+      "network_simulation": {
+        "enabled": true,
+        "conditions": [
+          {
+            "name": "broadband",
+            "latency": "50ms",
+            "bandwidth": "100Mbps",
+            "packet_loss": "0.1%"
+          },
+          {
+            "name": "mobile_4g", 
+            "latency": "100ms",
+            "bandwidth": "50Mbps",
+            "packet_loss": "0.5%"
+          },
+          {
+            "name": "mobile_3g",
+            "latency": "200ms", 
+            "bandwidth": "10Mbps",
+            "packet_loss": "1%"
+          }
+        ]
+      }
+    },
+    "production": {
+      "name": "Production Environment",
+      "description": "Live production system - USE WITH EXTREME CAUTION",
+      "endpoints": {
+        "api_base": "https://api.weather.example.com",
+        "frontend_base": "https://weather.example.com", 
+        "metrics_endpoint": "https://api.weather.example.com/metrics",
+        "health_endpoint": "https://api.weather.example.com/health"
+      },
+      "authentication": {
+        "api_token": "${PRODUCTION_API_TOKEN}",
+        "token_header": "Authorization",
+        "token_prefix": "Bearer"
+      },
+      "load_profiles": {
+        "smoke_test": {
+          "concurrent_users": 2,
+          "duration": "1m",
+          "ramp_time": "30s",
+          "description": "Minimal smoke test to verify production readiness"
+        },
+        "canary": {
+          "concurrent_users": 5,
+          "duration": "2m",
+          "ramp_time": "1m",
+          "description": "Canary test for gradual production validation"
+        },
+        "shadow": {
+          "concurrent_users": 10,
+          "duration": "5m",
+          "ramp_time": "2m",
+          "description": "Shadow traffic test using production replicas"
+        }
+      },
+      "thresholds": {
+        "response_time_p95": 1500,
+        "response_time_p99": 3000,
+        "error_rate_max": 0.1,
+        "throughput_min": 50
+      },
+      "monitoring": {
+        "prometheus_url": "https://prometheus.internal.example.com",
+        "grafana_url": "https://grafana.internal.example.com",
+        "enabled": true
+      },
+      "safety_limits": {
+        "max_concurrent_users": 20,
+        "max_duration_minutes": 10,
+        "emergency_stop_error_rate": 2,
+        "requires_approval": true
+      }
+    },
+    "cloud_scale": {
+      "name": "Cloud Scale Testing",
+      "description": "Multi-region cloud infrastructure load testing",
+      "endpoints": {
+        "api_base": "https://api-{region}.weather.example.com",
+        "frontend_base": "https://weather-{region}.example.com",
+        "metrics_endpoint": "https://api-{region}.weather.example.com/metrics",
+        "health_endpoint": "https://api-{region}.weather.example.com/health"
+      },
+      "regions": [
+        {
+          "id": "us-east-1",
+          "name": "US East (Virginia)",
+          "endpoint_suffix": "use1",
+          "load_percentage": 40
+        },
+        {
+          "id": "us-west-2", 
+          "name": "US West (Oregon)",
+          "endpoint_suffix": "usw2",
+          "load_percentage": 30
+        },
+        {
+          "id": "eu-west-1",
+          "name": "Europe (Ireland)",
+          "endpoint_suffix": "euw1", 
+          "load_percentage": 20
+        },
+        {
+          "id": "ap-southeast-2",
+          "name": "Asia Pacific (Sydney)",
+          "endpoint_suffix": "apse2",
+          "load_percentage": 10
+        }
+      ],
+      "authentication": {
+        "api_token": "${CLOUD_API_TOKEN}",
+        "token_header": "Authorization", 
+        "token_prefix": "Bearer"
+      },
+      "load_profiles": {
+        "global_baseline": {
+          "concurrent_users": 100,
+          "duration": "10m",
+          "ramp_time": "2m"
+        },
+        "global_peak": {
+          "concurrent_users": 500,
+          "duration": "15m",
+          "ramp_time": "3m"
+        },
+        "disaster_recovery": {
+          "concurrent_users": 200,
+          "duration": "20m",
+          "ramp_time": "5m",
+          "description": "Test failover capabilities during simulated outages"
+        },
+        "black_friday": {
+          "concurrent_users": 1000,
+          "duration": "30m",
+          "ramp_time": "5m",
+          "description": "Extreme load simulation for peak traffic events"
+        }
+      },
+      "thresholds": {
+        "response_time_p95": 2000,
+        "response_time_p99": 5000,
+        "error_rate_max": 0.5,
+        "throughput_min": 100
+      },
+      "monitoring": {
+        "prometheus_url": "https://prometheus.monitoring.example.com",
+        "grafana_url": "https://grafana.monitoring.example.com",
+        "enabled": true,
+        "custom_dashboards": [
+          "multi-region-performance",
+          "global-error-tracking", 
+          "cdn-performance",
+          "auto-scaling-metrics"
+        ]
+      },
+      "auto_scaling": {
+        "enabled": true,
+        "scale_up_threshold": 70,
+        "scale_down_threshold": 30,
+        "min_instances": 2,
+        "max_instances": 20,
+        "cooldown_period": "5m"
+      }
+    }
+  },
+  "test_scenarios": {
+    "api_focused": {
+      "name": "API-Focused Load Testing",
+      "description": "Heavy API usage with minimal frontend interaction",
+      "api_weight": 0.8,
+      "frontend_weight": 0.2,
+      "endpoints": [
+        {
+          "path": "/forecast",
+          "method": "GET",
+          "weight": 0.6,
+          "params": {
+            "horizon": ["6h", "12h", "24h", "48h"],
+            "vars": [
+              "t2m",
+              "t2m,u10,v10",
+              "t2m,u10,v10,msl",
+              "t2m,u10,v10,msl,cape",
+              "t2m,u10,v10,msl,z500,t850,q850,u850,v850,cape"
+            ]
+          }
+        },
+        {
+          "path": "/health",
+          "method": "GET", 
+          "weight": 0.2,
+          "auth_required": false
+        },
+        {
+          "path": "/metrics",
+          "method": "GET",
+          "weight": 0.2,
+          "auth_required": true
+        }
+      ]
+    },
+    "frontend_focused": {
+      "name": "Frontend-Focused Load Testing",
+      "description": "Heavy frontend usage with realistic user interactions",
+      "api_weight": 0.3,
+      "frontend_weight": 0.7,
+      "user_journeys": [
+        {
+          "name": "dashboard_browsing",
+          "weight": 0.5,
+          "steps": [
+            {"action": "visit", "path": "/"},
+            {"action": "wait", "duration": "3s"},
+            {"action": "api_call", "endpoint": "/api/forecast"},
+            {"action": "wait", "duration": "5s"},
+            {"action": "visit", "path": "/cape-demo"}
+          ]
+        },
+        {
+          "name": "detailed_analysis",
+          "weight": 0.3,
+          "steps": [
+            {"action": "visit", "path": "/analog-demo"},
+            {"action": "wait", "duration": "2s"}, 
+            {"action": "api_call", "endpoint": "/api/forecast", "params": {"horizon": "24h"}},
+            {"action": "wait", "duration": "8s"},
+            {"action": "visit", "path": "/metrics-demo"}
+          ]
+        },
+        {
+          "name": "mobile_quick_check",
+          "weight": 0.2,
+          "user_agent": "mobile",
+          "steps": [
+            {"action": "visit", "path": "/"},
+            {"action": "wait", "duration": "1s"},
+            {"action": "api_call", "endpoint": "/api/forecast", "params": {"horizon": "6h", "vars": "t2m,u10,v10"}}
+          ]
+        }
+      ]
+    },
+    "mixed_workload": {
+      "name": "Mixed Workload Testing",
+      "description": "Realistic combination of API and frontend usage",
+      "api_weight": 0.5,
+      "frontend_weight": 0.5,
+      "user_types": [
+        {
+          "name": "casual_user",
+          "percentage": 0.6,
+          "session_duration": "2m",
+          "api_calls_per_session": 3
+        },
+        {
+          "name": "power_user", 
+          "percentage": 0.3,
+          "session_duration": "8m",
+          "api_calls_per_session": 12
+        },
+        {
+          "name": "api_consumer",
+          "percentage": 0.1,
+          "session_duration": "30s",
+          "api_calls_per_session": 5
+        }
+      ]
+    },
+    "data_export": {
+      "name": "Data Export Load Testing", 
+      "description": "Large data export and download simulation",
+      "api_weight": 0.9,
+      "frontend_weight": 0.1,
+      "focus": "large_payloads",
+      "endpoints": [
+        {
+          "path": "/forecast",
+          "method": "GET",
+          "weight": 1.0,
+          "params": {
+            "horizon": ["48h"],
+            "vars": ["t2m,u10,v10,msl,z500,t850,q850,u850,v850,cape"]
+          },
+          "expected_response_size": "large"
+        }
+      ]
+    },
+    "real_time_monitoring": {
+      "name": "Real-Time Monitoring Simulation",
+      "description": "Continuous polling for real-time weather updates",
+      "api_weight": 1.0,
+      "frontend_weight": 0.0,
+      "polling_interval": "5s",
+      "endpoints": [
+        {
+          "path": "/forecast",
+          "method": "GET",
+          "weight": 0.8,
+          "params": {
+            "horizon": ["6h"],
+            "vars": ["t2m,u10,v10,cape"]
+          }
+        },
+        {
+          "path": "/health",
+          "method": "GET",
+          "weight": 0.2,
+          "auth_required": false
+        }
+      ]
+    }
+  },
+  "network_conditions": {
+    "fiber": {
+      "name": "Fiber Broadband",
+      "latency": "10ms",
+      "bandwidth_down": "1000Mbps",
+      "bandwidth_up": "1000Mbps", 
+      "packet_loss": "0.01%",
+      "jitter": "1ms"
+    },
+    "broadband": {
+      "name": "Standard Broadband",
+      "latency": "50ms",
+      "bandwidth_down": "100Mbps",
+      "bandwidth_up": "10Mbps",
+      "packet_loss": "0.1%",
+      "jitter": "5ms"
+    },
+    "mobile_4g": {
+      "name": "Mobile 4G",
+      "latency": "100ms",
+      "bandwidth_down": "50Mbps", 
+      "bandwidth_up": "5Mbps",
+      "packet_loss": "0.5%",
+      "jitter": "20ms"
+    },
+    "mobile_3g": {
+      "name": "Mobile 3G",
+      "latency": "200ms",
+      "bandwidth_down": "10Mbps",
+      "bandwidth_up": "1Mbps",
+      "packet_loss": "1%",
+      "jitter": "50ms"
+    },
+    "satellite": {
+      "name": "Satellite Internet",
+      "latency": "600ms",
+      "bandwidth_down": "25Mbps",
+      "bandwidth_up": "3Mbps",
+      "packet_loss": "2%",
+      "jitter": "100ms"
+    },
+    "throttled": {
+      "name": "Throttled Connection",
+      "latency": "300ms",
+      "bandwidth_down": "5Mbps",
+      "bandwidth_up": "1Mbps",
+      "packet_loss": "3%",
+      "jitter": "150ms"
+    }
+  },
+  "reporting": {
+    "formats": ["json", "html", "markdown", "csv"],
+    "metrics": [
+      {
+        "name": "response_time",
+        "aggregations": ["avg", "min", "max", "p50", "p90", "p95", "p99"]
+      },
+      {
+        "name": "throughput",
+        "aggregations": ["total", "per_second", "per_minute"]
+      },
+      {
+        "name": "error_rate", 
+        "aggregations": ["percentage", "count", "by_status_code"]
+      },
+      {
+        "name": "user_sessions",
+        "aggregations": ["total", "successful", "failed", "duration"]
+      }
+    ],
+    "dashboards": {
+      "real_time": {
+        "enabled": true,
+        "update_interval": "5s",
+        "charts": ["response_time", "throughput", "error_rate", "active_users"]
+      },
+      "summary": {
+        "enabled": true,
+        "sections": ["overview", "performance", "errors", "capacity", "recommendations"]
+      }
+    }
+  },
+  "alerting": {
+    "enabled": true,
+    "channels": ["console", "file", "webhook"],
+    "rules": [
+      {
+        "name": "high_error_rate",
+        "condition": "error_rate > 5%",
+        "severity": "critical",
+        "action": "stop_test"
+      },
+      {
+        "name": "response_time_sla_breach",
+        "condition": "response_time_p95 > threshold",
+        "severity": "warning",
+        "action": "notify"
+      },
+      {
+        "name": "throughput_drop",
+        "condition": "throughput < 50% of baseline",
+        "severity": "warning", 
+        "action": "notify"
+      }
+    ]
+  }
+}

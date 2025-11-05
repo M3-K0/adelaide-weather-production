@@ -1,0 +1,80 @@
+[bandit]
+# Bandit configuration for Adelaide Weather Forecast API Security Scanning
+
+# Test set - comprehensive security checks
+tests = B101,B102,B103,B104,B105,B106,B107,B108,B110,B112,B201,B301,B302,B303,B304,B305,B306,B307,B308,B309,B310,B311,B312,B313,B314,B315,B316,B317,B318,B319,B320,B321,B322,B323,B324,B325,B401,B402,B403,B404,B405,B406,B407,B408,B409,B410,B411,B412,B413,B501,B502,B503,B504,B505,B506,B507,B601,B602,B603,B604,B605,B606,B607,B608,B609,B610,B611,B701,B702,B703
+
+# Paths to scan
+# Include API and core modules
+include = api/,core/
+
+# Paths to exclude from scanning
+exclude_dirs = /tests,/test,/__pycache__,/.git,/venv,/env,/.venv
+
+# Skipped tests (with justification)
+skips = 
+    # B101: Skip assert_used test in test files only
+    # B603: Skip subprocess_without_shell_equals_true - we use shell=False explicitly
+    # B607: Skip start_process_with_partial_path - we use absolute paths
+
+# Confidence levels to report
+# HIGH: High confidence that the finding is a real issue
+# MEDIUM: Medium confidence
+# LOW: Low confidence, might be false positive
+confidence = HIGH,MEDIUM
+
+# Severity levels to report
+# HIGH: Critical security issues
+# MEDIUM: Important security issues
+# LOW: Minor security issues
+severity = HIGH,MEDIUM,LOW
+
+# Output format options
+# Available formats: csv,custom,html,json,screen,txt,xml,yaml
+format = json
+
+# Plugin configuration
+[bandit.plugins.B104]
+# Hardcoded bind all interfaces - check for 0.0.0.0 bindings
+check_typed_list = True
+
+[bandit.plugins.B201]
+# Flask debug mode - ensure debug is disabled in production
+check_debug = True
+
+[bandit.plugins.B301]
+# Pickle and related modules - unsafe serialization
+check_pickle = True
+
+[bandit.plugins.B401]
+# Import telnet module - insecure protocol
+check_telnet = True
+
+[bandit.plugins.B501]
+# Request with verify=False - SSL verification disabled
+check_requests = True
+
+[bandit.plugins.B601]
+# Shell injection via paramiko
+check_paramiko = True
+
+[bandit.plugins.B701]
+# Test for use of jinja2 autoescape=False
+check_jinja2 = True
+
+# Message template for findings
+msg_template = {abspath}:{line}: {test_id}[bandit]: {severity}: {msg}
+
+# Additional custom configurations
+[bandit.formatters.custom]
+# Custom format for CI/CD integration
+format_string = "%(filename)s:%(line)s: [%(test_id)s] %(msg)s (Confidence: %(confidence)s, Severity: %(severity)s)"
+
+# Report generation settings
+[bandit.report]
+# Include source code context in reports
+include_nosec = False
+# Maximum number of issues to report (0 = unlimited)
+max_issues = 0
+# Aggregate findings by file
+aggregate = vuln
