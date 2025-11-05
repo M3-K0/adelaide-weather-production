@@ -210,7 +210,7 @@ jobs:
           find logs -type f -exec ls -lh {} \; 2>/dev/null || true
       
       - name: Upload Test Results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: e2e-smoke-test-results-${{ matrix.test-scenario }}-${{ github.sha }}
@@ -336,7 +336,7 @@ jobs:
           cat deployment-status.json | python3 -m json.tool
       
       - name: Upload Deployment Status
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: deployment-status-${{ github.sha }}

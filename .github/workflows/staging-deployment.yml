@@ -534,7 +534,7 @@ jobs:
           artillery report load-test-results.json --output load-test-report.html
           
       - name: Upload Load Test Results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: load-test-results
           path: |
