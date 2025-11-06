@@ -1,0 +1,102 @@
+# Adelaide Weather Forecasting System - Lite Development Setup
+# Minimal configuration with just API and UI for quick local development
+# No monitoring stack, no nginx proxy - direct access to services
+
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: ./api/Dockerfile.simple
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - API_TOKEN=${API_TOKEN:-dev-token-change-in-production}
+      - CORS_ORIGINS=http://localhost:3000,http://localhost
+      - LOG_LEVEL=INFO
+      - RATE_LIMIT_PER_MINUTE=300
+      - PERFORMANCE_MODE=false
+      - DEBUG_MODE=true
+    volumes:
+      # Mount forecasting system dependencies from host
+      - ./core:/app/core:ro
+      - ./outcomes:/app/outcomes:ro
+      - ./indices:/app/indices:ro
+      - ./embeddings:/app/embeddings:ro
+      - ./models:/app/models:ro
+      # Mount API source for development hot reload
+      - ./api:/app/api_source:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - forecast-lite
+
+  ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - API_BASE_URL=http://api:8000
+      - API_TOKEN=${API_TOKEN:-dev-token-change-in-production}
+      - NEXT_TELEMETRY_DISABLED=1
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      # Mount frontend source for development hot reload
+      - ./frontend:/app:delegated
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    restart: unless-stopped
+    networks:
+      - forecast-lite
+
+networks:
+  forecast-lite:
+    driver: bridge
+    name: adelaide-forecast-lite
+
+# Quick Start Commands:
+# =====================
+# Start services:
+#   docker-compose -f docker-compose.lite.yml up -d
+#
+# View logs:
+#   docker-compose -f docker-compose.lite.yml logs -f
+#   docker-compose -f docker-compose.lite.yml logs -f api
+#   docker-compose -f docker-compose.lite.yml logs -f ui
+#
+# Stop services:
+#   docker-compose -f docker-compose.lite.yml down
+#
+# Rebuild and restart:
+#   docker-compose -f docker-compose.lite.yml up -d --build
+#
+# Access Points:
+# ==============
+# Frontend UI:    http://localhost:3000
+# API Direct:     http://localhost:8000
+# API Health:     http://localhost:8000/health
+# API Docs:       http://localhost:8000/docs
+# API Metrics:    http://localhost:8000/metrics
+#
+# Test Forecast:
+#   curl -H "Authorization: Bearer dev-token-change-in-production" \
+#     "http://localhost:8000/forecast?horizon=24h&vars=t2m,u10,v10"
