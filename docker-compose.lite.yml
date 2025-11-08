@@ -1,6 +1,15 @@
 # Adelaide Weather Forecasting System - Lite Development Setup
 # Minimal configuration with just API and UI for quick local development
 # No monitoring stack, no nginx proxy - direct access to services
+#
+# ⚠️  IMPORTANT: Run setup first to generate test data!
+#     ./setup-lite.sh
+#
+# This creates the required directories:
+#   - indices/     (FAISS index files)
+#   - embeddings/  (embedding vectors and metadata)
+#   - outcomes/    (forecast outcomes)
+#   - models/      (model files)
 
 version: '3.8'
 
@@ -75,7 +84,10 @@ networks:
 
 # Quick Start Commands:
 # =====================
-# Start services:
+# 1. First time setup (generates test data):
+#   ./setup-lite.sh
+#
+# 2. Start services:
 #   docker-compose -f docker-compose.lite.yml up -d
 #
 # View logs:
