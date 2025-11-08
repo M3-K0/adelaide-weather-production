@@ -2,14 +2,17 @@
 # Minimal configuration with just API and UI for quick local development
 # No monitoring stack, no nginx proxy - direct access to services
 #
-# ⚠️  IMPORTANT: Run setup first to generate test data!
-#     ./setup-lite.sh
+# ⚠️  IMPORTANT: You need your local ERA5 data!
 #
-# This creates the required directories:
-#   - indices/     (FAISS index files)
-#   - embeddings/  (embedding vectors and metadata)
-#   - outcomes/    (forecast outcomes)
-#   - models/      (model files)
+# 1. Place your ERA5 data in one of these locations:
+#    - ./data/                (in this repo directory)
+#    - ~/weather-data/        (in your home directory)
+#    - Or set DATA_DIR environment variable to point to your data
+#
+# 2. Your data directory should contain:
+#    - data/era5/zarr/era5_surface_2010_2020.zarr
+#    - data/era5/zarr/era5_pressure_2010_2019.zarr
+#    - Or the processed indices/, embeddings/, outcomes/ directories
 
 version: '3.8'
 
@@ -31,10 +34,17 @@ services:
     volumes:
       # Mount forecasting system dependencies from host
       - ./core:/app/core:ro
+      # Mount your local data directory (adjust path as needed)
+      # Option 1: Data in repo directory
+      - ./data:/app/data:ro
       - ./outcomes:/app/outcomes:ro
       - ./indices:/app/indices:ro
       - ./embeddings:/app/embeddings:ro
       - ./models:/app/models:ro
+      # Option 2: Data in home directory (uncomment if needed)
+      # - ${HOME}/weather-data:/app/data:ro
+      # Option 3: Custom location via environment variable
+      # - ${DATA_DIR:-./data}:/app/data:ro
       # Mount API source for development hot reload
       - ./api:/app/api_source:ro
     healthcheck:
@@ -84,8 +94,8 @@ networks:
 
 # Quick Start Commands:
 # =====================
-# 1. First time setup (generates test data):
-#   ./setup-lite.sh
+# 1. Put your ERA5 data in ./data/ directory
+#    (or update the volume mount above to point to your data location)
 #
 # 2. Start services:
 #   docker-compose -f docker-compose.lite.yml up -d

@@ -1,53 +1,96 @@
 # Adelaide Weather - Lite Development Setup
 
-Quick and minimal setup for local development with just API and UI services.
+Quick and minimal setup for local development with just API and UI services using your **real ERA5 data**.
 
 ## What's Included
 
 ✅ **API Service** (port 8000)
 ✅ **UI Service** (port 3000)
 ✅ **Hot reload** for development
-✅ **Test data generation**
+✅ **Uses your local ERA5 data**
 
 ❌ No monitoring stack (Prometheus, Grafana)
 ❌ No nginx reverse proxy
 ❌ No production features
+❌ No fake/test/mock data
 
 ## Quick Start
 
-### 1. First Time Setup
+### 1. Put Your Data in Place
 
-Run the setup script to generate test FAISS indices and data:
+You have **real ERA5 data locally**. Put it in one of these locations:
 
+**Option A: In the repo directory**
 ```bash
-./setup-lite.sh
+# Create data directory in repo
+mkdir -p data/era5/zarr
+
+# Copy or symlink your ERA5 data here
+cp -r /path/to/your/era5_surface_2010_2020.zarr data/era5/zarr/
+cp -r /path/to/your/era5_pressure_2010_2019.zarr data/era5/zarr/
 ```
 
-This will:
-- Install required Python dependencies (numpy, pandas, faiss-cpu, pyarrow)
-- Generate test FAISS indices for all horizons (6h, 12h, 24h, 48h)
-- Create embeddings and metadata files
-- Create empty directories for outcomes and models
+**Option B: Symlink from another location**
+```bash
+# Symlink if data is elsewhere
+ln -s /path/to/your/weather-data ./data
+```
 
-**Generated directories:**
-- `indices/` - FAISS index files (6574-13148 vectors per horizon)
-- `embeddings/` - Embedding vectors and metadata (.npy and .parquet files)
-- `outcomes/` - Ready for forecast outcomes
-- `models/` - Ready for model files
+**Option C: Use custom path**
+Edit `docker-compose.lite.yml` and uncomment/modify the volume mount:
+```yaml
+volumes:
+  - ${HOME}/weather-data:/app/data:ro  # Your custom path
+```
 
-### 2. Start Services
+### 2. Verify Data Structure
+
+Your data should be in one of these structures:
+
+**Raw ERA5 data:**
+```
+data/
+└── era5/
+    └── zarr/
+        ├── era5_surface_2010_2020.zarr/
+        └── era5_pressure_2010_2019.zarr/
+```
+
+**OR processed data (indices/embeddings/outcomes):**
+```
+indices/
+├── faiss_6h_flatip.faiss
+├── faiss_12h_flatip.faiss
+├── faiss_24h_flatip.faiss
+└── faiss_48h_flatip.faiss
+
+embeddings/
+├── embeddings_6h.npy
+├── embeddings_12h.npy
+├── embeddings_24h.npy
+├── embeddings_48h.npy
+├── metadata_6h.parquet
+├── metadata_12h.parquet
+├── metadata_24h.parquet
+└── metadata_48h.parquet
+
+outcomes/
+└── (outcomes database files)
+```
+
+### 3. Start Services
 
 ```bash
 docker-compose -f docker-compose.lite.yml up -d
 ```
 
-### 3. Verify It's Working
+### 4. Verify It's Working
 
 ```bash
 # Check API health
 curl http://localhost:8000/health
 
-# Test forecast endpoint
+# Test forecast endpoint (use your real token or the dev one)
 curl -H "Authorization: Bearer dev-token-change-in-production" \
   "http://localhost:8000/forecast?horizon=24h&vars=t2m,u10,v10"
 ```
@@ -84,73 +127,109 @@ docker-compose -f docker-compose.lite.yml up -d --build
 docker-compose -f docker-compose.lite.yml down -v
 ```
 
-## Test Data Details
+## Processing Your ERA5 Data
 
-The setup script creates realistic test data:
+If you have raw ERA5 zarr files but need to generate the indices/embeddings/outcomes:
 
-- **Embedding dimension:** 256
-- **Index type:** FlatIP (baseline) and IVF-PQ (optimized)
-- **6h horizon:** 6,574 vectors
-- **12h horizon:** 6,574 vectors
-- **24h horizon:** 13,148 vectors
-- **48h horizon:** 13,148 vectors
-- **Total vectors:** 52,592 (matching production system)
+### Generate Embeddings
+```bash
+cd scripts
+python generate_embeddings.py --horizon 24
+```
 
-All embeddings are:
-- L2 normalized for cosine similarity
-- Deterministically seeded for reproducibility
-- Stored with metadata (timestamps, horizon, indices)
+### Build Outcomes Database
+```bash
+python scripts/build_outcomes_database.py --horizon 24
+```
+
+### Build FAISS Indices
+```bash
+python scripts/build_faiss_index.py --horizon 24
+```
+
+Or use the automated pipeline:
+```bash
+./scripts/full_pipeline.sh
+```
+
+## Data Size Reference
+
+Your ERA5 data is probably:
+- **Surface data (2010-2020):** ~50-100 GB
+- **Pressure data (2010-2019):** ~30-80 GB
+- **Processed indices:** ~500 MB
+- **Embeddings:** ~10-20 GB
+- **Outcomes:** ~5-10 GB
+
+That's why it's too big for git! 😄
 
 ## Troubleshooting
 
-### "No such file or directory: indices/faiss_24h_flatip.faiss"
+### "No such file or directory: data/era5/zarr/..."
 
-Run the setup script first:
+Check your data mount:
 ```bash
-./setup-lite.sh
+# Verify data directory exists
+ls -la data/era5/zarr/
+
+# Verify volume mount in docker
+docker-compose -f docker-compose.lite.yml config | grep -A 5 volumes
 ```
 
-### "Permission denied: ./setup-lite.sh"
+### "FAISS index not found"
 
-Make the script executable:
-```bash
-chmod +x setup-lite.sh
-```
+Either:
+1. Generate indices from your ERA5 data (see "Processing Your ERA5 Data" above)
+2. Copy pre-generated indices to `./indices/` directory
 
-### API not starting / health check fails
+### API fails to start
 
-Check the logs:
+Check logs:
 ```bash
 docker-compose -f docker-compose.lite.yml logs api
 ```
 
 Common issues:
-- Volumes not mounted correctly (check docker-compose.lite.yml)
-- Indices not generated (run setup-lite.sh)
+- Data not mounted correctly
+- Missing indices/embeddings
 - Port 8000 already in use
 
-### UI not accessible
+### Permission issues with mounted data
 
-Check if the container is running:
+If running on Linux and getting permission errors:
 ```bash
-docker-compose -f docker-compose.lite.yml ps
+# Make data readable
+chmod -R +r data/
 ```
 
-Check UI logs:
-```bash
-docker-compose -f docker-compose.lite.yml logs ui
+Or update the Dockerfile to match your user ID.
+
+## Data Location Options
+
+Three ways to mount your data:
+
+### 1. Default (./data)
+```yaml
+volumes:
+  - ./data:/app/data:ro
 ```
 
-## Switching to Full Setup
+### 2. Home directory
+```yaml
+volumes:
+  - ${HOME}/weather-data:/app/data:ro
+```
 
-For production-like setup with monitoring:
-
+### 3. Environment variable
 ```bash
-# Stop lite setup
-docker-compose -f docker-compose.lite.yml down
+export DATA_DIR=/mnt/bigdisk/weather-data
+docker-compose -f docker-compose.lite.yml up -d
+```
 
-# Start full setup
-docker-compose up -d --profile monitoring
+With volume:
+```yaml
+volumes:
+  - ${DATA_DIR:-./data}:/app/data:ro
 ```
 
 ## What's Different from Full Setup?
@@ -159,18 +238,20 @@ docker-compose up -d --profile monitoring
 |---------|------------|------------|
 | API Service | ✅ | ✅ |
 | UI Service | ✅ | ✅ |
+| Real ERA5 Data | ✅ | ✅ |
 | Nginx Proxy | ❌ | ✅ |
 | Prometheus | ❌ | ✅ (profile) |
 | Grafana | ❌ | ✅ (profile) |
 | Redis Cache | ❌ | ✅ (production) |
 | Resource Limits | ❌ | ✅ |
 | Production Config | ❌ | ✅ |
-| Direct Port Access | ✅ 3000, 8000 | ✅ 80, 3000, 8000 |
 
 ## Notes
 
+- **Data is read-only** (`:ro` mount) to prevent accidental modifications
 - Uses development API token: `dev-token-change-in-production`
 - Rate limit: 300 requests/minute (relaxed for dev)
 - Debug mode enabled
 - CORS accepts localhost origins
-- No persistent volumes (data in containers)
+- Data stays on your host machine (not copied into containers)
+- `.gitignore` excludes `data/`, `indices/`, `embeddings/`, `outcomes/` (too big for git)
