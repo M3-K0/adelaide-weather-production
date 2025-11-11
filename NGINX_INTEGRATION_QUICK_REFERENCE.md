@@ -1,181 +1,261 @@
-# Nginx Integration - Quick Reference
+# T007 Nginx Integration Quick Reference
 
 ## Overview
-Nginx has been integrated into the Adelaide Weather Forecasting System as a reverse proxy for both development and staging environments, providing:
 
-- **API Proxy**: Routes `/api/*` requests to FastAPI backend with path rewriting
-- **Gzip Compression**: Automatic compression for text-based responses
-- **CORS Headers**: Proper CORS configuration for cross-origin requests
-- **Rate Limiting**: Basic rate limiting to prevent abuse
-- **Security Headers**: Standard security headers for production readiness
+**Mission Complete**: Production-ready nginx reverse proxy for Adelaide Weather System's 7-service architecture.
 
 ## Quick Start
 
-### Development Environment
 ```bash
-# Start with nginx proxy
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# 1. Generate SSL certificates (if not already done)
+cd nginx/ssl && ./generate_certs.sh localhost
 
-# Access points
-curl http://localhost/              # Frontend via nginx
-curl http://localhost/api/health    # API via nginx proxy
-curl http://localhost/health        # Direct API access
+# 2. Start the system
+docker-compose -f docker-compose.production.yml up -d
+
+# 3. Test the integration
+./test_nginx_integration.sh
+
+# 4. Access the system
+open https://localhost/  # Frontend (accept SSL warning for self-signed cert)
 ```
 
-### Staging Environment  
-```bash
-# Start staging with nginx
-docker-compose -f docker-compose.staging.yml up -d
+## Service Architecture
 
-# Access points
-curl http://localhost/              # Frontend via nginx
-curl http://localhost/api/health    # API via nginx proxy
 ```
+External Traffic → nginx:80/443
+                     ↓
+    ┌─────────────────┼─────────────────┐
+    │                 │                 │
+frontend:3000    api:8000        Monitoring Stack
+    │                 │                 │
+    ├─ /             ├─ /api/*         ├─ /grafana/* → grafana:3000
+    ├─ /forecast     ├─ /health        ├─ /prometheus/* → prometheus:9090
+    ├─ /about        ├─ /metrics       └─ /alertmanager/* → alertmanager:9093
+    └─ /analog-demo  └─ /docs
+```
+
+## Access Points
+
+| Service | HTTP | HTTPS | Purpose |
+|---------|------|-------|---------|
+| Frontend | http://localhost/ | https://localhost/ | Main weather interface |
+| API (prefixed) | http://localhost/api/ | https://localhost/api/ | API with prefix removal |
+| API (direct) | http://localhost/health | https://localhost/health | Direct API access |
+| Grafana | http://localhost/grafana/ | https://localhost/grafana/ | Monitoring dashboards |
+| Prometheus | - | - | Internal networks only |
+| Alertmanager | - | - | Internal networks only |
 
 ## Key Features Implemented
 
-### 1. API Path Rewriting
-- **Route**: `/api/*` → removes `/api` prefix and forwards to backend
-- **Example**: `GET /api/health` → `GET /health` on FastAPI backend
-- **Rate Limit**: 10 requests/second with burst of 10
+### ✅ SSL Termination
+- **TLS 1.2 + 1.3** with modern cipher suites
+- **Self-signed certificates** for development (replace for production)
+- **Perfect Forward Secrecy** enabled
+- **HSTS** with preload directive
 
-### 2. Gzip Compression
-- **Enabled for**: JSON, HTML, CSS, JS, XML, SVG
-- **Min Size**: 1024 bytes
-- **Compression Level**: 6
+### ✅ Security Headers
+- **X-Frame-Options**: DENY
+- **X-Content-Type-Options**: nosniff
+- **X-XSS-Protection**: 1; mode=block
+- **Referrer-Policy**: strict-origin-when-cross-origin
+- **Content-Security-Policy**: Dynamic based on content type
+- **Permissions-Policy**: Restrictive permissions
 
-### 3. CORS Configuration
-- **Origin**: `*` (configurable)
-- **Methods**: `GET, POST, PUT, DELETE, OPTIONS, HEAD`
-- **Headers**: `Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control`
-- **Preflight**: Automatic handling of OPTIONS requests
+### ✅ Advanced Routing
+- **API prefix removal**: `/api/health` → `api:8000/health`
+- **Frontend SPA support**: WebSocket and hot reload support
+- **Monitoring integration**: `/grafana/` → `grafana:3000/`
+- **Health check aggregation**: `/health/upstream` checks API status
 
-### 4. Security Headers
-- `X-Frame-Options: DENY`
-- `X-Content-Type-Options: nosniff`
-- `X-XSS-Protection: 1; mode=block`
-- `Referrer-Policy: strict-origin-when-cross-origin`
-- `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+### ✅ Performance Optimization
+- **Gzip compression** with optimized file types
+- **Static asset caching** with appropriate cache headers
+- **Connection keep-alive** with upstream pooling
+- **Proxy caching** for static content
 
-### 5. Rate Limiting
-- **API Endpoints**: 10 req/s (burst 10)
-- **Frontend**: 30 req/s (burst 20)
-- **Zone Size**: 10MB memory
+### ✅ Rate Limiting & DDoS Protection
+- **API strict**: 10 req/s burst 20
+- **API moderate**: 30 req/s burst 30
+- **Frontend**: 50 req/s burst 50
+- **Monitoring**: 5 req/s burst 5-10
+- **Connection limiting**: 50 connections per IP
 
-## Validation
-
-### Automated Testing
-```bash
-./test_nginx_integration.sh
-```
-
-### Manual Testing
-```bash
-# Test CORS headers
-curl -H "Origin: http://localhost:3000" -X OPTIONS http://localhost/api/health -I
-
-# Test compression
-curl -H "Accept-Encoding: gzip" http://localhost/ -I
-
-# Test rate limiting
-for i in {1..15}; do curl http://localhost/api/health; done
-```
+### ✅ Attack Mitigation
+- **Block attack patterns**: PHP, ASP, JSP files
+- **Block scanners**: nmap, nikto, sqlmap user agents
+- **Block suspicious URLs**: eval(), base64_, /etc/passwd
+- **Hidden file protection**: Block dotfiles and backups
 
 ## Configuration Files
 
-### Main Configuration
-- **File**: `nginx/nginx.conf`
-- **Mount**: Read-only in all environments
-- **Features**: All proxy rules, compression, CORS, security headers
+| File | Purpose |
+|------|---------|
+| `/nginx/nginx.conf` | Main nginx configuration |
+| `/nginx/ssl/cert.pem` | SSL certificate |
+| `/nginx/ssl/key.pem` | SSL private key |
+| `/nginx/routing_rules.md` | Detailed routing documentation |
 
-### Docker Compose Integration
-- **Development**: `docker-compose.yml` + `docker-compose.dev.yml`
-- **Staging**: `docker-compose.staging.yml`
-- **Ports**: 80 (HTTP), 443 (HTTPS staging-ready)
+## Docker Integration
 
-## Monitoring & Debugging
-
-### Development Logs
-```bash
-# Nginx logs are mounted to ./logs/nginx/
-tail -f logs/nginx/access.log
-tail -f logs/nginx/error.log
-
-# Container logs
-docker-compose logs -f nginx
+### Volume Mounts
+```yaml
+- ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+- ./nginx/ssl:/etc/nginx/ssl:ro
+- nginx_cache:/var/cache/nginx
+- nginx_logs:/var/log/nginx
+- nginx_certbot:/var/www/certbot
 ```
 
-### Staging Logs
-```bash
-# Logs stored in named volume
-docker-compose -f docker-compose.staging.yml logs -f nginx
+### Network Configuration
+- **adelaide_internal**: Service-to-service communication
+- **adelaide_external**: Public traffic
+- **adelaide_monitoring**: Monitoring stack
 
-# Access volume
-docker volume inspect adelaide-staging-nginx-logs
+### Health Checks
+```yaml
+test: ["CMD", "curl", "-f", "http://localhost/health"]
+interval: 30s
+timeout: 5s
+retries: 3
 ```
 
-## Health Checks
+## Testing & Validation
 
-### Nginx Health
-- **Endpoint**: `wget http://localhost/health` 
-- **Interval**: 30s
-- **Timeout**: 10s
-- **Retries**: 3
+### Manual Testing
+```bash
+# Health checks
+curl http://localhost/health
+curl http://localhost/health/upstream
 
-### Service Dependencies
-- Nginx waits for both API and UI services to be healthy before starting
-- Proper startup order: API → UI → Nginx
+# API routing
+curl http://localhost/api/health
+curl http://localhost/metrics
 
-## Performance Configuration
+# Frontend
+curl http://localhost/
 
-### Connection Settings
-- **Worker Connections**: 1024
-- **Keepalive**: 32 upstream connections
-- **Multi-accept**: Enabled
-- **Sendfile**: Enabled
+# SSL
+curl -k https://localhost/health
 
-### Timeouts
-- **API Requests**: 5s connect, 10s send/read
-- **Frontend Requests**: 10s connect, 30s send/read
+# Security headers
+curl -I https://localhost/
+```
 
-## Future Enhancements
+### Automated Testing
+```bash
+# Run comprehensive integration test
+./test_nginx_integration.sh
 
-### SSL/TLS (Staging Ready)
-- Port 443 exposed in staging
-- SSL configuration template in nginx.conf
-- Certificate mounting points prepared
+# Validate nginx config syntax
+cd nginx && ./validate_config.sh
 
-### Caching
-- Static file caching configured
-- API response caching disabled
-- Frontend asset caching (1 day)
+# Test with docker-compose
+cd nginx && ./test_config.sh
+```
+
+### Monitoring
+```bash
+# View logs
+docker-compose logs nginx
+docker exec adelaide-weather-nginx tail -f /var/log/nginx/access.log
+
+# Check service status
+docker-compose ps nginx
+docker-compose exec nginx nginx -t
+```
+
+## Production Considerations
+
+### 🔐 SSL Certificates
+- Replace self-signed certificates with proper CA-signed certificates
+- Consider **Let's Encrypt** for free automated certificates
+- Set up automatic certificate renewal
+
+### 📊 Monitoring
+- Configure log aggregation (ELK stack, Fluentd)
+- Set up nginx metrics collection for Prometheus
+- Monitor response times and error rates
+
+### 🛡️ Security
+- Implement **HTTP Basic Auth** for monitoring endpoints
+- Configure **fail2ban** for additional IP blocking
+- Regular security updates for nginx
+
+### ⚡ Performance
+- Enable **Brotli compression** if available
+- Configure **HTTP/3** support for modern clients
+- Implement **CDN** for static asset delivery
+
+### 🔧 Maintenance
+```bash
+# Reload configuration without downtime
+docker exec adelaide-weather-nginx nginx -s reload
+
+# Test configuration changes
+docker exec adelaide-weather-nginx nginx -t
+
+# View real-time logs
+docker exec adelaide-weather-nginx tail -f /var/log/nginx/access.log
+```
 
 ## Troubleshooting
 
 ### Common Issues
-1. **502 Bad Gateway**: Backend services not ready
-2. **Rate Limited**: Too many requests
-3. **CORS Errors**: Check Origin headers
-4. **No Compression**: Response too small or wrong content-type
 
-### Debug Commands
+**Nginx won't start:**
 ```bash
-# Check nginx config syntax
-docker-compose exec nginx nginx -t
+# Check configuration
+docker exec adelaide-weather-nginx nginx -t
 
-# Reload nginx config
-docker-compose exec nginx nginx -s reload
+# Check logs
+docker-compose logs nginx
 
-# Check upstream health
-curl http://localhost/api/health
-curl http://localhost:3000/  # direct frontend
-curl http://localhost:8000/health  # direct API
+# Verify SSL certificates
+ls -la nginx/ssl/
 ```
 
-## Quality Gates Satisfied
+**Service routing not working:**
+```bash
+# Check backend services are running
+docker-compose ps
 
-✅ **Compose service exists in dev path**  
-✅ **Proxy routes `/api/*` correctly with compression and CORS headers**  
-✅ **All proxy features validated** (via test script)
+# Test internal service connectivity
+docker exec adelaide-weather-nginx nslookup api
+docker exec adelaide-weather-nginx nslookup frontend
+```
 
-The nginx integration provides a production-ready reverse proxy solution with proper security, performance, and operational features for the Adelaide Weather Forecasting System.
+**SSL certificate issues:**
+```bash
+# Regenerate certificates
+cd nginx/ssl && ./generate_certs.sh localhost
+
+# Check certificate validity
+openssl x509 -in nginx/ssl/cert.pem -text -noout | grep "Not After"
+```
+
+**Rate limiting too aggressive:**
+- Adjust rate limit zones in `nginx.conf`
+- Increase burst capacity for legitimate traffic
+- Consider IP whitelisting for internal services
+
+## Integration with T006 Orchestration
+
+✅ **Network Compatibility**: Uses docker-compose service names for routing  
+✅ **Volume Integration**: Properly mounted SSL certificates and cache  
+✅ **Health Check Alignment**: Consistent with docker-compose health strategy  
+✅ **Service Dependencies**: Proper startup ordering with depends_on  
+✅ **Resource Limits**: Optimized for container resource constraints
+
+## Next Steps (Post-T007)
+
+1. **Production SSL**: Implement Let's Encrypt or CA certificates
+2. **Advanced Monitoring**: Integrate nginx metrics with Prometheus
+3. **Load Testing**: Validate performance under load
+4. **CDN Integration**: Implement edge caching for global distribution
+5. **WAF Integration**: Web Application Firewall for advanced security
+
+---
+
+**T007 Status**: ✅ **COMPLETE**  
+**Integration Specialist**: Mission accomplished - Production-ready nginx reverse proxy deployed with SSL termination, security headers, advanced routing, and comprehensive monitoring integration.

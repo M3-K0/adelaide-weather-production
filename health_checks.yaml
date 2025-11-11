@@ -1,0 +1,508 @@
+---
+# Adelaide Weather System - Comprehensive Health Check Configuration
+# ================================================================
+# 
+# Complete health monitoring configuration for production deployment
+# Validates real FAISS analog forecasting pipeline with zero mock data tolerance
+# 
+# Based on T004 API fixes and T005 frontend rebuild completion
+# Implements comprehensive observability for real-time weather forecasting
+#
+# Author: Monitoring & Observability Engineer
+# Version: 1.0.0 - Production Health Monitoring
+# Date: 2025-11-11
+
+metadata:
+  version: "1.0.0"
+  system: "adelaide-weather-forecast"
+  environment: "production"
+  last_updated: "2025-11-11"
+  validation_mode: "real_data_only"  # CRITICAL: Zero tolerance for mock data
+
+# =============================================================================
+# API HEALTH ENDPOINTS CONFIGURATION
+# =============================================================================
+
+api_health:
+  base_url: "http://api:8000"
+  
+  endpoints:
+    # Kubernetes Liveness Probe
+    - name: "liveness"
+      path: "/health/live"
+      description: "Process alive and responsive check"
+      critical: true
+      timeout_ms: 2000
+      expected_status: 200
+      frequency_seconds: 30
+      failure_threshold: 3
+      success_threshold: 1
+      validation:
+        - field: "status"
+          value: "alive"
+        - field: "uptime_seconds"
+          min_value: 0
+          
+    # Kubernetes Readiness Probe  
+    - name: "readiness"
+      path: "/health/ready"
+      description: "Ready to serve traffic check"
+      critical: true
+      timeout_ms: 5000
+      expected_status: 200
+      frequency_seconds: 10
+      failure_threshold: 2
+      success_threshold: 1
+      validation:
+        - field: "status"
+          value: "ready"
+        - field: "checks_passed"
+          min_value: 3
+          
+    # Comprehensive System Health
+    - name: "detailed_health"
+      path: "/health/detailed"
+      description: "Full system health validation"
+      critical: true
+      timeout_ms: 10000
+      expected_status: 200
+      frequency_seconds: 60
+      failure_threshold: 1
+      validation:
+        # FAISS System Validation
+        - field: "faiss_indices"
+          required: true
+          validation_type: "faiss_health"
+          min_indices: 8  # 4 horizons × 2 index types
+        - field: "faiss_performance.total_queries"
+          min_value: 0
+        - field: "faiss_performance.error_rate"
+          max_value: 0.05  # <5% error rate
+        - field: "degraded_mode"
+          value: false  # Must not be in degraded mode
+        # CNN Model Validation
+        - field: "checks"
+          contains:
+            - name: "forecast_adapter"
+              status: "pass"
+            - name: "core_system"  
+              status: "pass"
+            - name: "model_files"
+              status: "pass"
+        # Real Data Pipeline Validation
+        - field: "system_metrics.memory_usage_percent"
+          max_value: 85
+        - field: "performance_baseline.forecast_p95_ms"
+          max_value: 300  # <300ms p95 latency
+          
+    # Dependencies Status
+    - name: "dependencies"
+      path: "/health/dependencies"
+      description: "External dependency health"
+      critical: false
+      timeout_ms: 8000
+      expected_status: 200
+      frequency_seconds: 120
+      validation:
+        - field: "overall_status"
+          allowed_values: ["healthy", "partial"]
+          
+    # Performance Metrics
+    - name: "performance"
+      path: "/health/performance"
+      description: "System performance validation"
+      critical: false
+      timeout_ms: 5000
+      expected_status: 200
+      frequency_seconds: 30
+      validation:
+        - field: "system_metrics.cpu_usage_percent"
+          max_value: 80
+        - field: "system_metrics.disk_usage_percent"
+          max_value: 85
+
+# =============================================================================
+# FRONTEND HEALTH ENDPOINTS CONFIGURATION  
+# =============================================================================
+
+frontend_health:
+  base_url: "http://frontend:3000"
+  
+  endpoints:
+    # Frontend Health Check
+    - name: "frontend_health"
+      path: "/api/health"
+      description: "Frontend application health"
+      critical: true
+      timeout_ms: 5000
+      expected_status: 200
+      frequency_seconds: 60
+      validation:
+        - field: "status"
+          value: "healthy"
+        - field: "checks.react_render"
+          value: "pass"
+        - field: "checks.api_connectivity"
+          value: "pass"
+        - field: "checks.static_assets"
+          value: "pass"
+          
+    # Frontend Metrics
+    - name: "frontend_metrics"
+      path: "/api/metrics/summary"
+      description: "Frontend performance metrics"
+      critical: false
+      timeout_ms: 3000
+      expected_status: 200
+      frequency_seconds: 120
+      validation:
+        - field: "page_load_time_p95"
+          max_value: 2000  # <2s p95 load time
+        - field: "api_error_rate"
+          max_value: 0.03  # <3% error rate
+
+# =============================================================================
+# FAISS SYSTEM HEALTH VALIDATION
+# =============================================================================
+
+faiss_health:
+  description: "Real-time FAISS analog forecasting validation"
+  critical: true
+  
+  indices_validation:
+    required_indices:
+      - horizon: "6h"
+        index_types: ["flatip", "ivfpq"]
+        min_vectors: 1000
+        max_age_hours: 24
+      - horizon: "12h"
+        index_types: ["flatip", "ivfpq"]
+        min_vectors: 1000
+        max_age_hours: 24
+      - horizon: "24h"
+        index_types: ["flatip", "ivfpq"]
+        min_vectors: 1000
+        max_age_hours: 24
+      - horizon: "48h"
+        index_types: ["flatip", "ivfpq"]
+        min_vectors: 1000
+        max_age_hours: 24
+        
+  performance_thresholds:
+    search_latency_p50_ms: 15   # <15ms median search
+    search_latency_p95_ms: 50   # <50ms p95 search
+    search_latency_p99_ms: 100  # <100ms p99 search
+    error_rate_max: 0.01        # <1% error rate
+    memory_usage_mb_max: 2048   # <2GB memory usage
+    
+  quality_validation:
+    min_accuracy_score: 0.95    # >95% accuracy for flatip
+    min_results_returned: 10    # At least 10 analogs
+    max_distance_threshold: 1.5 # Distance validation
+    
+  real_data_validation:
+    # CRITICAL: Validate real data pipeline
+    mock_data_tolerance: 0      # Zero tolerance for mock data
+    min_era5_files: 100         # Minimum ERA5 data files
+    data_freshness_hours: 6     # Data must be <6h old
+    weather_api_connectivity: true
+
+# =============================================================================
+# CNN MODEL HEALTH VALIDATION
+# =============================================================================
+
+cnn_model_health:
+  description: "CNN model operational validation"
+  critical: true
+  
+  model_validation:
+    model_file: "/app/models/best_model.pt"
+    min_file_size_mb: 10
+    max_file_size_mb: 500
+    max_age_days: 30
+    
+  inference_validation:
+    max_inference_time_ms: 100  # <100ms inference
+    min_prediction_accuracy: 0.85  # >85% accuracy
+    memory_usage_mb_max: 1024   # <1GB memory during inference
+    
+  input_validation:
+    required_variables: ["t2m", "msl", "u10", "v10"]
+    min_data_points: 144        # 6 days × 4 per day
+    data_quality_threshold: 0.95 # >95% valid data points
+
+# =============================================================================
+# WEATHER API INTEGRATION HEALTH
+# =============================================================================
+
+weather_api_health:
+  description: "WeatherAPI.com integration validation" 
+  critical: true
+  
+  connectivity_validation:
+    base_url: "https://api.weatherapi.com/v1"
+    timeout_ms: 5000
+    frequency_seconds: 300
+    
+  api_validation:
+    endpoints:
+      - path: "/current.json"
+        test_params: "key=test&q=Adelaide&aqi=no"
+        expected_fields: ["current", "location"]
+      - path: "/forecast.json"
+        test_params: "key=test&q=Adelaide&days=7&aqi=no"
+        expected_fields: ["forecast", "current", "location"]
+        
+  data_quality_validation:
+    required_fields:
+      current: ["temp_c", "humidity", "pressure_mb", "wind_kph"]
+      forecast: ["maxtemp_c", "mintemp_c", "totalprecip_mm"]
+    data_freshness_minutes: 60  # Data must be <1h old
+    mock_data_fallback: false   # CRITICAL: No mock data fallback
+
+# =============================================================================
+# SYSTEM HEALTH VALIDATION  
+# =============================================================================
+
+system_health:
+  description: "Infrastructure and resource validation"
+  critical: true
+  
+  resource_validation:
+    cpu_usage_max: 80          # <80% CPU usage
+    memory_usage_max: 85       # <85% memory usage  
+    disk_usage_max: 90         # <90% disk usage
+    open_files_max: 1024       # <1024 open files
+    network_connections_max: 100
+    
+  service_validation:
+    required_services:
+      - name: "redis"
+        port: 6379
+        timeout_ms: 2000
+        critical: false
+      - name: "nginx"
+        port: 80
+        timeout_ms: 3000
+        critical: true
+        
+  file_system_validation:
+    required_directories:
+      - "/app/models"
+      - "/app/embeddings" 
+      - "/app/indices"
+      - "/app/data/era5"
+    min_free_space_gb: 5       # >5GB free space
+    
+  database_validation:
+    era5_data_files:
+      min_count: 100
+      max_age_days: 365
+      file_pattern: "*.nc"
+      
+# =============================================================================
+# MONITORING THRESHOLDS & ALERTS
+# =============================================================================
+
+monitoring_thresholds:
+  critical:
+    # System failures requiring immediate attention
+    api_down_duration_seconds: 60
+    faiss_error_rate: 0.10      # >10% error rate
+    response_time_p95_ms: 500   # >500ms p95 response
+    memory_usage_percent: 90    # >90% memory usage
+    disk_usage_percent: 95      # >95% disk usage
+    
+  warning:
+    # Issues requiring attention but not immediate
+    faiss_error_rate: 0.05      # >5% error rate  
+    response_time_p95_ms: 300   # >300ms p95 response
+    cpu_usage_percent: 80       # >80% CPU usage
+    memory_usage_percent: 80    # >80% memory usage
+    disk_usage_percent: 85      # >85% disk usage
+    
+  performance_slos:
+    # Service Level Objectives
+    availability_percent: 99.5  # 99.5% uptime SLO
+    error_budget_percent: 0.5   # 0.5% error budget
+    response_time_p95_ms: 150   # <150ms p95 response SLO
+    throughput_rps_min: 10      # >10 requests/second minimum
+
+# =============================================================================
+# ALERT CONFIGURATION
+# =============================================================================
+
+alerting:
+  notification_channels:
+    critical:
+      - type: "pagerduty"
+        integration_key: "${PAGERDUTY_INTEGRATION_KEY}"
+      - type: "slack"
+        webhook_url: "${SLACK_ALERT_WEBHOOK}"
+        channel: "#incidents"
+        
+    warning:
+      - type: "slack"
+        webhook_url: "${SLACK_ALERT_WEBHOOK}"
+        channel: "#monitoring"
+      - type: "email"
+        recipients: ["devops@company.com"]
+        
+  escalation_policy:
+    critical:
+      initial_delay_minutes: 0
+      repeat_interval_minutes: 15
+      max_escalations: 3
+      
+    warning:
+      initial_delay_minutes: 5
+      repeat_interval_minutes: 60
+      max_escalations: 2
+
+# =============================================================================
+# HEALTH CHECK EXECUTION SCHEDULE
+# =============================================================================
+
+execution_schedule:
+  # High-frequency checks
+  liveness_probe:
+    interval_seconds: 30
+    timeout_seconds: 2
+    
+  readiness_probe:
+    interval_seconds: 10
+    timeout_seconds: 5
+    
+  # Medium-frequency checks
+  faiss_health:
+    interval_seconds: 60
+    timeout_seconds: 10
+    
+  api_performance:
+    interval_seconds: 30
+    timeout_seconds: 5
+    
+  # Low-frequency checks
+  comprehensive_health:
+    interval_seconds: 300
+    timeout_seconds: 30
+    
+  dependency_health:
+    interval_seconds: 120
+    timeout_seconds: 8
+
+# =============================================================================
+# VALIDATION RULES
+# =============================================================================
+
+validation_rules:
+  # Real Data Pipeline Validation
+  real_data_enforcement:
+    enabled: true
+    mock_data_detection:
+      - check_era5_data_source: true
+      - validate_timestamp_currency: true
+      - verify_data_variability: true
+    fallback_behavior: "fail"  # Fail rather than use mock data
+    
+  # FAISS Integrity Validation
+  faiss_integrity:
+    index_consistency_check: true
+    embedding_quality_validation: true
+    search_accuracy_testing: true
+    performance_regression_detection: true
+    
+  # CNN Model Validation  
+  model_integrity:
+    model_checksum_validation: true
+    inference_quality_testing: true
+    prediction_accuracy_monitoring: true
+    resource_usage_monitoring: true
+
+# =============================================================================
+# PRODUCTION READINESS CRITERIA
+# =============================================================================
+
+production_readiness:
+  description: "Criteria for production deployment approval"
+  
+  mandatory_checks:
+    - name: "faiss_indices_available"
+      description: "All 8 FAISS indices loaded and operational"
+      validation: "faiss_indices_count >= 8"
+      
+    - name: "cnn_model_operational"
+      description: "CNN model loaded and inference working"
+      validation: "forecast_adapter_status == 'pass'"
+      
+    - name: "real_data_pipeline"
+      description: "Real weather data flowing (no mock data)"
+      validation: "mock_data_percentage == 0"
+      
+    - name: "api_performance"
+      description: "API performance within SLOs"
+      validation: "response_time_p95 <= 150ms"
+      
+    - name: "system_stability"
+      description: "System resources within limits"
+      validation: "memory_usage < 85% AND cpu_usage < 80%"
+      
+  recommended_checks:
+    - name: "monitoring_active"
+      description: "All monitoring systems operational"
+      
+    - name: "alerting_configured"
+      description: "Alert rules configured and tested"
+      
+    - name: "runbooks_available"
+      description: "Incident response runbooks accessible"
+
+# =============================================================================
+# HEALTH CHECK REPORTING
+# =============================================================================
+
+reporting:
+  formats:
+    - type: "prometheus"
+      endpoint: "/metrics"
+      labels: ["service", "environment", "version"]
+      
+    - type: "json"
+      endpoint: "/health/detailed"
+      include_metadata: true
+      include_performance_history: true
+      
+    - type: "grafana"
+      dashboard_id: "adelaide-weather-health"
+      panels: ["system_overview", "faiss_performance", "api_metrics"]
+      
+  metrics_retention:
+    detailed_metrics_days: 7
+    summary_metrics_days: 30
+    alert_history_days: 90
+    performance_samples_count: 10000
+
+# =============================================================================
+# CONFIGURATION VALIDATION
+# =============================================================================
+
+config_validation:
+  schema_version: "1.0"
+  required_environment_variables:
+    - "WEATHER_API_KEY"
+    - "REDIS_URL"
+    - "PROMETHEUS_URL"
+    - "GRAFANA_URL"
+    
+  optional_environment_variables:
+    - "PAGERDUTY_INTEGRATION_KEY"
+    - "SLACK_ALERT_WEBHOOK"
+    - "ALERT_EMAIL_RECIPIENTS"
+    
+  configuration_checks:
+    - name: "indices_directory_exists"
+      validation: "directory_exists('/app/indices')"
+    - name: "model_file_exists"
+      validation: "file_exists('/app/models/best_model.pt')"
+    - name: "prometheus_accessible"
+      validation: "http_accessible('${PROMETHEUS_URL}')"

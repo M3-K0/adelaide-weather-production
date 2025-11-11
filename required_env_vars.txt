@@ -1,0 +1,148 @@
+Adelaide Weather Forecasting System - Environment Variables Analysis
+================================================================
+
+Investigation Date: 2025-11-11
+Investigation Scope: T001 - Mock Data Fallback Root Cause Analysis
+
+SUMMARY
+-------
+The investigation revealed that MISSING ENVIRONMENT VARIABLES are NOT the root cause 
+of the mock data fallback. The issue is a data preprocessing dimension mismatch.
+
+REQUIRED ENVIRONMENT VARIABLES: NONE
+====================================
+
+The Adelaide Weather Forecasting System operates successfully with minimal configuration.
+No additional environment variables are required beyond what currently exists.
+
+CURRENT WORKING CONFIGURATION
+==============================
+
+File: .env
+----------
+API_TOKEN=demo-token-12345
+
+File: .env.production  
+---------------------
+API_TOKEN=demo-token-12345
+
+ENVIRONMENT VARIABLES INVESTIGATED
+===================================
+
+✅ API_TOKEN
+   Status: Present
+   Value: demo-token-12345
+   Usage: API authentication
+   Required: Yes (already configured)
+
+❌ WEATHER_API_KEY  
+   Status: Missing
+   Documented Value: 8fb71420c6364a98919121035252410
+   Usage: WeatherAPI.com integration
+   Required: NO - Not needed for FAISS analog forecasting
+   Note: System uses ERA5 historical data, not live weather API
+
+❌ ENVIRONMENT
+   Status: Missing
+   Usage: Environment detection (development/staging/production)
+   Required: NO - System defaults to appropriate behavior
+
+❌ LOG_LEVEL
+   Status: Missing  
+   Usage: Logging configuration
+   Required: NO - System uses appropriate default logging
+
+❌ FAISS_INDEX_PATH
+   Status: Missing
+   Usage: Custom FAISS index location
+   Required: NO - System automatically finds indices/ directory
+
+❌ MODEL_PATH
+   Status: Missing
+   Usage: Custom model checkpoint location  
+   Required: NO - System automatically finds outputs/training_production_demo/
+
+❌ EMBEDDINGS_PATH
+   Status: Missing
+   Usage: Custom embeddings location
+   Required: NO - System automatically finds embeddings/ directory
+
+OPTIONAL ENVIRONMENT VARIABLES
+===============================
+
+The following variables CAN be set but are NOT required:
+
+WEATHER_API_KEY=8fb71420c6364a98919121035252410
+   Purpose: Enable live weather data fetching (optional enhancement)
+   Impact: None on core FAISS forecasting functionality
+
+ENVIRONMENT=production
+   Purpose: Explicit environment detection
+   Impact: System auto-detects appropriately
+
+LOG_LEVEL=INFO
+   Purpose: Control logging verbosity  
+   Impact: System uses appropriate defaults
+
+FAISS_INDEX_PATH=/custom/path/to/indices
+   Purpose: Override default index location
+   Impact: System finds indices automatically
+
+MODEL_PATH=/custom/path/to/model.pt
+   Purpose: Override default model location
+   Impact: System finds model automatically
+
+EMBEDDINGS_PATH=/custom/path/to/embeddings  
+   Purpose: Override default embeddings location
+   Impact: System finds embeddings automatically
+
+VERIFICATION RESULTS
+====================
+
+✅ Model Loading: PASSED (no env vars needed)
+✅ FAISS Indices: PASSED (auto-discovery works)
+✅ Core Forecaster: PASSED (default configuration sufficient)
+✅ Analog Search Service: PASSED (no additional config needed)
+✅ Forecast Adapter: PASSED (minimal config sufficient)
+
+ACTUAL ROOT CAUSE
+==================
+
+The mock data fallback is NOT caused by missing environment variables.
+
+Root Cause: Neural network input dimension mismatch
+- Model expects: 11 input variables
+- Pattern extraction provides: 9 input variables
+- Fix required: Update _extract_weather_pattern() method
+
+See root_cause_analysis.md for complete technical details.
+
+CONFIGURATION RECOMMENDATIONS
+==============================
+
+MINIMAL WORKING CONFIGURATION (current):
+```
+# .env
+API_TOKEN=demo-token-12345
+```
+
+ENHANCED CONFIGURATION (optional):
+```
+# .env.production
+API_TOKEN=demo-token-12345
+WEATHER_API_KEY=8fb71420c6364a98919121035252410
+ENVIRONMENT=production
+LOG_LEVEL=INFO
+```
+
+CONCLUSION
+==========
+
+No additional environment variables are required to fix the mock data fallback issue.
+The system is properly configured from an environment perspective.
+
+The fix requires code changes to the weather pattern extraction logic, not 
+environment configuration changes.
+
+Total Required Environment Variables: 1 (API_TOKEN - already present)
+Total Missing Environment Variables Needed: 0

@@ -1,13 +1,7 @@
-# Adelaide Weather Forecasting UI - Production Dockerfile
-FROM node:18-alpine as base
+# Adelaide Weather Forecasting UI - Simple Production Dockerfile
+# Uses pre-built application from local .next directory
 
-# Set environment variables
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV CI=true
-
-# Install system dependencies
-RUN apk update && apk add --no-cache curl
+FROM node:18-alpine AS production
 
 # Create app user for security
 RUN addgroup --system --gid 1001 nodejs
@@ -16,31 +10,27 @@ RUN adduser --system --uid 1001 nextjs
 # Set work directory
 WORKDIR /app
 
-# Copy package files first for better caching
-COPY package*.json ./
+# Set production environment
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
-# Install dependencies
-RUN npm ci --only=production --ignore-scripts
+# Copy pre-built application (using local successful build)
+COPY .next/standalone ./
+COPY .next/static ./.next/static
+COPY public ./public
 
-# Copy application code
-COPY . .
-
-# Generate TypeScript types if needed
-RUN npm run generate-types || true
-
-# Build application
-RUN npm run build
-
-# Set ownership and permissions
+# Change ownership to nextjs user
 RUN chown -R nextjs:nodejs /app
-USER nextjs
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:3000/api/health || exit 1
+# Switch to non-root user
+USER nextjs
 
 # Expose port
 EXPOSE 3000
 
+# Basic health check using Node.js (no external dependencies)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD node -e "const http = require('http'); const req = http.request('http://localhost:3000/api/health', res => process.exit(res.statusCode === 200 ? 0 : 1)); req.on('error', () => process.exit(1)); req.end();"
+
 # Production command
-CMD ["npm", "start"]
+CMD ["node", "server.js"]

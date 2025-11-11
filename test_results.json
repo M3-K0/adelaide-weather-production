@@ -1,0 +1,74 @@
+{
+  "test_execution_id": "integration_test_1762875959",
+  "timestamp": "2025-11-11T15:45:59.385235",
+  "test_type": "comprehensive_integration",
+  "status": "completed",
+  "tests": [
+    {
+      "test_name": "faiss_data_integrity",
+      "status": "PASS",
+      "details": "All FAISS data files present and valid",
+      "execution_time": 0.01740431785583496,
+      "timestamp": "2025-11-11T15:45:59.402732"
+    },
+    {
+      "test_name": "core_modules_availability",
+      "status": "PASS",
+      "details": "All core modules available",
+      "execution_time": 1.754194974899292,
+      "timestamp": "2025-11-11T15:46:01.157079"
+    },
+    {
+      "test_name": "api_module_structure",
+      "status": "PASS",
+      "details": "API module structure valid",
+      "execution_time": 0.0009138584136962891,
+      "timestamp": "2025-11-11T15:46:01.158015"
+    },
+    {
+      "test_name": "frontend_structure",
+      "status": "PASS",
+      "details": "Frontend structure valid",
+      "execution_time": 0.00046133995056152344,
+      "timestamp": "2025-11-11T15:46:01.158495"
+    },
+    {
+      "test_name": "nginx_configuration",
+      "status": "PASS",
+      "details": "Nginx configuration valid",
+      "execution_time": 6.198883056640625e-05,
+      "timestamp": "2025-11-11T15:46:01.158574"
+    },
+    {
+      "test_name": "monitoring_configuration",
+      "status": "PASS",
+      "details": "Monitoring configuration present",
+      "execution_time": 0.0002970695495605469,
+      "timestamp": "2025-11-11T15:46:01.158878"
+    },
+    {
+      "test_name": "docker_compose_files",
+      "status": "PASS",
+      "details": "Found compose files: ['docker-compose.production.yml', 'docker-compose.yml']",
+      "execution_time": 3.123283386230469e-05,
+      "timestamp": "2025-11-11T15:46:01.158922"
+    },
+    {
+      "test_name": "environment_configuration",
+      "status": "PASS",
+      "details": "Environment files found: ['.env.production', '.env.example']",
+      "execution_time": 0.00026702880859375,
+      "timestamp": "2025-11-11T15:46:01.159198"
+    },
+    {
+      "test_name": "system_integration_readiness",
+      "status": "EXCELLENT",
+      "details": "Pass rate: 100.0% (8/8), Readiness: ready_for_production, Failed: 0, Errors: 0",
+      "execution_time": 4.291534423828125e-06,
+      "timestamp": "2025-11-11T15:46:01.159219"
+    }
+  ],
+  "overall_score": 1.0,
+  "recommendations": [],
+  "readiness_status": "ready_for_production"
+}

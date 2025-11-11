@@ -1,0 +1,415 @@
+{
+  "timestamp": "2025-11-12T00:56:47.731016",
+  "validation_summary": {
+    "total_indices": 8,
+    "healthy_indices": 8,
+    "failed_indices": 0,
+    "missing_indices": 0,
+    "total_vectors": 78888
+  },
+  "indices": {
+    "faiss_6h_flatip": {
+      "index_path": "/home/micha/adelaide-weather-final/indices/faiss_6h_flatip.faiss",
+      "status": "healthy",
+      "errors": [],
+      "metrics": {
+        "file_size_mb": 6.419964790344238,
+        "modified_time": "2025-11-05T04:11:33.987746",
+        "total_vectors": 6574,
+        "vector_dimension": 256,
+        "is_trained": true,
+        "metric_type": 0,
+        "search_test": {
+          "success": true,
+          "search_time_ms": 1.3194084167480469,
+          "results_count": 10,
+          "valid_indices": true,
+          "distances_range": [
+            3.125363826751709,
+            4.119913101196289
+          ]
+        }
+      },
+      "data_integrity": {
+        "embeddings_shape": [
+          6574,
+          256
+        ],
+        "embeddings_dtype": "float32",
+        "embeddings_index_consistency": true,
+        "metadata_records": 6574,
+        "metadata_columns": [
+          "init_time",
+          "horizon",
+          "embedding_idx"
+        ],
+        "metadata_index_consistency": true
+      }
+    },
+    "faiss_6h_ivfpq": {
+      "index_path": "/home/micha/adelaide-weather-final/indices/faiss_6h_ivfpq.faiss",
+      "status": "healthy",
+      "errors": [],
+      "metrics": {
+        "file_size_mb": 0.5659828186035156,
+        "modified_time": "2025-11-05T04:11:34.327747",
+        "total_vectors": 6574,
+        "vector_dimension": 256,
+        "is_trained": true,
+        "metric_type": 1,
+        "search_test": {
+          "success": true,
+          "search_time_ms": 1.168966293334961,
+          "results_count": 10,
+          "valid_indices": true,
+          "distances_range": [
+            279.5799865722656,
+            280.2362060546875
+          ]
+        }
+      },
+      "data_integrity": {
+        "embeddings_shape": [
+          6574,
+          256
+        ],
+        "embeddings_dtype": "float32",
+        "embeddings_index_consistency": true,
+        "metadata_records": 6574,
+        "metadata_columns": [
+          "init_time",
+          "horizon",
+          "embedding_idx"
+        ],
+        "metadata_index_consistency": true
+      }
+    },
+    "faiss_12h_flatip": {
+      "index_path": "/home/micha/adelaide-weather-final/indices/faiss_12h_flatip.faiss",
+      "status": "healthy",
+      "errors": [],
+      "metrics": {
+        "file_size_mb": 6.419964790344238,
+        "modified_time": "2025-11-05T04:11:34.387747",
+        "total_vectors": 6574,
+        "vector_dimension": 256,
+        "is_trained": true,
+        "metric_type": 0,
+        "search_test": {
+          "success": true,
+          "search_time_ms": 0.1518726348876953,
+          "results_count": 10,
+          "valid_indices": true,
+          "distances_range": [
+            3.1015565395355225,
+            3.748574733734131
+          ]
+        }
+      },
+      "data_integrity": {
+        "embeddings_shape": [
+          6574,
+          256
+        ],
+        "embeddings_dtype": "float32",
+        "embeddings_index_consistency": true,
+        "metadata_records": 6574,
+        "metadata_columns": [
+          "init_time",
+          "horizon",
+          "embedding_idx"
+        ],
+        "metadata_index_consistency": true
+      }
+    },
+    "faiss_12h_ivfpq": {
+      "index_path": "/home/micha/adelaide-weather-final/indices/faiss_12h_ivfpq.faiss",
+      "status": "healthy",
+      "errors": [],
+      "metrics": {
+        "file_size_mb": 0.5659828186035156,
+        "modified_time": "2025-11-05T04:11:34.687747",
+        "total_vectors": 6574,
+        "vector_dimension": 256,
+        "is_trained": true,
+        "metric_type": 1,
+        "search_test": {
+          "success": true,
+          "search_time_ms": 0.308990478515625,
+          "results_count": 10,
+          "valid_indices": true,
+          "distances_range": [
+            228.72457885742188,
+            230.00241088867188
+          ]
+        }
+      },
+      "data_integrity": {
+        "embeddings_shape": [
+          6574,
+          256
+        ],
+        "embeddings_dtype": "float32",
+        "embeddings_index_consistency": true,
+        "metadata_records": 6574,
+        "metadata_columns": [
+          "init_time",
+          "horizon",
+          "embedding_idx"
+        ],
+        "metadata_index_consistency": true
+      }
+    },
+    "faiss_24h_flatip": {
+      "index_path": "/home/micha/adelaide-weather-final/indices/faiss_24h_flatip.faiss",
+      "status": "healthy",
+      "errors": [],
+      "metrics": {
+        "file_size_mb": 12.839886665344238,
+        "modified_time": "2025-11-05T04:11:34.823747",
+        "total_vectors": 13148,
+        "vector_dimension": 256,
+        "is_trained": true,
+        "metric_type": 0,
+        "search_test": {
+          "success": true,
+          "search_time_ms": 0.3399848937988281,
+          "results_count": 10,
+          "valid_indices": true,
+          "distances_range": [
+            3.1612815856933594,
+            3.9651825428009033
+          ]
+        }
+      },
+      "data_integrity": {
+        "embeddings_shape": [
+          13148,
+          256
+        ],
+        "embeddings_dtype": "float32",
+        "embeddings_index_consistency": true,
+        "metadata_records": 13148,
+        "metadata_columns": [
+          "init_time",
+          "horizon",
+          "embedding_idx"
+        ],
+        "metadata_index_consistency": true
+      }
+    },
+    "faiss_24h_ivfpq": {
+      "index_path": "/home/micha/adelaide-weather-final/indices/faiss_24h_ivfpq.faiss",
+      "status": "healthy",
+      "errors": [],
+      "metrics": {
+        "file_size_mb": 0.8030586242675781,
+        "modified_time": "2025-11-05T04:11:35.531749",
+        "total_vectors": 13148,
+        "vector_dimension": 256,
+        "is_trained": true,
+        "metric_type": 1,
+        "search_test": {
+          "success": true,
+          "search_time_ms": 0.2536773681640625,
+          "results_count": 10,
+          "valid_indices": true,
+          "distances_range": [
+            263.4242248535156,
+            264.6379699707031
+          ]
+        }
+      },
+      "data_integrity": {
+        "embeddings_shape": [
+          13148,
+          256
+        ],
+        "embeddings_dtype": "float32",
+        "embeddings_index_consistency": true,
+        "metadata_records": 13148,
+        "metadata_columns": [
+          "init_time",
+          "horizon",
+          "embedding_idx"
+        ],
+        "metadata_index_consistency": true
+      }
+    },
+    "faiss_48h_flatip": {
+      "index_path": "/home/micha/adelaide-weather-final/indices/faiss_48h_flatip.faiss",
+      "status": "healthy",
+      "errors": [],
+      "metrics": {
+        "file_size_mb": 12.839886665344238,
+        "modified_time": "2025-11-05T04:11:35.659749",
+        "total_vectors": 13148,
+        "vector_dimension": 256,
+        "is_trained": true,
+        "metric_type": 0,
+        "search_test": {
+          "success": true,
+          "search_time_ms": 0.32520294189453125,
+          "results_count": 10,
+          "valid_indices": true,
+          "distances_range": [
+            2.8810110092163086,
+            3.316107749938965
+          ]
+        }
+      },
+      "data_integrity": {
+        "embeddings_shape": [
+          13148,
+          256
+        ],
+        "embeddings_dtype": "float32",
+        "embeddings_index_consistency": true,
+        "metadata_records": 13148,
+        "metadata_columns": [
+          "init_time",
+          "horizon",
+          "embedding_idx"
+        ],
+        "metadata_index_consistency": true
+      }
+    },
+    "faiss_48h_ivfpq": {
+      "index_path": "/home/micha/adelaide-weather-final/indices/faiss_48h_ivfpq.faiss",
+      "status": "healthy",
+      "errors": [],
+      "metrics": {
+        "file_size_mb": 0.8030586242675781,
+        "modified_time": "2025-11-05T04:11:36.351750",
+        "total_vectors": 13148,
+        "vector_dimension": 256,
+        "is_trained": true,
+        "metric_type": 1,
+        "search_test": {
+          "success": true,
+          "search_time_ms": 0.27108192443847656,
+          "results_count": 10,
+          "valid_indices": true,
+          "distances_range": [
+            209.86846923828125,
+            210.8291015625
+          ]
+        }
+      },
+      "data_integrity": {
+        "embeddings_shape": [
+          13148,
+          256
+        ],
+        "embeddings_dtype": "float32",
+        "embeddings_index_consistency": true,
+        "metadata_records": 13148,
+        "metadata_columns": [
+          "init_time",
+          "horizon",
+          "embedding_idx"
+        ],
+        "metadata_index_consistency": true
+      }
+    }
+  },
+  "data_pipeline_status": {
+    "outcomes": {
+      "outcomes_6h": {
+        "available": true,
+        "shape": [
+          7168,
+          9
+        ],
+        "dtype": "float32",
+        "file_size_mb": 0.2462158203125
+      },
+      "metadata_6h_clean": {
+        "available": true,
+        "records": 7168,
+        "columns": [
+          "init_time",
+          "month",
+          "hour",
+          "day_of_year",
+          "season",
+          "lead_time",
+          "valid_time"
+        ],
+        "file_size_mb": 0.13335227966308594
+      },
+      "outcomes_12h": {
+        "available": true,
+        "shape": [
+          7168,
+          9
+        ],
+        "dtype": "float32",
+        "file_size_mb": 0.2462158203125
+      },
+      "metadata_12h_clean": {
+        "available": true,
+        "records": 7168,
+        "columns": [
+          "init_time",
+          "month",
+          "hour",
+          "day_of_year",
+          "season",
+          "lead_time",
+          "valid_time"
+        ],
+        "file_size_mb": 0.15170669555664062
+      },
+      "outcomes_24h": {
+        "available": true,
+        "shape": [
+          14336,
+          9
+        ],
+        "dtype": "float32",
+        "file_size_mb": 0.4923095703125
+      },
+      "metadata_24h_clean": {
+        "available": true,
+        "records": 14336,
+        "columns": [
+          "init_time",
+          "month",
+          "hour",
+          "day_of_year",
+          "season",
+          "lead_time",
+          "valid_time"
+        ],
+        "file_size_mb": 0.2624530792236328
+      },
+      "outcomes_48h": {
+        "available": true,
+        "shape": [
+          14336,
+          9
+        ],
+        "dtype": "float32",
+        "file_size_mb": 0.4923095703125
+      },
+      "metadata_48h_clean": {
+        "available": true,
+        "records": 14336,
+        "columns": [
+          "init_time",
+          "month",
+          "hour",
+          "day_of_year",
+          "season",
+          "lead_time",
+          "valid_time"
+        ],
+        "file_size_mb": 0.2624521255493164
+      }
+    }
+  },
+  "recommendations": [
+    "SUCCESS: All FAISS indices are healthy and operational."
+  ]
+}

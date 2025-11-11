@@ -15,8 +15,8 @@ import { FORECAST_HORIZONS, WEATHER_VARIABLES } from '@/types';
  * TODO: Replace with actual backend integration when available
  */
 
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000';
-const API_TOKEN = process.env.API_TOKEN;
+// const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000';
+// const API_TOKEN = process.env.API_TOKEN;
 
 // Mock data generator for development
 function generateMockAnalogData(horizon: ForecastHorizon): AnalogExplorerData {

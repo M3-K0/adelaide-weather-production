@@ -1,0 +1,205 @@
+{
+  "test_type": "faiss_integration",
+  "timestamp": 1762876103.7146964,
+  "tests": [
+    {
+      "test_name": "faiss_index_loading",
+      "status": "PASS",
+      "details": "Loaded 2 indices successfully",
+      "timestamp": 1762876103.749879,
+      "metrics": {
+        "loaded_indices": 2,
+        "average_load_time": "0.017s",
+        "index_details": {
+          "faiss_48h_flatip.faiss": {
+            "ntotal": 13148,
+            "d": 256,
+            "is_trained": true
+          },
+          "faiss_6h_flatip.faiss": {
+            "ntotal": 6574,
+            "d": 256,
+            "is_trained": true
+          }
+        }
+      }
+    },
+    {
+      "test_name": "embeddings_loading",
+      "status": "PASS",
+      "details": "Loaded 4 embedding files successfully",
+      "timestamp": 1762876103.780205,
+      "metrics": {
+        "loaded_files": 4,
+        "total_size_mb": "38.5MB",
+        "average_load_time": "0.007s",
+        "embedding_details": {
+          "embeddings_24h.npy": {
+            "shape": [
+              13148,
+              256
+            ],
+            "dtype": "float32",
+            "size_mb": 12.83984375
+          },
+          "embeddings_48h.npy": {
+            "shape": [
+              13148,
+              256
+            ],
+            "dtype": "float32",
+            "size_mb": 12.83984375
+          },
+          "embeddings_6h.npy": {
+            "shape": [
+              6574,
+              256
+            ],
+            "dtype": "float32",
+            "size_mb": 6.419921875
+          },
+          "embeddings_12h.npy": {
+            "shape": [
+              6574,
+              256
+            ],
+            "dtype": "float32",
+            "size_mb": 6.419921875
+          }
+        }
+      }
+    },
+    {
+      "test_name": "outcomes_data_loading",
+      "status": "PASS",
+      "details": "Loaded 4 outcome files successfully",
+      "timestamp": 1762876103.7867992,
+      "metrics": {
+        "loaded_files": 4,
+        "outcome_details": {
+          "outcomes_12h.npy": {
+            "shape": [
+              7168,
+              9
+            ],
+            "dtype": "float32",
+            "min_value": -33.22993469238281,
+            "max_value": 5967.76904296875,
+            "mean_value": 786.8358154296875
+          },
+          "outcomes_48h.npy": {
+            "shape": [
+              14336,
+              9
+            ],
+            "dtype": "float32",
+            "min_value": -33.86381530761719,
+            "max_value": 5967.76904296875,
+            "mean_value": 787.4566040039062
+          },
+          "outcomes_6h.npy": {
+            "shape": [
+              7168,
+              9
+            ],
+            "dtype": "float32",
+            "min_value": -33.86381530761719,
+            "max_value": 5957.75830078125,
+            "mean_value": 788.1087646484375
+          },
+          "outcomes_24h.npy": {
+            "shape": [
+              14336,
+              9
+            ],
+            "dtype": "float32",
+            "min_value": -33.86381530761719,
+            "max_value": 5967.76904296875,
+            "mean_value": 787.4610595703125
+          }
+        }
+      }
+    },
+    {
+      "test_name": "faiss_search_performance",
+      "status": "PASS",
+      "details": "FAISS search performance test completed",
+      "timestamp": 1762876103.795163,
+      "metrics": {
+        "index_file": "faiss_48h_flatip.faiss",
+        "embedding_file": "embeddings_24h.npy",
+        "index_size": 13148,
+        "vector_dimension": 256,
+        "queries_tested": 5,
+        "k_results": 10,
+        "avg_search_time": "0.0004s",
+        "min_search_time": "0.0001s",
+        "max_search_time": "0.0015s",
+        "performance_acceptable": true,
+        "sample_distances": [
+          0.21456703543663025,
+          0.21425321698188782,
+          0.21343320608139038
+        ],
+        "sample_indices": [
+          11632,
+          402,
+          1738
+        ]
+      }
+    },
+    {
+      "test_name": "analog_forecast_simulation",
+      "status": "PASS",
+      "details": "Completed 6h analog forecast simulation",
+      "timestamp": 1762876103.7996318,
+      "metrics": {
+        "horizon": "6h",
+        "total_time": "0.0036s",
+        "analogs_found": 10,
+        "forecast_value": 807.1357421875,
+        "analog_distances": [
+          1.0,
+          0.22691455483436584,
+          0.22627322375774384
+        ],
+        "sample_outcomes": [
+          [
+            5781.7939453125,
+            299.275146484375,
+            289.525146484375,
+            0.0069198282435536385,
+            8.896503448486328,
+            -2.44598388671875,
+            11.12062931060791,
+            -3.0574798583984375,
+            1386.568115234375
+          ],
+          [
+            5707.7265625,
+            294.01873779296875,
+            284.26873779296875,
+            0.00400038156658411,
+            9.22114372253418,
+            -6.647168159484863,
+            11.526429176330566,
+            -8.3089599609375,
+            1140.6802978515625
+          ],
+          [
+            5558.29638671875,
+            284.0570068359375,
+            274.3070068359375,
+            0.0041895294561982155,
+            4.973593711853027,
+            -4.690204620361328,
+            6.216992378234863,
+            -5.86275577545166,
+            751.6521606445312
+          ]
+        ]
+      }
+    }
+  ],
+  "performance_metrics": {}
+}

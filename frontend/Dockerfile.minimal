@@ -1,0 +1,73 @@
+# Adelaide Weather Forecasting UI - Minimal Production Dockerfile
+# Simplified build without problematic Alpine packages
+
+# Build stage - includes ALL dependencies for successful build
+FROM node:18-alpine AS build
+
+# Set build environment
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV CI=true
+
+# Create app user for security
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Set work directory
+WORKDIR /app
+
+# Copy package files first for better caching
+COPY package*.json ./
+
+# Install ALL dependencies (including devDependencies needed for build)
+RUN npm ci --include=dev
+
+# Copy application code
+COPY . .
+
+# Change ownership before build
+RUN chown -R nextjs:nodejs /app
+
+# Switch to nextjs user for build
+USER nextjs
+
+# Build application (now has access to all dev dependencies)
+RUN npm run build
+
+# Switch back to root for cleanup
+USER root
+
+# Remove dev dependencies to reduce final image size
+RUN npm prune --production
+
+# Production stage - optimized runtime image
+FROM node:18-alpine AS production
+
+# Create app user for security
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Set work directory
+WORKDIR /app
+
+# Set production environment
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Copy only production artifacts from build stage
+COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=build --chown=nextjs:nodejs /app/public ./public
+
+# Switch to non-root user
+USER nextjs
+
+# Expose port
+EXPOSE 3000
+
+# Basic health check using Node.js (no curl dependency)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD node -e "const http = require('http'); const req = http.request('http://localhost:3000/api/health', res => process.exit(res.statusCode === 200 ? 0 : 1)); req.on('error', () => process.exit(1)); req.end();"
+
+# Production command
+CMD ["node", "server.js"]

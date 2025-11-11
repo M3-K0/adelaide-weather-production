@@ -188,7 +188,7 @@ class AnalogEnsembleForecaster:
         return normalized
         
     def _extract_weather_pattern(self, query_time: Union[str, pd.Timestamp]) -> Optional[np.ndarray]:
-        """Extract weather pattern for a specific timestamp."""
+        """Extract weather pattern for a specific timestamp - FIXED VERSION."""
         if isinstance(query_time, str):
             query_time = pd.to_datetime(query_time)
         
@@ -197,42 +197,102 @@ class AnalogEnsembleForecaster:
             return self._generate_mock_weather_pattern(query_time)
             
         try:
-            # Extract surface variables (MSL pressure)
+            # Extract surface variables
             surface_data = self.surface_ds.sel(time=query_time, method='nearest')
-            msl_data = surface_data['msl'].values
             
-            # Extract pressure level variables
+            # Extract pressure level variables  
             pressure_data = self.pressure_ds.sel(time=query_time, method='nearest')
             
-            # Build weather array
+            # Build weather array in TRAINING ORDER (11 variables)
             all_arrays = []
             
-            # Surface MSL pressure (resize to 21x21)
-            if msl_data.shape == (16, 16):
-                msl_resized = np.resize(msl_data, (21, 21))
-                all_arrays.append(msl_resized)
-            else:
+            # 1. 2m temperature
+            try:
+                t2m_data = surface_data['2m_temperature'].values
+                if t2m_data.shape == (16, 16):
+                    all_arrays.append(np.resize(t2m_data, (21, 21)))
+                else:
+                    return None
+            except KeyError:
+                logger.warning("2m_temperature not found, using fallback")
                 return None
-                
-            # Pressure level variables: z, t, u, v at 500 and 850 hPa
-            pressure_vars = ['z', 't', 'u', 'v']
-            for var in pressure_vars:
-                for level in [500, 850]:
-                    try:
-                        var_data = pressure_data[var].sel(isobaricInhPa=level).values
-                        if var_data.shape == (16, 16):
-                            var_resized = np.resize(var_data, (21, 21))
-                            all_arrays.append(var_resized)
-                        else:
-                            return None
-                    except KeyError:
+            
+            # 2. Mean sea level pressure
+            try:
+                msl_data = surface_data['msl'].values  
+                if msl_data.shape == (16, 16):
+                    all_arrays.append(np.resize(msl_data, (21, 21)))
+                else:
+                    return None
+            except KeyError:
+                logger.warning("msl not found, using fallback")
+                return None
+            
+            # 3. 10m u-component of wind
+            try:
+                u10_data = surface_data['10m_u_component_of_wind'].values
+                if u10_data.shape == (16, 16):
+                    all_arrays.append(np.resize(u10_data, (21, 21)))
+                else:
+                    return None
+            except KeyError:
+                logger.warning("10m_u_component_of_wind not found, using fallback")
+                return None
+            
+            # 4. 10m v-component of wind
+            try:
+                v10_data = surface_data['10m_v_component_of_wind'].values
+                if v10_data.shape == (16, 16):
+                    all_arrays.append(np.resize(v10_data, (21, 21)))
+                else:
+                    return None
+            except KeyError:
+                logger.warning("10m_v_component_of_wind not found, using fallback")
+                return None
+            
+            # 5. Total precipitation
+            try:
+                tp_data = surface_data['total_precipitation'].values
+                if tp_data.shape == (16, 16):
+                    all_arrays.append(np.resize(tp_data, (21, 21)))
+                else:
+                    return None
+            except KeyError:
+                logger.warning("total_precipitation not found, using zero fallback")
+                # Use zeros if precipitation data not available
+                all_arrays.append(np.zeros((21, 21)))
+            
+            # 6-9. 500mb variables (geopotential, temperature, u_wind, v_wind)
+            for var in ['z', 't', 'u', 'v']:
+                try:
+                    var_data = pressure_data[var].sel(isobaricInhPa=500).values
+                    if var_data.shape == (16, 16):
+                        all_arrays.append(np.resize(var_data, (21, 21)))
+                    else:
                         return None
-                        
-            # Stack to create input array (21, 21, 9)
-            if len(all_arrays) == 9:
+                except KeyError:
+                    logger.warning(f"{var} at 500mb not found, using fallback")
+                    return None
+            
+            # 10-11. 850mb variables (geopotential, temperature only - NO u/v winds)
+            for var in ['z', 't']:
+                try:
+                    var_data = pressure_data[var].sel(isobaricInhPa=850).values
+                    if var_data.shape == (16, 16):
+                        all_arrays.append(np.resize(var_data, (21, 21)))
+                    else:
+                        return None
+                except KeyError:
+                    logger.warning(f"{var} at 850mb not found, using fallback")
+                    return None
+            
+            # Stack to create input array (21, 21, 11)
+            if len(all_arrays) == 11:
                 weather_array = np.stack(all_arrays, axis=-1)
+                logger.info(f"Successfully extracted weather pattern with {weather_array.shape} dimensions")
                 return self._normalize_variables(weather_array)
             else:
+                logger.error(f"Expected 11 variables but got {len(all_arrays)}")
                 return None
                 
         except Exception as e:
@@ -240,25 +300,27 @@ class AnalogEnsembleForecaster:
             return self._generate_mock_weather_pattern(query_time)
     
     def _generate_mock_weather_pattern(self, query_time: pd.Timestamp) -> np.ndarray:
-        """Generate a realistic mock weather pattern for testing."""
+        """Generate a realistic mock weather pattern for testing - FIXED VERSION."""
         # Generate deterministic mock data based on time for consistency
         np.random.seed(hash(str(query_time)) % 2**32)
         
-        # Create 21x21x9 weather pattern
-        # Variables: MSL pressure, z500, t500, u500, v500, z850, t850, u850, v850
-        weather_array = np.zeros((21, 21, 9))
+        # Create 21x21x11 weather pattern - TRAINING ORDER
+        # Variables: t2m, msl, u10, v10, tp, z500, t500, u500, v500, z850, t850
+        weather_array = np.zeros((21, 21, 11))
         
-        # Generate realistic ranges for each variable
+        # Generate realistic ranges for each variable in TRAINING ORDER
         variable_configs = [
-            {'mean': 101325, 'std': 1000},    # MSL pressure (Pa)
-            {'mean': 5500, 'std': 100},       # z500 (m)
-            {'mean': 250, 'std': 10},         # t500 (K)
-            {'mean': 20, 'std': 10},          # u500 (m/s)
-            {'mean': 0, 'std': 10},           # v500 (m/s)
-            {'mean': 1500, 'std': 50},        # z850 (m)
-            {'mean': 280, 'std': 15},         # t850 (K)
-            {'mean': 10, 'std': 8},           # u850 (m/s)
-            {'mean': 0, 'std': 8}             # v850 (m/s)
+            {'mean': 288, 'std': 15},         # t2m: 2m temperature (K)
+            {'mean': 101325, 'std': 1000},    # msl: Mean sea level pressure (Pa)
+            {'mean': 5, 'std': 8},            # u10: 10m u-wind (m/s)
+            {'mean': 0, 'std': 8},            # v10: 10m v-wind (m/s)
+            {'mean': 0, 'std': 0.001},        # tp: Total precipitation (m)
+            {'mean': 5500, 'std': 100},       # z500: geopotential at 500mb (m)
+            {'mean': 250, 'std': 10},         # t500: temperature at 500mb (K)
+            {'mean': 20, 'std': 10},          # u500: u-wind at 500mb (m/s)
+            {'mean': 0, 'std': 10},           # v500: v-wind at 500mb (m/s)
+            {'mean': 1500, 'std': 50},        # z850: geopotential at 850mb (m)
+            {'mean': 280, 'std': 15}          # t850: temperature at 850mb (K)
         ]
         
         for i, config in enumerate(variable_configs):
@@ -273,6 +335,7 @@ class AnalogEnsembleForecaster:
                 # Fallback if scipy not available
                 weather_array[:, :, i] = base_field
         
+        logger.info(f"Generated mock weather pattern with {weather_array.shape} dimensions")
         return self._normalize_variables(weather_array)
             
     def _generate_query_embedding(self, weather_pattern: np.ndarray, 

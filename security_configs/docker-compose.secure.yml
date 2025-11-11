@@ -1,0 +1,651 @@
+version: '3.8'
+
+# =============================================================================
+# Adelaide Weather Forecasting System - Secure Production Configuration
+# =============================================================================
+# 
+# Security-hardened Docker Compose configuration implementing defense-in-depth
+# security controls for production deployment.
+#
+# Security Features:
+# - All services run as non-root users
+# - Secrets management integration
+# - Network segmentation and isolation
+# - Read-only filesystem mounts where possible
+# - Security scanning and monitoring integration
+# - Resource limits and security constraints
+# 
+# DEPLOYMENT PREREQUISITES:
+# 1. Configure secret management system (Kubernetes Secrets, Docker Swarm Secrets, or Vault)
+# 2. Obtain CA-issued SSL certificates  
+# 3. Set up monitoring and alerting infrastructure
+# 4. Configure firewall and network security policies
+# =============================================================================
+
+services:
+  # =============================================================================
+  # API SERVICE: Secure FastAPI with FAISS analog forecasting
+  # =============================================================================
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile.production
+      args:
+        BUILD_DATE: ${BUILD_DATE:-}
+        VCS_REF: ${VCS_REF:-}
+        VERSION: ${VERSION:-1.0.0}
+    container_name: adelaide-weather-api-secure
+    ports:
+      - "127.0.0.1:8000:8000"  # Bind to localhost only
+    environment:
+      # Core Configuration
+      - ENVIRONMENT=production
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_WORKERS=4
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # Security Configuration - Use secret references
+      - API_TOKEN_FILE=/run/secrets/api_token  # Secret reference
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://your-production-domain.com}
+      - TRUSTED_HOSTS=${TRUSTED_HOSTS:-your-production-domain.com}
+      
+      # Performance Configuration
+      - RATE_LIMIT_PER_MINUTE=30  # Stricter for production
+      - RATE_LIMIT_ENABLED=true
+      - PERFORMANCE_CACHE_TTL=300
+      - COMPRESSION_ENABLED=true
+      
+      # FAISS Configuration
+      - FAISS_INDICES_PATH=/app/indices
+      - FAISS_EMBEDDINGS_PATH=/app/embeddings
+      - FAISS_OUTCOMES_PATH=/app/outcomes
+      - FAISS_MODEL_PATH=/app/models
+      
+      # Redis Configuration with auth
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - REDIS_ENABLED=true
+      
+      # Enhanced Security Features
+      - TOKEN_ROTATION_ENABLED=true
+      - TOKEN_ROTATION_INTERVAL_HOURS=24
+      - SECURITY_HEADERS_ENABLED=true
+      - CONFIG_DRIFT_REALTIME_ENABLED=true
+      
+      # Monitoring
+      - PROMETHEUS_ENABLED=true
+      - METRICS_COLLECTION_INTERVAL=30
+      
+    volumes:
+      # FAISS Data (Read-Only)
+      - ./indices:/app/indices:ro
+      - ./embeddings:/app/embeddings:ro
+      - ./outcomes:/app/outcomes:ro
+      - ./models:/app/models:ro
+      
+      # Core System Components (Read-Only)
+      - ./core:/app/core:ro
+      - ./api/services:/app/services:ro
+      - ./configs:/app/configs:ro
+      
+      # Writable Volumes (Minimal)
+      - api_logs:/app/logs
+      - api_tmp:/app/tmp
+      
+    secrets:
+      - api_token
+      
+    networks:
+      - adelaide_internal
+      - adelaide_monitoring
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-H", "User-Agent: docker-healthcheck", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+      
+    restart: unless-stopped
+    
+    depends_on:
+      redis:
+        condition: service_healthy
+        
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 3G
+          pids: 1000  # Limit process creation
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+          
+    # Security constraints
+    security_opt:
+      - no-new-privileges:true
+      
+    # Read-only root filesystem for security
+    read_only: true
+    
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+      
+    labels:
+      - "com.adelaide-weather.service=api"
+      - "com.adelaide-weather.version=${VERSION:-1.0.0}"
+      - "com.adelaide-weather.security=hardened"
+
+  # =============================================================================
+  # FRONTEND SERVICE: Secure React/Next.js UI
+  # =============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.production
+      args:
+        BUILD_DATE: ${BUILD_DATE:-}
+        VCS_REF: ${VCS_REF:-}
+        VERSION: ${VERSION:-1.0.0}
+    container_name: adelaide-weather-frontend-secure
+    ports:
+      - "127.0.0.1:3000:3000"  # Bind to localhost only
+    environment:
+      # Core Configuration
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - NEXT_TELEMETRY_DISABLED=1
+      
+      # API Integration (NO API TOKEN - handled server-side)
+      - API_BASE_URL=http://api:8000
+      - NEXT_PUBLIC_API_BASE_URL=/api
+      
+      # Build Information
+      - NEXT_PUBLIC_VERSION=${VERSION:-1.0.0}
+      - NEXT_PUBLIC_BUILD_DATE=${BUILD_DATE:-}
+      
+      # Security Features
+      - SECURITY_HEADERS_ENABLED=true
+      
+    volumes:
+      # Minimal writable volumes
+      - frontend_logs:/app/logs
+      - frontend_cache:/app/.next/cache
+      
+    networks:
+      - adelaide_internal
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-H", "User-Agent: docker-healthcheck", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+      
+    restart: unless-stopped
+    
+    depends_on:
+      api:
+        condition: service_healthy
+        
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1.5G
+          pids: 500
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+          
+    # Security constraints
+    security_opt:
+      - no-new-privileges:true
+      
+    read_only: true
+    
+    tmpfs:
+      - /tmp:noexec,nosuid,size=50m
+      
+    labels:
+      - "com.adelaide-weather.service=frontend"
+      - "com.adelaide-weather.version=${VERSION:-1.0.0}"
+      - "com.adelaide-weather.security=hardened"
+
+  # =============================================================================
+  # NGINX REVERSE PROXY: Hardened load balancer with SSL termination
+  # =============================================================================
+  nginx:
+    image: nginx:1.24-alpine
+    container_name: adelaide-weather-nginx-secure
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - NGINX_HOST=${NGINX_HOST:-your-production-domain.com}
+      
+    volumes:
+      # Configuration (Use secure nginx config)
+      - ./security_configs/nginx-secure.conf:/etc/nginx/nginx.conf:ro
+      
+      # SSL Certificates (CA-issued certificates)
+      - /etc/letsencrypt/live/${NGINX_HOST}/fullchain.pem:/etc/nginx/ssl/fullchain.pem:ro
+      - /etc/letsencrypt/live/${NGINX_HOST}/privkey.pem:/etc/nginx/ssl/privkey.pem:ro
+      - ./security_configs/ssl/dhparam.pem:/etc/nginx/ssl/dhparam.pem:ro
+      
+      # Static Files
+      - static_files:/var/www/static:ro
+      
+      # Logs
+      - nginx_logs:/var/log/nginx
+      
+      # Let's Encrypt ACME challenge
+      - nginx_certbot:/var/www/certbot
+      
+    networks:
+      - adelaide_internal
+      - adelaide_external
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+      
+    restart: unless-stopped
+    
+    depends_on:
+      - api
+      - frontend
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+          pids: 200
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+          
+    # Security constraints
+    security_opt:
+      - no-new-privileges:true
+      
+    labels:
+      - "com.adelaide-weather.service=nginx"
+      - "com.adelaide-weather.component=proxy"
+      - "com.adelaide-weather.security=hardened"
+
+  # =============================================================================
+  # REDIS CACHE: Secure session storage and caching layer
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: adelaide-weather-redis-secure
+    # NO external port exposure for security
+    command: |
+      redis-server /etc/redis/redis.conf
+      --requirepass ${REDIS_PASSWORD}
+      --appendonly yes 
+      --maxmemory 512mb 
+      --maxmemory-policy allkeys-lru
+    environment:
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
+      
+    volumes:
+      # Secure Redis configuration
+      - ./security_configs/redis-secure.conf:/etc/redis/redis.conf:ro
+      - redis_data:/data
+      - redis_logs:/var/log
+      
+    secrets:
+      - redis_password
+      
+    networks:
+      - adelaide_internal  # Internal network only
+      
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+      
+    restart: unless-stopped
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+          pids: 100
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+          
+    # Security constraints
+    security_opt:
+      - no-new-privileges:true
+      
+    user: "999:999"  # Redis user
+    
+    labels:
+      - "com.adelaide-weather.service=redis"
+      - "com.adelaide-weather.component=cache"
+      - "com.adelaide-weather.security=hardened"
+
+  # =============================================================================
+  # PROMETHEUS MONITORING: Secure metrics collection
+  # =============================================================================
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: adelaide-weather-prometheus-secure
+    # NO external port exposure - access via nginx only
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=10GB'
+      - '--web.enable-lifecycle'
+      - '--log.level=info'
+      - '--web.external-url=https://${NGINX_HOST}/prometheus/'
+      - '--web.route-prefix=/prometheus/'
+      
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+      
+    networks:
+      - adelaide_monitoring
+      - adelaide_internal
+      
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+      
+    restart: unless-stopped
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+          pids: 200
+        reservations:
+          cpus: '0.2'
+          memory: 512M
+          
+    # Security constraints
+    security_opt:
+      - no-new-privileges:true
+      
+    user: "65534:65534"  # nobody user
+    
+    labels:
+      - "com.adelaide-weather.service=prometheus"
+      - "com.adelaide-weather.component=monitoring"
+      - "com.adelaide-weather.security=hardened"
+
+  # =============================================================================
+  # GRAFANA DASHBOARDS: Secure visualization with authentication
+  # =============================================================================
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: adelaide-weather-grafana-secure
+    # NO external port exposure - access via nginx only
+    environment:
+      # Security Configuration
+      - GF_SECURITY_ADMIN_PASSWORD_FILE=/run/secrets/grafana_password
+      - GF_SECURITY_SECRET_KEY_FILE=/run/secrets/grafana_secret_key
+      - GF_SECURITY_DISABLE_GRAVATAR=true
+      - GF_SECURITY_COOKIE_SECURE=true
+      - GF_SECURITY_COOKIE_SAMESITE=strict
+      
+      # User Management
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_DEFAULT_THEME=dark
+      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Viewer
+      
+      # Server Configuration
+      - GF_SERVER_ROOT_URL=https://${NGINX_HOST}/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_SERVER_ENABLE_GZIP=true
+      
+      # Database
+      - GF_DATABASE_TYPE=sqlite3
+      
+      # Logging
+      - GF_LOG_LEVEL=info
+      - GF_LOG_MODE=console
+      
+      # Anonymous access disabled
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      
+    secrets:
+      - grafana_password
+      - grafana_secret_key
+      
+    networks:
+      - adelaide_monitoring
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+      
+    restart: unless-stopped
+    
+    depends_on:
+      prometheus:
+        condition: service_healthy
+        
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+          pids: 200
+        reservations:
+          cpus: '0.2'
+          memory: 256M
+          
+    # Security constraints
+    security_opt:
+      - no-new-privileges:true
+      
+    user: "472:0"  # Grafana user
+    
+    labels:
+      - "com.adelaide-weather.service=grafana"
+      - "com.adelaide-weather.component=monitoring"
+      - "com.adelaide-weather.security=hardened"
+
+# =============================================================================
+# SECRETS MANAGEMENT
+# =============================================================================
+secrets:
+  api_token:
+    external: true
+    # Reference to external secret manager
+    # For Kubernetes: kubectl create secret generic adelaide-secrets --from-literal=api-token="$(openssl rand -base64 32)"
+    
+  redis_password:
+    external: true
+    # kubectl create secret generic redis-credentials --from-literal=password="$(openssl rand -base64 24)"
+    
+  grafana_password:
+    external: true
+    # kubectl create secret generic grafana-credentials --from-literal=admin-password="$(openssl rand -base64 24)"
+    
+  grafana_secret_key:
+    external: true
+    # kubectl create secret generic grafana-credentials --from-literal=secret-key="$(openssl rand -base64 32)"
+
+# =============================================================================
+# SECURE VOLUME DEFINITIONS
+# =============================================================================
+volumes:
+  # API Service Volumes
+  api_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/logs/api
+  api_tmp:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=100m,uid=1001,gid=1001
+  
+  # Frontend Service Volumes  
+  frontend_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/logs/frontend
+  frontend_cache:
+    driver: local
+  
+  # Nginx Volumes
+  nginx_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/logs/nginx
+  nginx_certbot:
+    driver: local
+  static_files:
+    driver: local
+  
+  # Redis Volumes (Encrypted storage recommended)
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/data/redis
+  redis_logs:
+    driver: local
+  
+  # Monitoring Volumes
+  prometheus_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/data/prometheus
+  grafana_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/data/grafana
+
+# =============================================================================
+# SECURE NETWORK DEFINITIONS
+# =============================================================================
+networks:
+  # Internal network for service-to-service communication
+  adelaide_internal:
+    name: adelaide-weather-internal-secure
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.0.0/16
+          gateway: 172.30.0.1
+    driver_opts:
+      com.docker.network.bridge.name: br-adelaide-secure
+      com.docker.network.driver.mtu: 1500
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+      
+  # External network for public access (nginx only)
+  adelaide_external:
+    name: adelaide-weather-external-secure
+    driver: bridge
+    
+  # Monitoring network for observability stack
+  adelaide_monitoring:
+    name: adelaide-weather-monitoring-secure
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.31.0.0/16
+          gateway: 172.31.0.1
+    driver_opts:
+      com.docker.network.bridge.name: br-adelaide-monitor
+
+# =============================================================================
+# SECURITY DEPLOYMENT CHECKLIST
+# =============================================================================
+#
+# Before deploying this secure configuration:
+#
+# 1. SECRET MANAGEMENT:
+#    □ Set up secret management system (Kubernetes Secrets/Docker Swarm/Vault)
+#    □ Generate strong API token: openssl rand -base64 32
+#    □ Generate Redis password: openssl rand -base64 24
+#    □ Generate Grafana credentials: openssl rand -base64 24
+#    □ Store all secrets in secure secret manager
+#
+# 2. SSL/TLS CERTIFICATES:
+#    □ Obtain CA-issued certificates (Let's Encrypt recommended)
+#    □ Generate DH parameters: openssl dhparam -out dhparam.pem 2048
+#    □ Configure certificate auto-renewal
+#    □ Test SSL configuration with SSL Labs
+#
+# 3. NETWORK SECURITY:
+#    □ Configure firewall rules (block direct Redis access)
+#    □ Set up network policies if using Kubernetes
+#    □ Verify no unnecessary ports are exposed
+#    □ Configure geographic IP blocking if needed
+#
+# 4. MONITORING & ALERTING:
+#    □ Configure Prometheus alerting rules
+#    □ Set up notification channels (email, Slack, PagerDuty)
+#    □ Test incident response procedures
+#    □ Configure log aggregation and analysis
+#
+# 5. SECURITY TESTING:
+#    □ Run vulnerability scans (Nessus, OpenVAS)
+#    □ Perform penetration testing
+#    □ Test rate limiting and DDoS protection
+#    □ Verify authentication and authorization controls
+#
+# 6. COMPLIANCE:
+#    □ Document security controls for audit
+#    □ Implement data retention policies
+#    □ Configure audit logging
+#    □ Review and approve security configuration
+#
+# 7. DEPLOYMENT:
+#    □ Deploy to staging environment first
+#    □ Perform security acceptance testing
+#    □ Document rollback procedures
+#    □ Deploy to production with monitoring
+#
+# =============================================================================
+
+# Deployment command:
+# docker-compose -f docker-compose.secure.yml up -d

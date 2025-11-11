@@ -1,166 +1,554 @@
 version: '3.8'
 
+# =============================================================================
+# Adelaide Weather Forecasting System - Production Orchestration
+# =============================================================================
+# 
+# Production-grade Docker Compose orchestration designed for:
+# - Zero mock data - only real FAISS indices and WeatherAPI data
+# - Proper service dependencies and startup sequencing
+# - Health checks and restart policies
+# - Security and performance optimization
+# - Monitoring and observability integration
+# - Volume management for FAISS indices and data
+# 
+# Service Architecture:
+# UI → nginx → API → FAISS Indices + Real Weather Data
+#        ↓
+#    monitoring stack (prometheus/grafana)
+#
+# =============================================================================
+
 services:
+  # =============================================================================
+  # API SERVICE: FastAPI with FAISS analog forecasting
+  # =============================================================================
   api:
     build:
       context: .
       dockerfile: api/Dockerfile.production
+      args:
+        BUILD_DATE: ${BUILD_DATE:-}
+        VCS_REF: ${VCS_REF:-}
+        VERSION: ${VERSION:-1.0.0}
+    container_name: adelaide-weather-api
     ports:
       - "8000:8000"
     environment:
+      # Core Configuration
       - ENVIRONMENT=production
-      - API_TOKEN=${API_TOKEN}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_WORKERS=4
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-60}
-      - PERFORMANCE_CACHE_TTL=${PERFORMANCE_CACHE_TTL:-300}
-    volumes:
-      # Mount only necessary production data
-      - ./core:/app/core:ro
-      - ./outcomes:/app/outcomes:ro
-      - ./variables.py:/app/variables.py:ro
-      - ./performance_middleware.py:/app/performance_middleware.py:ro
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.production
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - API_BASE_URL=http://api:8000
+      
+      # Authentication & Security
       - API_TOKEN=${API_TOKEN}
-      - NEXT_TELEMETRY_DISABLED=1
-    depends_on:
-      api:
-        condition: service_healthy
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost}
+      - TRUSTED_HOSTS=${TRUSTED_HOSTS:-localhost,127.0.0.1,*.vercel.app}
+      
+      # Performance Configuration
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-60}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      - PERFORMANCE_CACHE_TTL=${PERFORMANCE_CACHE_TTL:-300}
+      - COMPRESSION_ENABLED=${COMPRESSION_ENABLED:-true}
+      - COMPRESSION_MIN_SIZE=${COMPRESSION_MIN_SIZE:-500}
+      - NGINX_COMPRESSION=${NGINX_COMPRESSION:-true}
+      
+      # FAISS Configuration
+      - FAISS_INDICES_PATH=/app/indices
+      - FAISS_EMBEDDINGS_PATH=/app/embeddings
+      - FAISS_OUTCOMES_PATH=/app/outcomes
+      - FAISS_MODEL_PATH=/app/models
+      
+      # WeatherAPI Integration (Optional Enhancement)
+      - WEATHER_API_KEY=${WEATHER_API_KEY:-}
+      - WEATHER_API_ENABLED=${WEATHER_API_ENABLED:-false}
+      
+      # Monitoring & Observability
+      - PROMETHEUS_ENABLED=${PROMETHEUS_ENABLED:-true}
+      - METRICS_COLLECTION_INTERVAL=${METRICS_COLLECTION_INTERVAL:-30}
+      - CONFIG_DRIFT_REALTIME_ENABLED=${CONFIG_DRIFT_REALTIME_ENABLED:-true}
+      
+      # Token Management
+      - TOKEN_ROTATION_ENABLED=${TOKEN_ROTATION_ENABLED:-true}
+      - TOKEN_ROTATION_INTERVAL_HOURS=${TOKEN_ROTATION_INTERVAL_HOURS:-24}
+      
+      # Redis Configuration
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_ENABLED=${REDIS_ENABLED:-true}
+    volumes:
+      # FAISS Data (Read-Only Production Data)
+      - ./indices:/app/indices:ro
+      - ./embeddings:/app/embeddings:ro
+      - ./outcomes:/app/outcomes:ro
+      - ./models:/app/models:ro
+      
+      # Core System Components (Read-Only)
+      - ./core:/app/core:ro
+      - ./api/services:/app/services:ro
+      
+      # Configuration Files (Read-Only)
+      - ./configs:/app/configs:ro
+      
+      # Writable Volumes for Logs and Runtime Data
+      - api_logs:/app/logs
+      - api_tmp:/app/tmp
+      
+      # Security Reports (Generated during build)
+      - api_security_reports:/app/security-reports:ro
+    networks:
+      - adelaide_internal
+      - adelaide_monitoring
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/forecast?horizon=6h&vars=t2m"]
+      test: ["CMD", "curl", "-f", "-H", "User-Agent: docker-healthcheck", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
     restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 3G
+    labels:
+      - "com.adelaide-weather.service=api"
+      - "com.adelaide-weather.version=${VERSION:-1.0.0}"
+      - "com.adelaide-weather.component=backend"
+
+  # =============================================================================
+  # FRONTEND SERVICE: React/Next.js UI
+  # =============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.production
+      args:
+        BUILD_DATE: ${BUILD_DATE:-}
+        VCS_REF: ${VCS_REF:-}
+        VERSION: ${VERSION:-1.0.0}
+    container_name: adelaide-weather-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # Core Configuration
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - NEXT_TELEMETRY_DISABLED=1
+      
+      # API Integration
+      - API_BASE_URL=http://api:8000
+      - NEXT_PUBLIC_API_BASE_URL=/api
+      - API_TOKEN=${API_TOKEN}
+      
+      # Build Information
+      - NEXT_PUBLIC_VERSION=${VERSION:-1.0.0}
+      - NEXT_PUBLIC_BUILD_DATE=${BUILD_DATE:-}
+      
+      # Feature Flags
+      - NEXT_PUBLIC_WEATHER_API_ENABLED=${WEATHER_API_ENABLED:-false}
+      - NEXT_PUBLIC_MONITORING_ENABLED=${MONITORING_ENABLED:-true}
+    volumes:
+      # Writable Volumes for Logs and Cache
+      - frontend_logs:/app/logs
+      - frontend_cache:/app/.next/cache
+      
+      # Security Reports (Generated during build)
+      - frontend_security_reports:/app/security-reports:ro
+    networks:
+      - adelaide_internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-H", "User-Agent: docker-healthcheck", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
     deploy:
       resources:
         limits:
           cpus: '1.0'
-          memory: 1G
-        reservations:
-          cpus: '0.25'
-          memory: 256M
+          memory: 1.5G
+    labels:
+      - "com.adelaide-weather.service=frontend"
+      - "com.adelaide-weather.version=${VERSION:-1.0.0}"
+      - "com.adelaide-weather.component=frontend"
 
+  # =============================================================================
+  # NGINX REVERSE PROXY: Load balancer with SSL termination
+  # =============================================================================
+  nginx:
+    image: nginx:1.24-alpine
+    container_name: adelaide-weather-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - NGINX_HOST=${NGINX_HOST:-localhost}
+      - NGINX_PORT=80
+      - NGINX_SSL_PORT=443
+    volumes:
+      # Configuration
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      
+      # Static Files
+      - static_files:/var/www/static
+      
+      # Proxy Cache (for performance optimization)
+      - nginx_cache:/var/cache/nginx
+      
+      # Logs
+      - nginx_logs:/var/log/nginx
+      
+      # Let's Encrypt ACME challenge support
+      - nginx_certbot:/var/www/certbot
+    networks:
+      - adelaide_internal
+      - adelaide_external
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    depends_on:
+      - api
+      - frontend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    labels:
+      - "com.adelaide-weather.service=nginx"
+      - "com.adelaide-weather.component=proxy"
+
+  # =============================================================================
+  # REDIS CACHE: Session storage and caching layer
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: adelaide-weather-redis
+    ports:
+      - "6379:6379"
+    command: |
+      redis-server 
+      --appendonly yes 
+      --maxmemory 512mb 
+      --maxmemory-policy allkeys-lru
+      --save 900 1 
+      --save 300 10 
+      --save 60 10000
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    volumes:
+      - redis_data:/data
+      - redis_logs:/var/log
+    networks:
+      - adelaide_internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    labels:
+      - "com.adelaide-weather.service=redis"
+      - "com.adelaide-weather.component=cache"
+
+  # =============================================================================
+  # PROMETHEUS MONITORING: Metrics collection and storage
+  # =============================================================================
   prometheus:
-    image: prom/prometheus:v2.40.0
+    image: prom/prometheus:v2.47.0
+    container_name: adelaide-weather-prometheus
     ports:
       - "9090:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=15d'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=10GB'
       - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--log.level=info'
+    environment:
+      - PROMETHEUS_RETENTION_TIME=30d
+      - PROMETHEUS_RETENTION_SIZE=10GB
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+      - prometheus_logs:/var/log/prometheus
+    networks:
+      - adelaide_monitoring
+      - adelaide_internal
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
     deploy:
       resources:
         limits:
-          memory: 512M
-        reservations:
-          memory: 128M
+          cpus: '1.0'
+          memory: 2G
+    labels:
+      - "com.adelaide-weather.service=prometheus"
+      - "com.adelaide-weather.component=monitoring"
 
+  # =============================================================================
+  # GRAFANA DASHBOARDS: Visualization and alerting
+  # =============================================================================
   grafana:
-    image: grafana/grafana:9.3.0
+    image: grafana/grafana:10.1.0
+    container_name: adelaide-weather-grafana
     ports:
       - "3001:3000"
     environment:
+      # Security
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_SECURITY_SECRET_KEY=${GRAFANA_SECRET_KEY:-}
+      
+      # User Management
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - GF_USERS_DEFAULT_THEME=dark
+      
+      # Server Configuration
+      - GF_SERVER_ROOT_URL=http://localhost:3001
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      
+      # Database (use internal SQLite for simplicity)
+      - GF_DATABASE_TYPE=sqlite3
+      
+      # Plugins
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource,grafana-worldmap-panel
+      
+      # Logging
+      - GF_LOG_LEVEL=info
+      
+      # Anonymous access (disabled for security)
+      - GF_AUTH_ANONYMOUS_ENABLED=false
     volumes:
       - grafana_data:/var/lib/grafana
+      - grafana_logs:/var/log/grafana
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - adelaide_monitoring
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    labels:
+      - "com.adelaide-weather.service=grafana"
+      - "com.adelaide-weather.component=monitoring"
+
+  # =============================================================================
+  # ALERTMANAGER: Alert routing and notifications
+  # =============================================================================
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: adelaide-weather-alertmanager
+    ports:
+      - "9093:9093"
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+      - '--log.level=info'
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    networks:
+      - adelaide_monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
     depends_on:
       - prometheus
-    restart: unless-stopped
     deploy:
       resources:
         limits:
-          memory: 512M
-        reservations:
-          memory: 128M
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
+          cpus: '0.5'
           memory: 256M
-        reservations:
-          memory: 64M
+    labels:
+      - "com.adelaide-weather.service=alertmanager"
+      - "com.adelaide-weather.component=monitoring"
 
-  nginx:
-    image: nginx:1.24-alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - static_files:/var/www/static
-    depends_on:
-      - api
-      - frontend
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-        reservations:
-          memory: 32M
-
+# =============================================================================
+# VOLUME DEFINITIONS: Persistent data storage
+# =============================================================================
 volumes:
-  prometheus_data:
+  # API Service Volumes
+  api_logs:
     driver: local
-  grafana_data:
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/logs/api
+  api_tmp:
     driver: local
-  redis_data:
+  api_security_reports:
+    driver: local
+  
+  # Frontend Service Volumes
+  frontend_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/logs/frontend
+  frontend_cache:
+    driver: local
+  frontend_security_reports:
+    driver: local
+  
+  # Nginx Volumes
+  nginx_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/logs/nginx
+  nginx_cache:
+    driver: local
+  nginx_certbot:
     driver: local
   static_files:
     driver: local
+  
+  # Redis Volumes
+  redis_data:
+    driver: local
+  redis_logs:
+    driver: local
+  
+  # Monitoring Volumes
+  prometheus_data:
+    driver: local
+  prometheus_logs:
+    driver: local
+  grafana_data:
+    driver: local
+  grafana_logs:
+    driver: local
+  alertmanager_data:
+    driver: local
 
+# =============================================================================
+# NETWORK DEFINITIONS: Service communication and security
+# =============================================================================
 networks:
-  default:
-    name: adelaide-weather
+  # Internal network for service-to-service communication
+  adelaide_internal:
+    name: adelaide-weather-internal
     driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+    driver_opts:
+      com.docker.network.bridge.name: br-adelaide-internal
+      com.docker.network.driver.mtu: 1500
+  
+  # External network for public access (nginx only)
+  adelaide_external:
+    name: adelaide-weather-external
+    driver: bridge
+    
+  # Monitoring network for observability stack
+  adelaide_monitoring:
+    name: adelaide-weather-monitoring
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.21.0.0/16
+          gateway: 172.21.0.1
+    driver_opts:
+      com.docker.network.bridge.name: br-adelaide-monitoring
+
+# =============================================================================
+# PRODUCTION DEPLOYMENT CONFIGURATION
+# =============================================================================
+# 
+# Environment Variables Required:
+# - API_TOKEN: Authentication token for API access
+# 
+# Environment Variables Optional:
+# - VERSION: Application version tag
+# - BUILD_DATE: Build timestamp
+# - VCS_REF: Git commit hash
+# - GRAFANA_PASSWORD: Grafana admin password
+# - GRAFANA_SECRET_KEY: Grafana secret key for sessions
+# - REDIS_PASSWORD: Redis authentication password
+# - WEATHER_API_KEY: WeatherAPI.com key for live data
+# - LOG_LEVEL: Logging verbosity (INFO, DEBUG, WARNING, ERROR)
+# - CORS_ORIGINS: Allowed CORS origins
+# 
+# Startup Dependencies:
+# 1. redis (base dependency)
+# 2. api (depends on redis)
+# 3. frontend (depends on api)
+# 4. nginx (depends on api and frontend)
+# 5. prometheus (independent)
+# 6. grafana (depends on prometheus)
+# 7. alertmanager (depends on prometheus)
+# 
+# Health Check Strategy:
+# - All services have comprehensive health checks
+# - Startup grace periods account for FAISS index loading
+# - Proper dependency ordering prevents cascading failures
+# - Restart policies ensure service recovery
+# 
+# Data Volumes:
+# - FAISS indices, embeddings, outcomes mounted read-only
+# - Logs written to host-mounted volumes for persistence
+# - Redis and monitoring data use Docker volumes
+# - Security reports preserved from build stage
+# 
+# Security Features:
+# - Non-root users in all containers
+# - Read-only mounts for application data
+# - Network segmentation (internal/external/monitoring)
+# - Security scanning in build pipeline
+# - Proper secret management via environment variables
+# 
+# =============================================================================

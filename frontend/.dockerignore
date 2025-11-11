@@ -1,0 +1,67 @@
+# Dependencies
+node_modules
+npm-debug.log*
+
+# Build outputs (keep .next for Docker build)
+# .next
+dist
+out
+build
+
+# Development files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Testing
+coverage
+.nyc_output
+
+# Git
+.git
+.gitignore
+
+# Misc
+*.tgz
+*.tar.gz
+
+# Backup files
+*.backup
+*.bak
+
+# Documentation
+README.md
+docs/
+
+# Tests (not needed for production build)
+__tests__
+tests/
+*.test.*
+*.spec.*
+
+# Linting
+.eslintcache
+
+# Package-lock (will be generated during install)
+package-lock.json
+
+# Grafana plugin (not needed for core app)
+grafana-plugin/
+
+# TypeScript build info
+*.tsbuildinfo
