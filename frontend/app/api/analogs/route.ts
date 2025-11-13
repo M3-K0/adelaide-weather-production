@@ -9,6 +9,10 @@ import { FORECAST_HORIZONS, WEATHER_VARIABLES } from '@/types';
 /**
  * Real API endpoint for Analog Explorer data
  * Direct integration with the backend `/api/analogs` endpoint
+ * 
+ * TRANSPARENCY (FE1): This endpoint propagates data_source and search_metadata
+ * fields from the backend to expose whether data comes from real FAISS indices
+ * or fallback/synthetic sources. No client-side data fabrication occurs.
  */
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000';
@@ -127,21 +131,25 @@ export async function GET(
                     error.message.includes('5') ? 503 : 400;
       
       const errorMessages = {
-        401: 'Backend authentication failed',
+        401: 'Backend authentication failed - analog data unavailable',
         429: 'Rate limit exceeded. Please try again later.',
-        503: 'Backend analog service temporarily unavailable',
+        503: 'Backend analog service temporarily unavailable - fallback data may be provided',
         400: 'Invalid request parameters'
       };
       
       const apiError: ApiError = { 
-        error: errorMessages[status as keyof typeof errorMessages] || 'Backend service error' 
+        error: errorMessages[status as keyof typeof errorMessages] || 'Backend service error - analog data may be degraded',
+        details: status === 503 ? 'The system may fall back to cached or synthetic data' : undefined
       };
       return NextResponse.json(apiError, { status });
     }
 
     // Handle network errors
     if (error instanceof Error && error.message.includes('fetch')) {
-      const apiError: ApiError = { error: 'Backend service unavailable' };
+      const apiError: ApiError = { 
+        error: 'Backend service unavailable - analog data degraded',
+        details: 'Unable to reach real-time analog search service. Data quality may be reduced.'
+      };
       return NextResponse.json(apiError, { status: 503 });
     }
 

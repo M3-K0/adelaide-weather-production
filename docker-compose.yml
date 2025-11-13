@@ -1,4 +1,5 @@
-# Adelaide Weather Forecasting System - Local Development
+# Adelaide Weather Forecasting System - Docker Compose Configuration
+# Supports: development, staging, and production deployment orchestration
 version: '3.8'
 
 services:
@@ -14,6 +15,9 @@ services:
       - CORS_ORIGINS=http://localhost:3000
       - LOG_LEVEL=INFO
       - RATE_LIMIT_PER_MINUTE=60
+      # FAISS configuration for analog search
+      - FAISS_CACHE_DIR=/app/faiss_cache
+      - FAISS_INDICES_PATH=/app/indices
     volumes:
       # Mount forecasting system dependencies from host
       - ./core:/app/core:ro
@@ -23,17 +27,19 @@ services:
       - ./models:/app/models:ro
       # Mount API source for development hot reload
       - ./api:/app/api_source:ro
+      # Persistent volume for FAISS index performance
+      - faiss-cache:/app/faiss_cache
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/detailed"]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 3
-      start_period: 60s
+      start_period: 90s
     restart: unless-stopped
     networks:
       - forecast-network
 
-  ui:
+  frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -69,7 +75,7 @@ services:
     depends_on:
       api:
         condition: service_healthy
-      ui:
+      frontend:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
@@ -132,12 +138,15 @@ volumes:
   grafana-storage:
     driver: local
     name: adelaide-forecast-grafana
+  faiss-cache:
+    driver: local
+    name: adelaide-forecast-faiss-cache
 
 # Development commands:
-# docker-compose up -d                    # Start core services (API + UI + Nginx)
+# docker-compose up -d                    # Start core services (API + Frontend + Nginx)
 # docker-compose --profile monitoring up  # Start with monitoring stack
 # docker-compose logs -f api              # View API logs
-# docker-compose logs -f ui               # View UI logs
+# docker-compose logs -f frontend         # View Frontend logs
 # docker-compose logs -f nginx            # View Nginx logs
 # docker-compose down                     # Stop all services
 # docker-compose down -v                  # Stop and remove volumes
@@ -145,3 +154,4 @@ volumes:
 # Access points:
 # http://localhost        - Main application via Nginx proxy
 # http://localhost/api/*  - API routes proxied to FastAPI backend
+# http://localhost/api/analogs - FAISS analog search (extended timeouts)

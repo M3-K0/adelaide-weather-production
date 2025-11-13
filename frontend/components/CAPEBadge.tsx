@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Info, Zap, AlertTriangle, TrendingUp, Calendar } from 'lucide-react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { clsx } from 'clsx';
+import ErrorBoundary from './ErrorBoundary';
+import EmptyState from './EmptyState';
 
 // CAPE Risk level thresholds
 const CAPE_THRESHOLDS = {
@@ -17,12 +19,12 @@ const CAPE_THRESHOLDS = {
 type RiskLevel = keyof typeof CAPE_THRESHOLDS;
 
 interface CAPEBadgeProps {
-  /** CAPE value in J/kg */
-  value: number;
+  /** CAPE value in J/kg (null/undefined will show empty state) */
+  value: number | null | undefined;
   /** Historical percentile for the current season (0-100) */
-  percentile?: number;
+  percentile?: number | null;
   /** Season label (e.g., "Summer", "Winter") */
-  season?: string;
+  season?: string | null;
   /** Optional size variant */
   size?: 'sm' | 'md' | 'lg';
   /** Whether to show the info icon */
@@ -31,13 +33,17 @@ interface CAPEBadgeProps {
   disableAnimations?: boolean;
   /** Custom className */
   className?: string;
+  /** Data source indicator */
+  dataSource?: 'api' | 'cache' | 'fallback';
+  /** Show fallback indicator */
+  showDataSource?: boolean;
 }
 
 interface CAPEExplanationProps {
   riskLevel: RiskLevel;
   value: number;
-  percentile?: number;
-  season?: string;
+  percentile?: number | null;
+  season?: string | null;
 }
 
 // Lightning animation component for extreme levels
@@ -182,7 +188,7 @@ const CAPEExplanation: React.FC<CAPEExplanationProps> = ({
       </div>
 
       {/* Historical Context */}
-      {percentile !== undefined && season && (
+      {percentile !== null && percentile !== undefined && season && (
         <div className='bg-slate-800/30 rounded-lg p-4 space-y-3'>
           <h4 className='text-sm font-medium text-slate-300 flex items-center gap-2'>
             <TrendingUp size={14} />
@@ -206,7 +212,7 @@ const CAPEExplanation: React.FC<CAPEExplanationProps> = ({
                   percentile >= 50 && percentile < 75 && 'bg-yellow-500',
                   percentile < 50 && 'bg-emerald-500'
                 )}
-                style={{ width: `${percentile}%` }}
+                style={{ width: `${Math.max(0, Math.min(100, percentile))}%` }}
               />
             </div>
 
@@ -288,19 +294,46 @@ export const CAPEBadge: React.FC<CAPEBadgeProps> = ({
   size = 'md',
   showInfo = true,
   disableAnimations = false,
-  className
+  className,
+  dataSource,
+  showDataSource = false
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Handle null/undefined values
+  if (value === null || value === undefined || isNaN(value)) {
+    return (
+      <ErrorBoundary componentName="CAPEBadge">
+        <div className={clsx('inline-flex', className)}>
+          <EmptyState
+            type="no-data"
+            title="CAPE Unavailable"
+            description="CAPE data could not be calculated."
+            size="sm"
+            disableAnimations={disableAnimations}
+            dataSource={dataSource === 'fallback' ? 'fallback' : undefined}
+          />
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  // Validate CAPE value is reasonable (negative values are invalid)
+  const validatedValue = Math.max(0, value);
+  if (validatedValue !== value) {
+    console.warn(`Invalid CAPE value ${value}, using ${validatedValue} instead`);
+  }
+
   // Determine risk level based on CAPE value
   const getRiskLevel = useCallback((capeValue: number): RiskLevel => {
+    if (!capeValue || capeValue < 0) return 'LOW';
     if (capeValue >= CAPE_THRESHOLDS.EXTREME.min) return 'EXTREME';
     if (capeValue >= CAPE_THRESHOLDS.HIGH.min) return 'HIGH';
     if (capeValue >= CAPE_THRESHOLDS.MODERATE.min) return 'MODERATE';
     return 'LOW';
   }, []);
 
-  const riskLevel = getRiskLevel(value);
+  const riskLevel = getRiskLevel(validatedValue);
   const threshold = CAPE_THRESHOLDS[riskLevel];
   const isExtreme = riskLevel === 'EXTREME';
 
@@ -352,7 +385,7 @@ export const CAPEBadge: React.FC<CAPEBadgeProps> = ({
   }, []);
 
   return (
-    <>
+    <ErrorBoundary componentName="CAPEBadge">
       <motion.div
         className={clsx(
           'inline-flex items-center gap-2 rounded-lg border font-medium relative overflow-hidden',
@@ -381,7 +414,7 @@ export const CAPEBadge: React.FC<CAPEBadgeProps> = ({
               }
             : undefined
         }
-        aria-label={`CAPE risk level: ${threshold.label}, ${value} J/kg${percentile ? `, ${percentile}th percentile for ${season}` : ''}`}
+        aria-label={`CAPE risk level: ${threshold.label}, ${validatedValue} J/kg${percentile ? `, ${percentile}th percentile for ${season || 'season'}` : ''}`}
       >
         {/* Lightning animation for extreme levels */}
         {isExtreme && !disableAnimations && (
@@ -391,8 +424,15 @@ export const CAPEBadge: React.FC<CAPEBadgeProps> = ({
         <span className='font-semibold'>{threshold.label}</span>
 
         <span className='font-mono text-xs opacity-80'>
-          {value.toLocaleString()}
+          {validatedValue.toLocaleString()}
         </span>
+
+        {/* Data source indicator */}
+        {showDataSource && dataSource === 'fallback' && (
+          <span className='px-1 py-0.5 rounded text-[9px] bg-orange-900/50 border border-orange-700 text-orange-300'>
+            FALLBACK
+          </span>
+        )}
 
         {showInfo && <Info size={iconSizes[size]} className='opacity-60' />}
       </motion.div>
@@ -426,18 +466,20 @@ export const CAPEBadge: React.FC<CAPEBadgeProps> = ({
                   </svg>
                 </Dialog.Close>
 
-                <CAPEExplanation
-                  riskLevel={riskLevel}
-                  value={value}
-                  percentile={percentile}
-                  season={season}
-                />
+                <ErrorBoundary componentName="CAPEExplanation">
+                  <CAPEExplanation
+                    riskLevel={riskLevel}
+                    value={validatedValue}
+                    percentile={percentile}
+                    season={season}
+                  />
+                </ErrorBoundary>
               </div>
             </Dialog.Content>
           </Dialog.Portal>
         </Dialog.Root>
       )}
-    </>
+    </ErrorBoundary>
   );
 };
 

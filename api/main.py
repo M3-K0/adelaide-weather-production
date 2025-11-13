@@ -43,6 +43,7 @@ from pydantic import BaseModel, Field, field_validator
 from prometheus_client import (
     Counter,
     Histogram,
+    Gauge,
     generate_latest,
     CONTENT_TYPE_LATEST,
     REGISTRY,
@@ -125,6 +126,21 @@ validation_errors = _get_or_create_metric(
     Counter, 'validation_errors_total', 'Total validation errors', ['error_type']
 )
 
+# Analog search metrics (OBS1 requirements)
+analog_real_total = _get_or_create_metric(
+    Counter, 'analog_real_total', 'Total successful real FAISS analog searches'
+)
+analog_fallback_total = _get_or_create_metric(
+    Counter, 'analog_fallback_total', 'Total fallback analog searches used'
+)
+analog_search_seconds = _get_or_create_metric(
+    Histogram, 'analog_search_seconds', 'Analog search latency distribution', 
+    ['horizon', 'k'], buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, float('inf')]
+)
+analog_results_count = _get_or_create_metric(
+    Gauge, 'analog_results_count', 'Number of analogs returned per horizon', ['horizon']
+)
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Adelaide Weather Forecasting API",
@@ -182,6 +198,62 @@ API_TOKEN = get_api_token()
 if not API_TOKEN:
     logger.error("CRITICAL: No API token configured. Set API_TOKEN environment variable or use token rotation CLI")
     exit(1)
+
+# SECURITY ENFORCEMENT: Strong token validation at startup
+environment = os.getenv("ENVIRONMENT", "production").lower()
+logger.info(f"Environment detected: {environment}")
+
+# Enforce strong token requirements in staging and production
+if environment in ["staging", "production"]:
+    logger.info("Enforcing strong token security requirements for non-development environment...")
+    
+    try:
+        # Import TokenEntropyValidator for strong validation
+        from api.token_rotation_cli import TokenEntropyValidator
+        
+        # Validate token meets minimum security requirements
+        is_valid, validation_issues = TokenEntropyValidator.validate_token(API_TOKEN)
+        
+        if not is_valid:
+            logger.error("SECURITY VIOLATION: API token does not meet security requirements for production environment")
+            logger.error(f"Token validation failures: {', '.join(validation_issues)}")
+            logger.error("ABORTING STARTUP: Weak tokens are not permitted in staging/production environments")
+            logger.error("Solutions:")
+            logger.error("  1. Generate a strong token using: python -m api.token_rotation_cli generate")
+            logger.error("  2. Set a secure 32+ character token with high entropy")
+            logger.error("  3. Use token rotation CLI to manage secure tokens")
+            logger.error(f"  4. For development only, set ENVIRONMENT=development to bypass this check")
+            exit(1)
+        
+        # Calculate token metrics for logging
+        token_metrics = TokenEntropyValidator.calculate_entropy(API_TOKEN)
+        logger.info(f"Token validation passed: {token_metrics.entropy_bits:.1f} bits entropy, security level: {token_metrics.security_level}")
+        logger.info("Strong token security requirements satisfied for production environment")
+        
+    except ImportError as e:
+        logger.error(f"CRITICAL: TokenEntropyValidator not available: {e}")
+        logger.error("Cannot validate token security in production environment")
+        logger.error("Enhanced token validation features are required for secure operation")
+        exit(1)
+        
+elif environment == "development":
+    logger.warning("DEVELOPMENT MODE: Token security enforcement is relaxed")
+    logger.warning("Strong token validation is bypassed - ensure this is not a production deployment")
+    
+    # Still perform basic validation in development
+    if len(API_TOKEN) < 8:
+        logger.error("CRITICAL: Token too short even for development (minimum 8 characters)")
+        exit(1)
+        
+    # Check for obvious insecure patterns
+    weak_patterns = ['test', 'demo', 'example', 'password', 'secret', 'admin']
+    if any(pattern in API_TOKEN.lower() for pattern in weak_patterns):
+        logger.warning(f"WARNING: Token contains weak patterns - acceptable in development but never use in production")
+
+else:
+    logger.warning(f"Unknown environment '{environment}' - defaulting to production security requirements")
+    # Re-run validation with production settings
+    environment = "production"
 
 # Log token management status
 token_health = token_manager.get_health_status()
@@ -681,6 +753,48 @@ def _validate_analog_request(horizon: str, variables: Optional[str], k: int, que
     except Exception as e:
         return {"valid": False, "error": f"Validation error: {str(e)}"}
 
+# Variable mapping from outcomes array indices to variable names (based on sidecar analysis)
+OUTCOMES_VARIABLE_MAP = {
+    0: "z500",
+    1: "t2m", 
+    2: "t850",
+    3: "q850",
+    4: "u10",
+    5: "v10",
+    6: "u850",
+    7: "v850",
+    8: "cape"
+}
+
+# Global cache for loaded outcomes and metadata
+_data_cache = {}
+
+def _load_outcomes_data(horizon: str):
+    """Load and cache outcomes and metadata for a given horizon."""
+    if horizon in _data_cache:
+        return _data_cache[horizon]
+    
+    try:
+        import numpy as np
+        import pandas as pd
+        
+        outcomes_path = f"/home/micha/adelaide-weather-final/outcomes/outcomes_{horizon}.npy"
+        metadata_path = f"/home/micha/adelaide-weather-final/outcomes/metadata_{horizon}_clean.parquet"
+        
+        outcomes = np.load(outcomes_path)
+        metadata = pd.read_parquet(metadata_path)
+        
+        _data_cache[horizon] = {
+            "outcomes": outcomes,
+            "metadata": metadata
+        }
+        
+        return _data_cache[horizon]
+        
+    except Exception as e:
+        logger.error(f"Failed to load outcomes data for horizon {horizon}: {e}")
+        return None
+
 def _horizon_to_hours(horizon: str) -> int:
     """Convert horizon string to hours."""
     horizon_map = {"6h": 6, "12h": 12, "24h": 24, "48h": 48}
@@ -717,35 +831,54 @@ def _transform_analog_result_to_response(
         # Transform to response model format
         top_analogs = []
         for analog in service_analogs[:10]:  # Limit to top 10 for response size
+            # Ensure analog has horizon information for real data extraction
+            analog_with_horizon = analog.copy()
+            analog_with_horizon["horizon"] = horizon
+            
             # Convert service analog to response model format
             analog_pattern = {
                 "date": analog.get("historical_date", datetime.now(timezone.utc).isoformat()),
                 "similarity_score": analog.get("similarity_score", 0.5),
-                "initial_conditions": _extract_initial_conditions(analog, variables),
-                "timeline": _generate_timeline_from_analog(analog, horizon),
-                "outcome_narrative": _generate_outcome_narrative(analog),
+                "initial_conditions": _extract_initial_conditions(analog_with_horizon, variables),
+                "timeline": _generate_timeline_from_analog(analog_with_horizon, horizon),
+                "outcome_narrative": _generate_outcome_narrative(analog_with_horizon),
                 "location": {
                     "latitude": -34.9285,  # Adelaide coordinates
                     "longitude": 138.6007,
                     "name": "Adelaide Weather Station"
                 },
-                "season_info": _extract_season_info(analog)
+                "season_info": _extract_season_info(analog_with_horizon)
             }
             top_analogs.append(analog_pattern)
         
-        # Generate ensemble statistics
-        ensemble_stats = _generate_ensemble_statistics(service_analogs, variables)
+        # Generate ensemble statistics with horizon information
+        service_analogs_with_horizon = []
+        for analog in service_analogs:
+            analog_with_horizon = analog.copy()
+            analog_with_horizon["horizon"] = horizon
+            service_analogs_with_horizon.append(analog_with_horizon)
+        
+        ensemble_stats = _generate_ensemble_statistics(service_analogs_with_horizon, variables)
+        
+        # Extract transparency fields from service response
+        search_metadata = analog_result.get("search_metadata", {})
+        faiss_successful = search_metadata.get("faiss_search_successful", False)
+        
+        # Determine data source based on search metadata
+        data_source = "faiss" if faiss_successful else "fallback"
         
         return {
             "forecast_horizon": horizon,
             "top_analogs": top_analogs,
             "ensemble_stats": ensemble_stats,
-            "generated_at": datetime.now(timezone.utc).isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data_source": data_source,
+            "search_metadata": search_metadata
         }
         
     except Exception as e:
         logger.error(f"[{correlation_id}] Failed to transform analog result: {e}")
-        # Return minimal valid response
+        # Return minimal valid response with required transparency fields
         return {
             "forecast_horizon": horizon,
             "top_analogs": [],
@@ -754,67 +887,136 @@ def _transform_analog_result_to_response(
                 "outcome_uncertainty": {},
                 "common_events": []
             },
-            "generated_at": datetime.now(timezone.utc).isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data_source": "fallback",
+            "search_metadata": {
+                "search_method": "error_fallback",
+                "faiss_search_successful": False,
+                "error": "Failed to transform service response"
+            }
         }
 
 def _extract_initial_conditions(analog: Dict[str, Any], variables: List[str]) -> Dict[str, Optional[float]]:
-    """Extract initial conditions from analog data."""
+    """Extract initial conditions from analog data using real outcomes data."""
     conditions = {}
-    outcome = analog.get("forecast_outcome", {})
     
-    # Map the primary variable to actual weather variables
-    primary_var = outcome.get("variable", "temperature")
-    primary_value = outcome.get("predicted_value", 20.0)
+    # Get the analog index to extract from outcomes data
+    analog_index = analog.get("index")
+    if analog_index is None:
+        # Fallback to minimal conditions if no index available
+        for var in variables:
+            conditions[var] = None
+        return conditions
     
-    # Map to actual variable names
-    if primary_var == "temperature":
-        conditions["t2m"] = primary_value
-    elif primary_var == "wind":
-        conditions["u10"] = primary_value * 0.7  # Approximate u component
-        conditions["v10"] = primary_value * 0.3  # Approximate v component
-    elif primary_var == "pressure":
-        conditions["msl"] = primary_value
-    elif primary_var == "precipitation":
-        conditions["tp6h"] = primary_value
+    # Get horizon to determine which outcomes file to use
+    horizon = analog.get("horizon", "24h")
     
-    # Fill in other variables with reasonable defaults
-    for var in variables:
-        if var not in conditions:
-            if var == "t2m":
-                conditions[var] = 20.0 + np.random.normal(0, 5)
-            elif var in ["u10", "v10"]:
-                conditions[var] = np.random.normal(0, 3)
-            elif var == "msl":
-                conditions[var] = 1013.0 + np.random.normal(0, 10)
-            else:
+    # Load the actual outcomes data
+    data = _load_outcomes_data(horizon)
+    if data is None:
+        # Fallback to minimal conditions if data can't be loaded
+        for var in variables:
+            conditions[var] = None
+        return conditions
+    
+    outcomes = data["outcomes"]
+    
+    # Extract real values from the outcomes array for this analog
+    try:
+        if analog_index >= 0 and analog_index < len(outcomes):
+            outcome_values = outcomes[analog_index]
+            
+            # Map from outcomes array indices to variable names
+            for var in variables:
+                if var in OUTCOMES_VARIABLE_MAP.values():
+                    # Find the index for this variable in the outcomes array
+                    var_index = None
+                    for idx, var_name in OUTCOMES_VARIABLE_MAP.items():
+                        if var_name == var:
+                            var_index = idx
+                            break
+                    
+                    if var_index is not None and var_index < len(outcome_values):
+                        conditions[var] = float(outcome_values[var_index])
+                    else:
+                        conditions[var] = None
+                else:
+                    conditions[var] = None
+        else:
+            # Index out of range, set all to None
+            for var in variables:
                 conditions[var] = None
+                
+    except Exception as e:
+        logger.error(f"Error extracting initial conditions from analog {analog_index}: {e}")
+        for var in variables:
+            conditions[var] = None
     
     return conditions
 
 def _generate_timeline_from_analog(analog: Dict[str, Any], horizon: str) -> List[Dict[str, Any]]:
-    """Generate timeline points from analog data."""
+    """Generate timeline points from analog data using real outcomes data."""
     timeline = []
     hours = _horizon_to_hours(horizon)
     
-    # Create timeline points at key intervals
-    for offset in [0, hours // 3, 2 * hours // 3, hours]:
-        point = {
-            "hours_offset": offset,
-            "values": {
-                "t2m": 20.0 + np.random.normal(0, 3),
-                "msl": 1013.0 + np.random.normal(0, 5),
-                "u10": np.random.normal(0, 2),
-                "v10": np.random.normal(0, 2)
-            },
-            "events": None,
-            "temperature_trend": "stable",
-            "pressure_trend": "stable"
-        }
-        
-        if offset > 0:
-            point["events"] = ["Weather pattern evolution"] if np.random.random() > 0.7 else None
+    # Get the analog index to extract from outcomes data
+    analog_index = analog.get("index")
+    if analog_index is None:
+        # Return empty timeline if no index available
+        return timeline
+    
+    # Load the actual outcomes data
+    data = _load_outcomes_data(horizon)
+    if data is None:
+        # Return empty timeline if data can't be loaded
+        return timeline
+    
+    outcomes = data["outcomes"]
+    metadata = data["metadata"]
+    
+    try:
+        if analog_index >= 0 and analog_index < len(outcomes):
+            outcome_values = outcomes[analog_index]
             
-        timeline.append(point)
+            # Extract real values for timeline
+            values = {}
+            for var_idx, var_name in OUTCOMES_VARIABLE_MAP.items():
+                if var_idx < len(outcome_values):
+                    values[var_name] = float(outcome_values[var_idx])
+            
+            # Get temporal information from metadata
+            temporal_info = metadata.iloc[analog_index] if analog_index < len(metadata) else {}
+            
+            # Create timeline points at key intervals using real data
+            for offset in [0, hours // 3, 2 * hours // 3, hours]:
+                # For simplicity, we use the same values at each time point
+                # In reality, you might want to interpolate or use multiple samples
+                point = {
+                    "hours_offset": offset,
+                    "values": {
+                        "t2m": values.get("t2m"),
+                        "msl": None,  # Not in outcomes data, set to None
+                        "u10": values.get("u10"),
+                        "v10": values.get("v10"),
+                        "t850": values.get("t850"),
+                        "z500": values.get("z500"),
+                        "cape": values.get("cape")
+                    },
+                    "events": None,
+                    "temperature_trend": "stable", 
+                    "pressure_trend": "stable"
+                }
+                
+                # Determine trends based on actual data patterns
+                if "t2m" in values:
+                    # Simple trend analysis could be added here based on comparing
+                    # with nearby analogs or temporal patterns
+                    pass
+                
+                timeline.append(point)
+                
+    except Exception as e:
+        logger.error(f"Error generating timeline from analog {analog_index}: {e}")
     
     return timeline
 
@@ -841,18 +1043,51 @@ def _generate_outcome_narrative(analog: Dict[str, Any]) -> str:
     return f"{base} {evolution} with typical seasonal characteristics."
 
 def _extract_season_info(analog: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract season information from analog data."""
-    temporal_info = analog.get("temporal_info", {})
-    month = temporal_info.get("month", datetime.now().month)
-    season = temporal_info.get("season", "autumn")
+    """Extract season information from analog data using real metadata."""
+    # Get the analog index to extract from metadata
+    analog_index = analog.get("index")
+    horizon = analog.get("horizon", "24h")
     
+    # Load the actual metadata
+    data = _load_outcomes_data(horizon)
+    if data is None or analog_index is None:
+        # Fallback to current time
+        from datetime import datetime
+        return {
+            "month": datetime.now().month,
+            "season": "autumn"
+        }
+    
+    metadata = data["metadata"]
+    
+    try:
+        if analog_index >= 0 and analog_index < len(metadata):
+            row = metadata.iloc[analog_index]
+            
+            # Extract real seasonal information
+            month = int(row['month']) if 'month' in row else datetime.now().month
+            season_code = int(row['season']) if 'season' in row else 1
+            
+            # Map season code to name
+            season_map = {0: "summer", 1: "autumn", 2: "winter", 3: "spring"}
+            season = season_map.get(season_code, "autumn")
+            
+            return {
+                "month": month,
+                "season": season
+            }
+    except Exception as e:
+        logger.error(f"Error extracting season info from analog {analog_index}: {e}")
+    
+    # Fallback
+    from datetime import datetime
     return {
-        "month": month,
-        "season": season
+        "month": datetime.now().month,
+        "season": "autumn"
     }
 
 def _generate_ensemble_statistics(analogs: List[Dict[str, Any]], variables: List[str]) -> Dict[str, Any]:
-    """Generate ensemble statistics from analog list."""
+    """Generate ensemble statistics from analog list using real outcomes data."""
     if not analogs:
         return {
             "mean_outcomes": {},
@@ -860,26 +1095,98 @@ def _generate_ensemble_statistics(analogs: List[Dict[str, Any]], variables: List
             "common_events": []
         }
     
-    # Extract values for statistics
+    # Get horizon from first analog to determine which dataset to use
+    horizon = analogs[0].get("horizon", "24h") if analogs else "24h"
+    
+    # Load the actual outcomes data
+    data = _load_outcomes_data(horizon)
+    if data is None:
+        return {
+            "mean_outcomes": {},
+            "outcome_uncertainty": {},
+            "common_events": []
+        }
+    
+    outcomes = data["outcomes"]
+    metadata = data["metadata"]
+    
+    # Extract values for statistics from real data
     mean_outcomes = {}
     outcome_uncertainty = {}
     
-    for var in variables[:4]:  # Limit to first 4 variables
+    # Process each requested variable
+    for var in variables:
+        if var not in OUTCOMES_VARIABLE_MAP.values():
+            mean_outcomes[var] = None
+            outcome_uncertainty[var] = None
+            continue
+            
+        # Find the index for this variable in the outcomes array
+        var_index = None
+        for idx, var_name in OUTCOMES_VARIABLE_MAP.items():
+            if var_name == var:
+                var_index = idx
+                break
+        
+        if var_index is None:
+            mean_outcomes[var] = None
+            outcome_uncertainty[var] = None
+            continue
+            
+        # Collect values from all analogs for this variable
         values = []
         for analog in analogs:
-            outcome = analog.get("forecast_outcome", {})
-            if outcome.get("variable") == _map_variable_to_primary(var):
-                values.append(outcome.get("predicted_value", 0))
+            analog_index = analog.get("index")
+            if analog_index is not None and 0 <= analog_index < len(outcomes):
+                try:
+                    outcome_values = outcomes[analog_index]
+                    if var_index < len(outcome_values):
+                        values.append(float(outcome_values[var_index]))
+                except Exception as e:
+                    logger.error(f"Error extracting value for variable {var} from analog {analog_index}: {e}")
+                    continue
         
+        # Calculate statistics from real values
         if values:
-            mean_outcomes[var] = round(np.mean(values), 1)
-            outcome_uncertainty[var] = round(np.std(values), 1)
+            import numpy as np
+            mean_outcomes[var] = round(float(np.mean(values)), 1)
+            outcome_uncertainty[var] = round(float(np.std(values)), 1)
         else:
             mean_outcomes[var] = None
             outcome_uncertainty[var] = None
     
-    # Extract common events
-    common_events = ["Weather pattern development", "Atmospheric evolution"]
+    # Extract common events from real temporal patterns
+    common_events = []
+    try:
+        # Analyze seasonal patterns from metadata
+        if len(analogs) > 0:
+            seasons = []
+            months = []
+            for analog in analogs:
+                analog_index = analog.get("index")
+                if analog_index is not None and analog_index < len(metadata):
+                    row = metadata.iloc[analog_index]
+                    if 'season' in row:
+                        seasons.append(row['season'])
+                    if 'month' in row:
+                        months.append(row['month'])
+            
+            if seasons:
+                # Add seasonal context
+                common_seasons = list(set(seasons))
+                if len(common_seasons) == 1:
+                    season_map = {0: "summer", 1: "autumn", 2: "winter", 3: "spring"}
+                    season_name = season_map.get(common_seasons[0], "transitional")
+                    common_events.append(f"Typical {season_name} weather patterns")
+                else:
+                    common_events.append("Transitional seasonal patterns")
+                    
+    except Exception as e:
+        logger.error(f"Error extracting temporal patterns for ensemble statistics: {e}")
+        common_events = ["Weather pattern evolution"]
+    
+    if not common_events:
+        common_events = ["Weather pattern evolution"]
     
     return {
         "mean_outcomes": mean_outcomes,

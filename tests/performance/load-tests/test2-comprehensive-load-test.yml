@@ -1,0 +1,382 @@
+# TEST2: Comprehensive Load Testing Configuration
+# Advanced performance testing with real FAISS integration
+# 
+# Performance Targets:
+# - API response time p95 < 150ms
+# - FAISS search time p95 < 1ms
+# - Zero fallback usage in CI runs
+# - Memory usage within acceptable limits
+# - Concurrent user handling: 50+ users
+
+config:
+  target: 'http://localhost:8000'
+  
+  # Load Testing Phases
+  phases:
+    # Phase 1: System Warmup - Prime FAISS indices and caches
+    - name: "FAISS Warmup"
+      duration: 120
+      arrivalRate: 2
+      rampTo: 5
+      
+    # Phase 2: Baseline Load - Establish performance baseline
+    - name: "Baseline Load"
+      duration: 300
+      arrivalRate: 10
+      
+    # Phase 3: Target Load - TEST2 concurrent user requirement
+    - name: "Target Load - 50 Users"
+      duration: 600
+      arrivalRate: 50
+      
+    # Phase 4: Peak Load - Validate system under stress
+    - name: "Peak Load - 100 Users"
+      duration: 300
+      arrivalRate: 100
+      
+    # Phase 5: Stress Test - Find breaking point
+    - name: "Stress Test"
+      duration: 180
+      arrivalRate: 200
+      rampTo: 500
+      
+    # Phase 6: Recovery Test - Validate system recovery
+    - name: "Recovery Validation"
+      duration: 120
+      arrivalRate: 10
+
+  # Connection and timeout settings
+  timeout: 30
+  pool: 100
+  
+  # HTTP configuration for optimal performance
+  http:
+    timeout: 30000
+    pool: 100
+    keepalive: true
+    headers:
+      'User-Agent': 'TEST2-LoadTest/1.0'
+      'Accept': 'application/json'
+      'Authorization': 'Bearer {{ $env.API_TOKEN }}'
+      'X-Load-Test': 'true'
+    
+  # Performance monitoring plugins
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+    expect: {}
+    apdex:
+      threshold: 150  # TEST2 requirement: 150ms threshold
+    hdrhistogram: {}
+    
+  # Custom performance processor
+  processor: './utils/test2-performance-processor.js'
+  
+  # Test data variables for realistic scenarios
+  variables:
+    horizons:
+      - "6h"
+      - "12h"
+      - "24h"
+      - "48h"
+    
+    variable_combinations:
+      # Light requests (fast execution)
+      - "t2m"
+      - "cape"
+      # Medium requests (balanced)
+      - "t2m,u10,v10"
+      - "t2m,cape"
+      # Heavy requests (high computation)
+      - "t2m,u10,v10,z500"
+      - "t2m,u10,v10,cape,t850"
+      - "t2m,u10,v10,z500,t850,q850"
+      # CAPE-focused (meteorologically relevant)
+      - "cape,t2m,u10,v10"
+    
+    analog_counts:
+      - 50
+      - 100
+      - 200
+      - 500
+    
+    # Weighted distribution for realistic usage
+    usage_patterns:
+      - weight: 40  # Most common: 24h forecasts
+        horizon: "24h"
+        vars: "t2m,u10,v10"
+        count: 100
+      - weight: 25  # Quick checks: 6h forecasts
+        horizon: "6h"
+        vars: "t2m"
+        count: 50
+      - weight: 15  # CAPE analysis: storm prediction
+        horizon: "12h"
+        vars: "t2m,u10,v10,cape"
+        count: 100
+      - weight: 10  # Extended forecasts: 48h
+        horizon: "48h"
+        vars: "t2m,u10,v10,z500"
+        count: 200
+      - weight: 10  # Detailed analysis
+        horizon: "24h"
+        vars: "t2m,u10,v10,z500,t850,q850"
+        count: 100
+
+# Load Testing Scenarios
+scenarios:
+  # Primary API Load Testing
+  - name: "FAISS Analog Search Load"
+    weight: 60
+    flow:
+      - loop:
+        - get:
+            url: "/api/analogs"
+            name: "api_analogs_request"
+            qs:
+              horizon: "{{ horizons[$randomInt(0, 4)] }}"
+              variables: "{{ variable_combinations[$randomInt(0, 8)] }}"
+              count: "{{ analog_counts[$randomInt(0, 4)] }}"
+            expect:
+              - statusCode: 200
+              - hasHeader: 'x-response-time'
+              - contentType: 'application/json'
+              - property: 'search_stats.data_source'
+                equals: 'faiss'
+              - property: 'search_stats.fallback_used'
+                equals: false
+              - property: 'search_stats.faiss_search_time_ms'
+                maxValue: 1.0  # FAISS p95 < 1ms requirement
+            capture:
+              - json: "$.search_stats.faiss_search_time_ms"
+                as: "faiss_search_time"
+              - json: "$.search_stats.total_search_time_ms"
+                as: "total_search_time"
+              - json: "$.analogs.length"
+                as: "analogs_returned"
+        count: 5
+        
+  - name: "Forecast Endpoint Load"
+    weight: 30
+    flow:
+      - loop:
+        - get:
+            url: "/forecast"
+            name: "forecast_request"
+            qs:
+              horizon: "{{ horizons[$randomInt(0, 4)] }}"
+              vars: "{{ variable_combinations[$randomInt(0, 8)] }}"
+            expect:
+              - statusCode: 200
+              - hasHeader: 'x-response-time'
+              - contentType: 'application/json'
+              - property: 'forecast.data_source'
+                equals: 'faiss'
+              - property: 'performance_stats.fallback_used'
+                equals: false
+            capture:
+              - json: "$.performance_stats.faiss_time_ms"
+                as: "forecast_faiss_time"
+              - json: "$.performance_stats.total_time_ms"
+                as: "forecast_total_time"
+              - json: "$.forecast.analogs_count"
+                as: "forecast_analogs_count"
+        count: 3
+
+  - name: "Health Monitoring Load"
+    weight: 5
+    flow:
+      - get:
+          url: "/health/faiss"
+          name: "faiss_health_check"
+          expect:
+            - statusCode: 200
+            - property: 'status'
+              equals: 'healthy'
+            - property: 'performance_stats.fallback_rate'
+              equals: 0
+          capture:
+            - json: "$.performance_stats.p95_search_time_ms"
+              as: "health_p95_time"
+            - json: "$.memory_usage_mb"
+              as: "memory_usage"
+      - think: 10
+
+  - name: "System Health Monitoring"
+    weight: 3
+    flow:
+      - get:
+          url: "/health/system"
+          name: "system_health_check"
+          expect:
+            - statusCode: 200
+          capture:
+            - json: "$.memory_usage_mb"
+              as: "system_memory"
+            - json: "$.cpu_usage_percent"
+              as: "system_cpu"
+      - think: 15
+
+  - name: "Performance Metrics Collection"
+    weight: 2
+    flow:
+      - get:
+          url: "/metrics"
+          name: "prometheus_metrics"
+          expect:
+            - statusCode: 200
+            - contentType: 'text/plain'
+          capture:
+            - regexp: 'api_requests_total ([0-9]+)'
+              as: "total_requests"
+            - regexp: 'faiss_search_time_seconds_bucket.*le="0.001".*} ([0-9]+)'
+              as: "faiss_sub_1ms_count"
+      - think: 20
+
+# Pre-test validation
+before:
+  flow:
+    - log: "Starting TEST2 Comprehensive Load Test"
+    
+    # Validate API health before load testing
+    - get:
+        url: "/health"
+        expect:
+          - statusCode: 200
+          - property: 'status'
+            equals: 'healthy'
+    
+    # Validate FAISS health specifically
+    - get:
+        url: "/health/faiss"
+        expect:
+          - statusCode: 200
+          - property: 'status'
+            equals: 'healthy'
+          - property: 'indices_loaded'
+            greaterThan: 0
+    
+    # Warmup FAISS indices
+    - get:
+        url: "/api/analogs"
+        qs:
+          horizon: "24h"
+          variables: "t2m"
+          count: "10"
+        expect:
+          - statusCode: 200
+    
+    - log: "TEST2 pre-test validation completed successfully"
+
+# Post-test validation and cleanup
+after:
+  flow:
+    - log: "TEST2 load test completed, collecting final metrics"
+    
+    # Collect final FAISS performance stats
+    - get:
+        url: "/health/faiss"
+        capture:
+          - json: "$"
+            as: "final_faiss_stats"
+    
+    # Collect system performance stats
+    - get:
+        url: "/health/system"
+        capture:
+          - json: "$"
+            as: "final_system_stats"
+    
+    # Collect Prometheus metrics
+    - get:
+        url: "/metrics"
+        capture:
+          - json: "$"
+            as: "final_prometheus_stats"
+    
+    - log: "Final FAISS stats: {{ final_faiss_stats }}"
+    - log: "Final system stats: {{ final_system_stats }}"
+
+# Performance expectations and SLA validation
+expect:
+  # API Response Time Requirements
+  - property: 'response.time'
+    maxValue: 150  # API p95 < 150ms requirement
+    message: "API response time SLA violation"
+    
+  # FAISS Search Time Requirements  
+  - property: 'faiss_search_time'
+    maxValue: 1.0  # FAISS p95 < 1ms requirement
+    message: "FAISS search time SLA violation"
+    
+  # Error Rate Requirements
+  - property: 'errors.rate'
+    maxValue: 0.001  # < 0.1% error rate
+    message: "Error rate SLA violation"
+    
+  # Fallback Usage Requirements (must be zero)
+  - property: 'fallback.rate'
+    maxValue: 0  # Zero fallback usage
+    message: "Fallback usage detected - must be zero for TEST2"
+
+# Custom metrics for detailed analysis
+metrics:
+  - name: "api_response_time_histogram"
+    type: "histogram"
+    buckets: [1, 5, 10, 25, 50, 100, 150, 200, 300, 500, 1000]
+    
+  - name: "faiss_search_time_histogram"
+    type: "histogram" 
+    buckets: [0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0]
+    
+  - name: "analogs_count_distribution"
+    type: "histogram"
+    buckets: [10, 25, 50, 100, 200, 500, 1000]
+    
+  - name: "memory_usage_gauge"
+    type: "gauge"
+    
+  - name: "concurrent_users_gauge" 
+    type: "gauge"
+    
+  - name: "faiss_index_performance"
+    type: "counter"
+
+# Environment-specific configurations
+environments:
+  ci:
+    target: 'http://localhost:8000'
+    phases:
+      - name: "CI Validation"
+        duration: 300
+        arrivalRate: 25
+    expect:
+      - property: 'response.time'
+        maxValue: 150
+      - property: 'faiss_search_time'
+        maxValue: 1.0
+      - property: 'errors.rate'
+        maxValue: 0
+        
+  development:
+    target: 'http://localhost:8000'
+    phases:
+      - name: "Development Test"
+        duration: 180
+        arrivalRate: 10
+        
+  staging:
+    target: 'https://staging-api.domain.com'
+    phases:
+      - name: "Staging Validation"
+        duration: 600
+        arrivalRate: 25
+        
+  production-safe:
+    target: 'https://api.domain.com'
+    # Conservative production testing
+    phases:
+      - name: "Production Validation"
+        duration: 300
+        arrivalRate: 5
+        rampTo: 15

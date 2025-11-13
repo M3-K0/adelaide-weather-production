@@ -13,19 +13,64 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     
-    // Parse query parameters
+    // Parse and validate query parameters with null safety
     const timeRange = (searchParams.get('timeRange') || '24h') as TimeRange;
-    const horizons = (searchParams.get('horizons') || '6h,12h,24h,48h').split(',') as ForecastHorizon[];
-    const variables = (searchParams.get('variables') || 't2m,u10,v10,msl,cape').split(',') as WeatherVariable[];
+    const horizonsParam = searchParams.get('horizons');
+    const variablesParam = searchParams.get('variables');
     const includeConfidence = searchParams.get('includeConfidence') === 'true';
 
-    // Generate mock metrics data (in production, this would fetch from Prometheus/monitoring systems)
-    const metricsData = generateMetricsData(timeRange, horizons, variables, includeConfidence);
+    // Validate and parse horizons parameter
+    const horizons: ForecastHorizon[] = horizonsParam 
+      ? horizonsParam.split(',').map(h => h.trim()).filter(h => h) as ForecastHorizon[]
+      : ['6h', '12h', '24h', '48h'];
+
+    // Validate and parse variables parameter  
+    const variables: WeatherVariable[] = variablesParam
+      ? variablesParam.split(',').map(v => v.trim()).filter(v => v) as WeatherVariable[]
+      : ['t2m', 'u10', 'v10', 'msl', 'cape'];
+
+    // Validate timeRange parameter
+    const validTimeRanges: TimeRange[] = ['1h', '6h', '24h', '7d', '30d'];
+    if (!validTimeRanges.includes(timeRange)) {
+      return NextResponse.json(
+        { error: `Invalid timeRange. Must be one of: ${validTimeRanges.join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    // Validate that we have at least one horizon and variable
+    if (horizons.length === 0) {
+      return NextResponse.json(
+        { error: 'At least one forecast horizon must be specified' },
+        { status: 400 }
+      );
+    }
+
+    if (variables.length === 0) {
+      return NextResponse.json(
+        { error: 'At least one weather variable must be specified' },
+        { status: 400 }
+      );
+    }
+
+    // Generate metrics data with proper error handling
+    const metricsData = await generateMetricsData(timeRange, horizons, variables, includeConfidence);
+
+    // Validate that we have meaningful data
+    if (!metricsData || (!metricsData.forecast_accuracy?.length && !metricsData.performance_metrics?.length)) {
+      return NextResponse.json(
+        { 
+          error: 'No metrics data available for the selected parameters',
+          details: 'The requested time range or parameters may not have available data'
+        },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json(metricsData, {
       status: 200,
       headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Cache-Control': 'public, max-age=30', // Short cache for metrics data
         'Pragma': 'no-cache',
         'Expires': '0',
       },
@@ -33,8 +78,37 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error generating metrics summary:', error);
     
+    // Detailed error handling
+    const errorMessage = error instanceof Error ? error.message : 'Failed to generate metrics summary';
+    
+    // Check if it's a validation error
+    if (errorMessage.includes('Invalid') || errorMessage.includes('validation')) {
+      return NextResponse.json(
+        { 
+          error: 'Parameter validation failed',
+          details: errorMessage 
+        },
+        { status: 400 }
+      );
+    }
+
+    // Check if it's a timeout or network error
+    if (errorMessage.includes('timeout') || errorMessage.includes('network')) {
+      return NextResponse.json(
+        { 
+          error: 'Metrics service temporarily unavailable',
+          details: 'Unable to fetch metrics data. Please try again later.'
+        },
+        { status: 503 }
+      );
+    }
+    
+    // Generic server error
     return NextResponse.json(
-      { error: 'Failed to generate metrics summary' },
+      { 
+        error: 'Internal server error',
+        details: 'An unexpected error occurred while generating metrics'
+      },
       { status: 500 }
     );
   }
@@ -43,36 +117,66 @@ export async function GET(request: NextRequest) {
 /**
  * Generate mock metrics data for demonstration
  * In production, this would integrate with Prometheus queries
+ * 
+ * Enhanced with null safety and fallback indicators
  */
-function generateMetricsData(
+async function generateMetricsData(
   timeRange: TimeRange,
   horizons: ForecastHorizon[],
   variables: WeatherVariable[],
   includeConfidence: boolean
-): MetricsSummary {
+): Promise<MetricsSummary> {
   const now = new Date();
   const nowISO = now.toISOString();
 
-  // Generate forecast accuracy metrics
+  // Validate input parameters
+  if (!horizons || horizons.length === 0) {
+    throw new Error('Invalid input: horizons array is empty');
+  }
+  if (!variables || variables.length === 0) {
+    throw new Error('Invalid input: variables array is empty');
+  }
+
+  // Generate forecast accuracy metrics with null safety
   const forecast_accuracy: AccuracyMetric[] = [];
-  horizons.forEach(horizon => {
-    variables.forEach(variable => {
-      // Simulate realistic accuracy based on horizon and variable
-      const baseAccuracy = getBaseAccuracy(variable);
-      const horizonMultiplier = getHorizonMultiplier(horizon);
-      const accuracy = baseAccuracy * horizonMultiplier;
+  
+  try {
+    horizons.forEach(horizon => {
+      if (!horizon) return; // Skip null/undefined horizons
       
-      forecast_accuracy.push({
-        horizon,
-        variable,
-        mae: generateMAE(variable, horizon),
-        bias: generateBias(variable),
-        accuracy_percent: accuracy + (Math.random() - 0.5) * 5, // Add some variation
-        confidence_interval: generateConfidenceInterval(variable, horizon),
-        last_updated: nowISO,
+      variables.forEach(variable => {
+        if (!variable) return; // Skip null/undefined variables
+        
+        try {
+          // Simulate realistic accuracy based on horizon and variable
+          const baseAccuracy = getBaseAccuracy(variable);
+          const horizonMultiplier = getHorizonMultiplier(horizon);
+          
+          if (baseAccuracy == null || horizonMultiplier == null) {
+            console.warn(`Skipping invalid accuracy calculation for ${variable}@${horizon}`);
+            return;
+          }
+          
+          const accuracy = baseAccuracy * horizonMultiplier;
+          
+          forecast_accuracy.push({
+            horizon,
+            variable,
+            mae: generateMAE(variable, horizon) ?? 0,
+            bias: generateBias(variable) ?? 0,
+            accuracy_percent: Math.max(0, Math.min(100, accuracy + (Math.random() - 0.5) * 5)), // Clamp to 0-100
+            confidence_interval: generateConfidenceInterval(variable, horizon) ?? 0,
+            last_updated: nowISO,
+          });
+        } catch (err) {
+          console.warn(`Error generating accuracy metric for ${variable}@${horizon}:`, err);
+        }
       });
     });
-  });
+  } catch (error) {
+    console.error('Error generating forecast accuracy metrics:', error);
+    // Continue with empty array rather than failing completely
+  }
 
   // Generate performance metrics
   const performance_metrics: PerformanceMetric[] = [
@@ -178,23 +282,50 @@ function generateMetricsData(
     },
   ];
 
-  // Generate trend data
-  const trends = generateTrendData(timeRange);
+  // Generate trend data with error handling
+  let trends;
+  try {
+    trends = generateTrendData(timeRange);
+  } catch (error) {
+    console.warn('Error generating trend data:', error);
+    // Provide empty trends as fallback
+    trends = {
+      accuracy_trends: [],
+      performance_trends: [],
+      confidence_trends: [],
+    };
+  }
 
-  return {
-    forecast_accuracy,
-    performance_metrics,
-    system_health,
-    trends,
+  // Prepare final metrics summary with data source indication
+  const result: MetricsSummary = {
+    forecast_accuracy: forecast_accuracy || [],
+    performance_metrics: performance_metrics || [],
+    system_health: system_health || [],
+    trends: trends || { accuracy_trends: [], performance_trends: [], confidence_trends: [] },
     generated_at: nowISO,
     time_range: timeRange,
+    data_source: 'fallback' as any, // Indicate this is mock/fallback data
   };
+
+  // Validate result has meaningful data
+  const hasData = result.forecast_accuracy.length > 0 || 
+                  result.performance_metrics.length > 0 || 
+                  result.system_health.length > 0;
+  
+  if (!hasData) {
+    console.warn('Generated metrics summary contains no data');
+  }
+
+  return result;
 }
 
 /**
  * Helper functions for generating realistic mock data
+ * Enhanced with null safety checks
  */
-function getBaseAccuracy(variable: WeatherVariable): number {
+function getBaseAccuracy(variable: WeatherVariable): number | null {
+  if (!variable) return null;
+  
   const accuracyMap: Record<WeatherVariable, number> = {
     't2m': 92,    // Temperature is usually quite accurate
     'u10': 85,    // Wind components have more uncertainty
@@ -206,20 +337,24 @@ function getBaseAccuracy(variable: WeatherVariable): number {
     't850': 90,   // Upper air temperature
     'z500': 93,   // Geopotential height
   };
-  return accuracyMap[variable] || 85;
+  return accuracyMap[variable] ?? 85; // Provide fallback value
 }
 
-function getHorizonMultiplier(horizon: ForecastHorizon): number {
+function getHorizonMultiplier(horizon: ForecastHorizon): number | null {
+  if (!horizon) return null;
+  
   const multiplierMap: Record<ForecastHorizon, number> = {
     '6h': 1.0,
     '12h': 0.96,
     '24h': 0.91,
     '48h': 0.85,
   };
-  return multiplierMap[horizon] || 0.8;
+  return multiplierMap[horizon] ?? 0.8; // Provide fallback value
 }
 
-function generateMAE(variable: WeatherVariable, horizon: ForecastHorizon): number {
+function generateMAE(variable: WeatherVariable, horizon: ForecastHorizon): number | null {
+  if (!variable || !horizon) return null;
+  
   const baseMAE: Record<WeatherVariable, number> = {
     't2m': 1.2,
     'u10': 2.1,
@@ -233,15 +368,20 @@ function generateMAE(variable: WeatherVariable, horizon: ForecastHorizon): numbe
   };
   
   const horizonMultiplier = horizon === '6h' ? 0.8 : horizon === '12h' ? 1.0 : horizon === '24h' ? 1.3 : 1.8;
-  return (baseMAE[variable] || 1.0) * horizonMultiplier * (0.8 + Math.random() * 0.4);
+  const baseValue = baseMAE[variable] ?? 1.0; // Provide fallback
+  return baseValue * horizonMultiplier * (0.8 + Math.random() * 0.4);
 }
 
-function generateBias(variable: WeatherVariable): number {
+function generateBias(variable: WeatherVariable): number | null {
+  if (!variable) return null;
+  
   // Bias should be close to zero for good models
   return (Math.random() - 0.5) * 0.6; // -0.3 to 0.3
 }
 
-function generateConfidenceInterval(variable: WeatherVariable, horizon: ForecastHorizon): number {
+function generateConfidenceInterval(variable: WeatherVariable, horizon: ForecastHorizon): number | null {
+  if (!variable || !horizon) return null;
+  
   const baseCI: Record<WeatherVariable, number> = {
     't2m': 3.5,
     'u10': 5.2,
@@ -255,7 +395,8 @@ function generateConfidenceInterval(variable: WeatherVariable, horizon: Forecast
   };
   
   const horizonMultiplier = horizon === '6h' ? 0.9 : horizon === '12h' ? 1.1 : horizon === '24h' ? 1.4 : 1.9;
-  return (baseCI[variable] || 3.0) * horizonMultiplier * (0.9 + Math.random() * 0.2);
+  const baseValue = baseCI[variable] ?? 3.0; // Provide fallback
+  return baseValue * horizonMultiplier * (0.9 + Math.random() * 0.2);
 }
 
 function generateTrendData(timeRange: TimeRange) {

@@ -31,6 +31,11 @@ info:
     ## New Features in v2.0.0
     - **Enhanced Health Monitoring**: Comprehensive health checks with Kubernetes probe support
     - **FAISS Integration**: Real-time FAISS index health monitoring and performance metrics
+    - **Analog Search Transparency**: Full transparency about FAISS vs fallback data sources
+    - **Search Metadata**: Comprehensive performance and quality metrics for analog searches
+    - **Environment Controls**: Configurable fallback behavior via ALLOW_ANALOG_FALLBACK
+    - **Quality Validation**: Automatic validation of search results and distance metrics
+    - **Performance Tracking**: Real-time latency percentiles and throughput monitoring
     - **Security Hardening**: Advanced token management and security monitoring
     - **Performance Optimization**: Intelligent caching and compression middleware
     - **Configuration Management**: Multi-environment configuration with drift detection
@@ -426,49 +431,321 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /analogs:
+  /api/analogs:
     get:
-      summary: Get detailed analog patterns
+      summary: Get comprehensive analog weather patterns
       description: |
-        Retrieve detailed historical analog patterns for the current atmospheric state.
-        Shows the top 5 most similar historical weather patterns with timelines of
-        what happened after each pattern.
+        Provides historical weather analogs that match current atmospheric conditions,
+        including detailed pattern analysis, similarity scoring, and meteorological context.
         
-        **Use case**: Research, pattern analysis, forecast explanation.
-        **Response time**: May take 1-2 seconds due to complex analysis.
+        Uses advanced FAISS-based vector search to find the most similar historical
+        weather patterns from Adelaide's meteorological history. Returns rich metadata
+        about search quality, data sources, and fallback behavior.
+        
+        ## Features
+        - **FAISS Integration**: Real vector similarity search when indices available
+        - **Transparency**: Clear indication of data source (FAISS vs fallback)
+        - **Rich Metadata**: Comprehensive search performance metrics
+        - **Quality Gates**: Validation of search results and distance monotonicity
+        - **Graceful Fallback**: High-quality mock data when FAISS unavailable
+        - **Environment Control**: Configurable via ALLOW_ANALOG_FALLBACK environment variable
+        
+        ## Data Sources
+        - **Primary**: Real FAISS search using indexed historical patterns
+        - **Fallback**: Synthetic analog patterns with realistic characteristics
+        - **Detection**: Response includes `data_source` field for transparency
+        
+        ## Error Handling
+        - Returns 503 when FAISS unavailable and fallback disabled
+        - Automatic retry with exponential backoff for transient failures
+        - Comprehensive error metadata in response for debugging
+        
+        **Performance**: 50-150ms for FAISS search, 10-30ms for fallback
+        **Reliability**: >99.9% availability with fallback enabled
       operationId: getAnalogs
       tags:
-        - Analysis
+        - Analog Search
       security:
         - BearerAuth: []
       parameters:
         - name: horizon
           in: query
-          description: Forecast horizon to analyze
+          description: Forecast time horizon
           required: false
           schema:
             type: string
             enum: ["6h", "12h", "24h", "48h"]
             default: "24h"
+          examples:
+            short_term:
+              value: "6h"
+              summary: Short-term 6-hour forecast horizon
+            standard:
+              value: "24h" 
+              summary: Standard 24-hour forecast horizon
+            extended:
+              value: "48h"
+              summary: Extended 48-hour forecast horizon
+        - name: variables
+          in: query
+          description: |
+            Comma-separated list of weather variables for analog search.
+            Influences which aspects of the atmospheric pattern are prioritized.
+            Default: t2m,u10,v10,msl (temperature, wind, pressure)
+          required: false
+          schema:
+            type: string
+            pattern: '^[a-z0-9,_]+$'
+            maxLength: 200
+          examples:
+            default:
+              value: "t2m,u10,v10,msl"
+              summary: Temperature, wind components, and pressure
+            temperature_focus:
+              value: "t2m,t850"
+              summary: Focus on temperature patterns
+            dynamics_focus:
+              value: "u10,v10,z500,msl"
+              summary: Focus on atmospheric dynamics
+        - name: k
+          in: query
+          description: Number of analog patterns to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 10
+          examples:
+            minimal:
+              value: 5
+              summary: Top 5 patterns only
+            standard:
+              value: 10
+              summary: Standard set of 10 patterns
+            comprehensive:
+              value: 50
+              summary: Comprehensive 50-pattern ensemble
+        - name: query_time
+          in: query
+          description: |
+            ISO 8601 datetime for analog search. Defaults to current time.
+            Must be within 5 years of present and not more than 30 days in future.
+          required: false
+          schema:
+            type: string
+            format: date-time
+          examples:
+            current:
+              value: "2024-01-15T12:00:00Z"
+              summary: Specific analysis time
+            recent:
+              value: "2024-01-14T06:00:00Z"
+              summary: Historical analysis point
       responses:
         '200':
           description: Analog patterns retrieved successfully
+          headers:
+            X-Request-ID:
+              description: Unique request identifier for debugging
+              schema:
+                type: string
+                format: uuid
+            X-Data-Source:
+              description: Indicates whether FAISS or fallback data was used
+              schema:
+                type: string
+                enum: ["faiss", "fallback"]
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AnalogExplorerData'
+              examples:
+                faiss_success:
+                  summary: Successful FAISS search with real data
+                  value:
+                    forecast_horizon: "24h"
+                    top_analogs:
+                      - date: "2023-03-15T12:00:00Z"
+                        similarity_score: 0.87
+                        initial_conditions:
+                          t2m: 24.5
+                          u10: 3.2
+                          v10: -1.8
+                          msl: 101520
+                        timeline:
+                          - hours_offset: 0
+                            values:
+                              t2m: 24.5
+                              u10: 3.2
+                              v10: -1.8
+                            events: null
+                            temperature_trend: "stable"
+                            pressure_trend: "rising"
+                          - hours_offset: 12
+                            values:
+                              t2m: 26.1
+                              u10: 2.8
+                              v10: -2.1
+                            events: null
+                            temperature_trend: "rising"
+                            pressure_trend: "stable"
+                          - hours_offset: 24
+                            values:
+                              t2m: 28.3
+                              u10: 1.9
+                              v10: -1.5
+                            events: null
+                            temperature_trend: "rising"
+                            pressure_trend: "falling"
+                        outcome_narrative: "Strong pattern match showing stable conditions with typical seasonal characteristics."
+                        location:
+                          latitude: -34.9285
+                          longitude: 138.6007
+                          name: "Adelaide Weather Station"
+                        season_info:
+                          month: 3
+                          season: "autumn"
+                    ensemble_stats:
+                      mean_outcomes:
+                        t2m: 23.7
+                        msl: 1014.2
+                      outcome_uncertainty:
+                        t2m: 2.8
+                        msl: 5.4
+                      common_events:
+                        - "Cloud cover increased"
+                        - "Gradual temperature rise"
+                    generated_at: "2024-01-15T14:30:00Z"
+                    data_source: "faiss"
+                    search_metadata:
+                      search_method: "faiss"
+                      faiss_search_successful: true
+                      indices_used: "24h_temperature_v1"
+                      total_candidates: 50000
+                      search_time_ms: 15.7
+                      k_neighbors_found: 10
+                      distance_metric: "L2"
+                      performance_metrics:
+                        current_latency_ms: 15.7
+                        p50_latency_ms: 18.2
+                        p95_latency_ms: 45.1
+                        total_measurements: 47
+                fallback_example:
+                  summary: Fallback data when FAISS unavailable
+                  value:
+                    forecast_horizon: "24h"
+                    top_analogs:
+                      - date: "2023-02-18T12:00:00Z"
+                        similarity_score: 0.72
+                        initial_conditions:
+                          t2m: 22.1
+                          u10: 4.1
+                          v10: -2.3
+                          msl: 101340
+                        timeline:
+                          - hours_offset: 0
+                            values:
+                              t2m: 22.1
+                              u10: 4.1
+                              v10: -2.3
+                            events: null
+                            temperature_trend: "stable"
+                            pressure_trend: "stable"
+                        outcome_narrative: "Moderate pattern match indicating stable conditions with seasonal characteristics."
+                        location:
+                          latitude: -34.9285
+                          longitude: 138.6007
+                          name: "Adelaide Weather Station"
+                        season_info:
+                          month: 2
+                          season: "summer"
+                    ensemble_stats:
+                      mean_outcomes:
+                        t2m: 21.4
+                        msl: 1013.8
+                      outcome_uncertainty:
+                        t2m: 3.2
+                        msl: 6.1
+                      common_events:
+                        - "Weather pattern evolution"
+                    generated_at: "2024-01-15T14:30:00Z"
+                    data_source: "fallback"
+                    search_metadata:
+                      search_method: "fallback_mock"
+                      faiss_search_successful: false
+                      fallback_reason: "FAISS indices unavailable"
+                      total_candidates: 13148
+                      search_time_ms: 8.3
+                      k_neighbors_found: 10
+                      distance_metric: "L2_fallback"
         '400':
-          description: Invalid parameters
+          description: Invalid request parameters
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_horizon:
+                  summary: Invalid forecast horizon
+                  value:
+                    error:
+                      code: 400
+                      message: "Invalid analog request parameters: Invalid horizon '36h'. Must be one of: 6h, 12h, 24h, 48h"
+                      timestamp: "2024-01-15T14:30:00Z"
+                      correlation_id: "analog_req_789012"
+                invalid_k_parameter:
+                  summary: Invalid k parameter
+                  value:
+                    error:
+                      code: 400
+                      message: "Invalid analog request parameters: Parameter 'k' must be an integer between 1 and 200"
+                      timestamp: "2024-01-15T14:30:00Z"
+                      correlation_id: "analog_req_789013"
+                invalid_query_time:
+                  summary: Invalid query time format
+                  value:
+                    error:
+                      code: 400
+                      message: "Invalid analog request parameters: Invalid query_time format: time data does not match format"
+                      timestamp: "2024-01-15T14:30:00Z"
+                      correlation_id: "analog_req_789014"
         '401':
           description: Authentication required
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: 401
+                  message: "Invalid authentication token"
+                  timestamp: "2024-01-15T14:30:00Z"
+                  correlation_id: "analog_req_789015"
+        '500':
+          description: Internal server error during analog search
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: 500
+                  message: "Analog search failed: Search execution error"
+                  timestamp: "2024-01-15T14:30:00Z"
+                  correlation_id: "analog_req_789016"
+        '503':
+          description: Service unavailable (FAISS down and fallback disabled)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: 503
+                  message: "Analog search service not available"
+                  timestamp: "2024-01-15T14:30:00Z" 
+                  correlation_id: "analog_req_789017"
 
   # Enhanced Health Monitoring Endpoints
   /health/live:
@@ -540,81 +817,671 @@ paths:
 
   /health/detailed:
     get:
-      summary: Comprehensive health report
+      summary: Comprehensive system health assessment
       description: |
-        Detailed health check with comprehensive system status including
-        startup validation, FAISS indices, configuration, security, and performance.
+        Comprehensive health check with detailed system status including startup
+        validation, FAISS search infrastructure, analog fallback behavior,
+        configuration management, security posture, and performance metrics.
+        
+        This endpoint consolidates health information from all system components
+        and provides transparency about FAISS availability and fallback behavior.
+        
+        ## Components Included
+        - **Startup Validation**: Component initialization and validation results
+        - **FAISS Infrastructure**: Search index status and performance metrics
+        - **Analog Search**: Search capability including fallback behavior transparency
+        - **Configuration**: System configuration and drift detection
+        - **Security**: Authentication, authorization, and audit status
+        - **Performance**: SLA compliance and resource utilization
+        
+        ## FAISS Transparency
+        - Real-time status of FAISS search capabilities
+        - Fallback behavior when FAISS unavailable (controlled by ALLOW_ANALOG_FALLBACK)
+        - Index health and performance metrics
+        - Search quality and latency statistics
+        
+        **Use for**: Comprehensive system monitoring, troubleshooting, capacity planning
+        **Update frequency**: Real-time collection with intelligent caching
       operationId: getDetailedHealth
       tags:
         - Health Monitoring
       responses:
         '200':
-          description: Detailed health information
+          description: Comprehensive health information retrieved successfully
           content:
             application/json:
               schema:
                 type: object
+                required: [status, timestamp, detailed_status]
                 properties:
                   status:
                     type: string
+                    enum: ["healthy", "degraded", "unhealthy", "critical"]
+                    description: Overall system health status
                     example: "healthy"
                   timestamp:
                     type: string
                     format: date-time
+                    description: Health assessment timestamp
+                    example: "2024-01-15T14:30:00Z"
                   detailed_status:
                     type: object
+                    required: [startup_validation, faiss_indices, analog_search, configuration, security, performance]
                     properties:
                       startup_validation:
                         type: object
+                        required: [status, components_validated, validation_time_ms, last_validation]
                         properties:
                           status:
                             type: string
+                            enum: ["passed", "failed", "in_progress", "not_started"]
+                            description: Overall startup validation status
+                            example: "passed"
                           components_validated:
                             type: integer
+                            minimum: 0
+                            description: Number of components successfully validated
+                            example: 12
+                          total_components:
+                            type: integer
+                            minimum: 0
+                            description: Total number of components to validate
+                            example: 12
                           validation_time_ms:
                             type: number
+                            minimum: 0
+                            description: Total validation time in milliseconds
+                            example: 3450.7
+                          last_validation:
+                            type: string
+                            format: date-time
+                            description: Last validation timestamp
+                            example: "2024-01-15T12:00:00Z"
+                          failed_components:
+                            type: array
+                            items:
+                              type: string
+                            description: List of failed component names
+                            example: []
+                          validation_details:
+                            type: object
+                            description: Per-component validation results
+                            additionalProperties:
+                              type: object
+                              properties:
+                                status:
+                                  type: string
+                                  enum: ["passed", "failed", "skipped"]
+                                duration_ms:
+                                  type: number
+                                error:
+                                  type: string
+                                  nullable: true
                       faiss_indices:
                         type: object
+                        required: [status, indices_loaded, total_vectors, avg_search_time_ms, availability_status]
                         properties:
                           status:
                             type: string
+                            enum: ["all_loaded", "partial", "failed", "unavailable"]
+                            description: Overall FAISS indices status
+                            example: "all_loaded"
                           indices_loaded:
                             type: integer
+                            minimum: 0
+                            description: Number of successfully loaded indices
+                            example: 4
+                          total_indices_expected:
+                            type: integer
+                            minimum: 0
+                            description: Total number of indices expected
+                            example: 4
                           total_vectors:
                             type: integer
+                            minimum: 0
+                            description: Total vectors across all indices
+                            example: 52592
                           avg_search_time_ms:
                             type: number
-                      configuration:
+                            minimum: 0
+                            description: Average search time across all indices
+                            example: 15.7
+                          memory_usage_mb:
+                            type: number
+                            minimum: 0
+                            description: Total FAISS memory usage in MB
+                            example: 187.3
+                          availability_status:
+                            type: object
+                            description: Per-horizon availability status
+                            additionalProperties:
+                              type: object
+                              properties:
+                                available:
+                                  type: boolean
+                                vectors:
+                                  type: integer
+                                last_successful_search:
+                                  type: string
+                                  format: date-time
+                                  nullable: true
+                                error:
+                                  type: string
+                                  nullable: true
+                            example:
+                              "6h":
+                                available: true
+                                vectors: 13148
+                                last_successful_search: "2024-01-15T14:29:45Z"
+                                error: null
+                              "24h":
+                                available: true
+                                vectors: 13148
+                                last_successful_search: "2024-01-15T14:29:32Z"
+                                error: null
+                          index_health_scores:
+                            type: object
+                            description: Health scores by horizon
+                            additionalProperties:
+                              type: integer
+                              minimum: 0
+                              maximum: 100
+                            example:
+                              "6h": 95
+                              "24h": 97
+                              "12h": 93
+                              "48h": 89
+                      analog_search:
                         type: object
+                        required: [status, data_source_capability, fallback_enabled, search_performance]
                         properties:
                           status:
                             type: string
+                            enum: ["optimal", "fallback", "degraded", "unavailable"]
+                            description: Overall analog search capability status
+                            example: "optimal"
+                          data_source_capability:
+                            type: object
+                            required: [faiss_available, fallback_available]
+                            properties:
+                              faiss_available:
+                                type: boolean
+                                description: Whether FAISS search is available
+                                example: true
+                              fallback_available:
+                                type: boolean
+                                description: Whether fallback search is available
+                                example: true
+                              primary_source:
+                                type: string
+                                enum: ["faiss", "fallback"]
+                                description: Currently active primary search method
+                                example: "faiss"
+                          fallback_enabled:
+                            type: boolean
+                            description: Whether analog fallback is enabled (ALLOW_ANALOG_FALLBACK env var)
+                            example: true
+                          search_performance:
+                            type: object
+                            required: [avg_response_time_ms, success_rate_pct, searches_24h]
+                            properties:
+                              avg_response_time_ms:
+                                type: number
+                                minimum: 0
+                                description: Average analog search response time
+                                example: 87.3
+                              success_rate_pct:
+                                type: number
+                                minimum: 0
+                                maximum: 100
+                                description: Search success rate percentage (24h)
+                                example: 99.7
+                              searches_24h:
+                                type: integer
+                                minimum: 0
+                                description: Total analog searches in last 24 hours
+                                example: 847
+                              faiss_searches_24h:
+                                type: integer
+                                minimum: 0
+                                description: FAISS searches in last 24 hours
+                                example: 823
+                              fallback_searches_24h:
+                                type: integer
+                                minimum: 0
+                                description: Fallback searches in last 24 hours
+                                example: 24
+                          transparency_metrics:
+                            type: object
+                            description: Metrics for transparency and monitoring
+                            properties:
+                              data_source_distribution:
+                                type: object
+                                properties:
+                                  faiss_pct:
+                                    type: number
+                                    minimum: 0
+                                    maximum: 100
+                                    example: 97.2
+                                  fallback_pct:
+                                    type: number
+                                    minimum: 0
+                                    maximum: 100
+                                    example: 2.8
+                              quality_metrics:
+                                type: object
+                                properties:
+                                  avg_similarity_score:
+                                    type: number
+                                    minimum: 0
+                                    maximum: 1
+                                    example: 0.78
+                                  pattern_diversity_score:
+                                    type: number
+                                    minimum: 0
+                                    maximum: 1
+                                    example: 0.85
+                      configuration:
+                        type: object
+                        required: [status, last_drift_check, drift_events, environment_status]
+                        properties:
+                          status:
+                            type: string
+                            enum: ["stable", "drift_detected", "validation_failed", "unknown"]
+                            description: Configuration management status
+                            example: "stable"
                           last_drift_check:
                             type: string
                             format: date-time
+                            description: Last configuration drift check timestamp
+                            example: "2024-01-15T14:00:00Z"
                           drift_events:
                             type: integer
+                            minimum: 0
+                            description: Number of drift events detected (24h)
+                            example: 0
+                          environment_status:
+                            type: object
+                            required: [allow_analog_fallback]
+                            properties:
+                              allow_analog_fallback:
+                                type: boolean
+                                description: ALLOW_ANALOG_FALLBACK environment variable status
+                                example: true
+                              environment_validated:
+                                type: boolean
+                                description: Whether environment configuration is validated
+                                example: true
+                              critical_vars_set:
+                                type: integer
+                                description: Number of critical environment variables properly set
+                                example: 5
+                              total_critical_vars:
+                                type: integer
+                                description: Total number of critical environment variables
+                                example: 5
+                          compliance_status:
+                            type: object
+                            properties:
+                              security_compliance:
+                                type: boolean
+                                example: true
+                              performance_compliance:
+                                type: boolean
+                                example: true
+                              operational_compliance:
+                                type: boolean
+                                example: true
                       security:
                         type: object
+                        required: [status, token_strength, auth_failures_24h, security_score]
                         properties:
                           status:
                             type: string
+                            enum: ["secure", "warnings", "vulnerabilities", "critical"]
+                            description: Overall security status
+                            example: "secure"
                           token_strength:
                             type: string
+                            enum: ["strong", "moderate", "weak", "unknown"]
+                            description: Authentication token strength assessment
+                            example: "strong"
                           last_rotation:
                             type: string
                             format: date-time
+                            nullable: true
+                            description: Last token rotation timestamp
+                            example: "2024-01-15T08:00:00Z"
                           auth_failures_24h:
                             type: integer
+                            minimum: 0
+                            description: Authentication failures in last 24 hours
+                            example: 3
+                          security_score:
+                            type: integer
+                            minimum: 0
+                            maximum: 100
+                            description: Overall security health score
+                            example: 94
+                          vulnerability_scan:
+                            type: object
+                            properties:
+                              last_scan:
+                                type: string
+                                format: date-time
+                                example: "2024-01-15T06:00:00Z"
+                              vulnerabilities_found:
+                                type: integer
+                                minimum: 0
+                                example: 0
+                              scan_status:
+                                type: string
+                                enum: ["clean", "low_risk", "medium_risk", "high_risk"]
+                                example: "clean"
                       performance:
                         type: object
+                        required: [status, sla_compliance, resource_usage, performance_score]
                         properties:
                           status:
                             type: string
+                            enum: ["optimal", "acceptable", "degraded", "critical"]
+                            description: Overall performance status
+                            example: "optimal"
                           sla_compliance:
                             type: number
+                            minimum: 0
+                            maximum: 100
+                            description: SLA compliance percentage
+                            example: 99.7
+                          performance_score:
+                            type: integer
+                            minimum: 0
+                            maximum: 100
+                            description: Overall performance health score
+                            example: 96
                           resource_usage:
                             type: object
+                            required: [cpu_usage_pct, memory_usage_pct, disk_usage_pct]
+                            properties:
+                              cpu_usage_pct:
+                                type: number
+                                minimum: 0
+                                maximum: 100
+                                description: CPU utilization percentage
+                                example: 23.5
+                              memory_usage_pct:
+                                type: number
+                                minimum: 0
+                                maximum: 100
+                                description: Memory utilization percentage
+                                example: 45.2
+                              disk_usage_pct:
+                                type: number
+                                minimum: 0
+                                maximum: 100
+                                description: Disk utilization percentage
+                                example: 67.8
+                              network_usage_mbps:
+                                type: number
+                                minimum: 0
+                                description: Network usage in Mbps
+                                example: 12.7
+                          latency_metrics:
+                            type: object
+                            properties:
+                              avg_response_time_ms:
+                                type: number
+                                minimum: 0
+                                example: 127.5
+                              p95_response_time_ms:
+                                type: number
+                                minimum: 0
+                                example: 284.7
+                              p99_response_time_ms:
+                                type: number
+                                minimum: 0
+                                example: 456.2
+                  recommendations:
+                    type: array
+                    items:
+                      type: object
+                      required: [category, priority, message]
+                      properties:
+                        category:
+                          type: string
+                          enum: ["performance", "security", "configuration", "faiss", "maintenance"]
+                        priority:
+                          type: string
+                          enum: ["low", "medium", "high", "critical"]
+                        message:
+                          type: string
+                        action_required:
+                          type: boolean
+                    description: System recommendations based on health assessment
+                    example:
+                      - category: "performance"
+                        priority: "low"
+                        message: "Consider tuning FAISS search parameters for better latency"
+                        action_required: false
+                      - category: "faiss"
+                        priority: "medium" 
+                        message: "Index rebuild recommended for 24h horizon within next week"
+                        action_required: true
+              examples:
+                healthy_system:
+                  summary: Healthy system with all components operational
+                  value:
+                    status: "healthy"
+                    timestamp: "2024-01-15T14:30:00Z"
+                    detailed_status:
+                      startup_validation:
+                        status: "passed"
+                        components_validated: 12
+                        total_components: 12
+                        validation_time_ms: 3450.7
+                        last_validation: "2024-01-15T12:00:00Z"
+                        failed_components: []
+                      faiss_indices:
+                        status: "all_loaded"
+                        indices_loaded: 4
+                        total_indices_expected: 4
+                        total_vectors: 52592
+                        avg_search_time_ms: 15.7
+                        memory_usage_mb: 187.3
+                        availability_status:
+                          "6h":
+                            available: true
+                            vectors: 13148
+                            last_successful_search: "2024-01-15T14:29:45Z"
+                            error: null
+                          "24h":
+                            available: true
+                            vectors: 13148
+                            last_successful_search: "2024-01-15T14:29:32Z"
+                            error: null
+                        index_health_scores:
+                          "6h": 95
+                          "24h": 97
+                          "12h": 93
+                          "48h": 89
+                      analog_search:
+                        status: "optimal"
+                        data_source_capability:
+                          faiss_available: true
+                          fallback_available: true
+                          primary_source: "faiss"
+                        fallback_enabled: true
+                        search_performance:
+                          avg_response_time_ms: 87.3
+                          success_rate_pct: 99.7
+                          searches_24h: 847
+                          faiss_searches_24h: 823
+                          fallback_searches_24h: 24
+                        transparency_metrics:
+                          data_source_distribution:
+                            faiss_pct: 97.2
+                            fallback_pct: 2.8
+                          quality_metrics:
+                            avg_similarity_score: 0.78
+                            pattern_diversity_score: 0.85
+                      configuration:
+                        status: "stable"
+                        last_drift_check: "2024-01-15T14:00:00Z"
+                        drift_events: 0
+                        environment_status:
+                          allow_analog_fallback: true
+                          environment_validated: true
+                          critical_vars_set: 5
+                          total_critical_vars: 5
+                        compliance_status:
+                          security_compliance: true
+                          performance_compliance: true
+                          operational_compliance: true
+                      security:
+                        status: "secure"
+                        token_strength: "strong"
+                        last_rotation: "2024-01-15T08:00:00Z"
+                        auth_failures_24h: 3
+                        security_score: 94
+                        vulnerability_scan:
+                          last_scan: "2024-01-15T06:00:00Z"
+                          vulnerabilities_found: 0
+                          scan_status: "clean"
+                      performance:
+                        status: "optimal"
+                        sla_compliance: 99.7
+                        performance_score: 96
+                        resource_usage:
+                          cpu_usage_pct: 23.5
+                          memory_usage_pct: 45.2
+                          disk_usage_pct: 67.8
+                          network_usage_mbps: 12.7
+                        latency_metrics:
+                          avg_response_time_ms: 127.5
+                          p95_response_time_ms: 284.7
+                          p99_response_time_ms: 456.2
+                    recommendations:
+                      - category: "performance"
+                        priority: "low"
+                        message: "Consider tuning FAISS search parameters for better latency"
+                        action_required: false
+                degraded_system:
+                  summary: System with FAISS issues and fallback active
+                  value:
+                    status: "degraded"
+                    timestamp: "2024-01-15T14:30:00Z"
+                    detailed_status:
+                      startup_validation:
+                        status: "passed"
+                        components_validated: 11
+                        total_components: 12
+                        validation_time_ms: 5234.2
+                        last_validation: "2024-01-15T12:00:00Z"
+                        failed_components: ["faiss_24h_index"]
+                      faiss_indices:
+                        status: "partial"
+                        indices_loaded: 3
+                        total_indices_expected: 4
+                        total_vectors: 39444
+                        avg_search_time_ms: 78.4
+                        memory_usage_mb: 94.7
+                        availability_status:
+                          "6h":
+                            available: true
+                            vectors: 13148
+                            last_successful_search: "2024-01-15T14:29:45Z"
+                            error: null
+                          "24h":
+                            available: false
+                            vectors: 0
+                            last_successful_search: null
+                            error: "Index loading failed: corrupted index file"
+                        index_health_scores:
+                          "6h": 78
+                          "24h": 0
+                          "12h": 82
+                          "48h": 65
+                      analog_search:
+                        status: "fallback"
+                        data_source_capability:
+                          faiss_available: false
+                          fallback_available: true
+                          primary_source: "fallback"
+                        fallback_enabled: true
+                        search_performance:
+                          avg_response_time_ms: 45.1
+                          success_rate_pct: 98.2
+                          searches_24h: 634
+                          faiss_searches_24h: 187
+                          fallback_searches_24h: 447
+                        transparency_metrics:
+                          data_source_distribution:
+                            faiss_pct: 29.5
+                            fallback_pct: 70.5
+                          quality_metrics:
+                            avg_similarity_score: 0.65
+                            pattern_diversity_score: 0.72
+                      configuration:
+                        status: "stable"
+                        last_drift_check: "2024-01-15T14:00:00Z"
+                        drift_events: 1
+                        environment_status:
+                          allow_analog_fallback: true
+                          environment_validated: true
+                          critical_vars_set: 5
+                          total_critical_vars: 5
+                        compliance_status:
+                          security_compliance: true
+                          performance_compliance: false
+                          operational_compliance: true
+                      security:
+                        status: "secure"
+                        token_strength: "strong"
+                        last_rotation: "2024-01-15T08:00:00Z"
+                        auth_failures_24h: 8
+                        security_score: 87
+                        vulnerability_scan:
+                          last_scan: "2024-01-15T06:00:00Z"
+                          vulnerabilities_found: 1
+                          scan_status: "low_risk"
+                      performance:
+                        status: "degraded"
+                        sla_compliance: 89.4
+                        performance_score: 72
+                        resource_usage:
+                          cpu_usage_pct: 45.2
+                          memory_usage_pct: 78.9
+                          disk_usage_pct: 85.4
+                          network_usage_mbps: 8.3
+                        latency_metrics:
+                          avg_response_time_ms: 287.3
+                          p95_response_time_ms: 567.1
+                          p99_response_time_ms: 1024.5
+                    recommendations:
+                      - category: "faiss"
+                        priority: "high"
+                        message: "Rebuild 24h FAISS index to restore full search capability"
+                        action_required: true
+                      - category: "performance"
+                        priority: "medium"
+                        message: "High memory pressure detected, consider scaling up"
+                        action_required: true
+                      - category: "security"
+                        priority: "low"
+                        message: "Increased authentication failures detected, monitor for patterns"
+                        action_required: false
+        '500':
+          description: Health check system error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: 500
+                  message: "Health monitoring system failure"
+                  timestamp: "2024-01-15T14:30:00Z"
+                  correlation_id: "detailed_health_req_456789"
 
   /health/dependencies:
     get:
@@ -684,10 +1551,29 @@ paths:
   # FAISS Health Monitoring
   /health/faiss:
     get:
-      summary: FAISS index health monitoring
+      summary: FAISS search engine health monitoring
       description: |
-        Real-time FAISS performance monitoring including index status,
-        search performance, memory usage, and health scoring.
+        Comprehensive FAISS performance monitoring and diagnostics for the analog
+        search system. Provides real-time metrics on index status, search performance,
+        memory usage, and overall system health.
+        
+        ## Metrics Included
+        - **Index Status**: Per-horizon index health and vector counts
+        - **Performance**: Search latency percentiles and throughput metrics  
+        - **Memory**: Index memory usage and optimization status
+        - **Quality**: Search result quality and distance distribution
+        - **Availability**: Index availability and failover status
+        - **Version**: FAISS version and index schema compatibility
+        
+        ## Health Scoring
+        - **100**: Perfect health - all indices loaded and performing optimally
+        - **75-99**: Good health - minor performance degradation or warnings
+        - **50-74**: Degraded health - some indices unavailable or slow
+        - **25-49**: Poor health - significant issues affecting search quality
+        - **0-24**: Critical health - most indices unavailable or system failing
+        
+        **Use for**: Operational monitoring, performance optimization, capacity planning
+        **Refresh rate**: Real-time with 30-second cache for expensive metrics
       operationId: getFAISSHealth
       tags:
         - FAISS Monitoring
@@ -695,52 +1581,323 @@ paths:
         - BearerAuth: []
       responses:
         '200':
-          description: FAISS health information
+          description: FAISS health information retrieved successfully
           content:
             application/json:
               schema:
                 type: object
+                required: [status, faiss_version, indices, performance, health_score, timestamp]
                 properties:
                   status:
                     type: string
+                    enum: ["healthy", "degraded", "unhealthy", "critical"]
+                    description: Overall FAISS system status
                     example: "healthy"
                   faiss_version:
                     type: string
+                    description: FAISS library version
                     example: "1.7.4"
                   indices:
                     type: object
+                    description: Per-horizon index health status
                     additionalProperties:
                       type: object
+                      required: [status, vectors, size_mb, last_search_ms, availability_pct]
                       properties:
                         status:
                           type: string
+                          enum: ["loaded", "loading", "failed", "missing"]
+                          description: Index loading status
+                          example: "loaded"
                         vectors:
                           type: integer
+                          minimum: 0
+                          description: Number of vectors in index
+                          example: 13148
                         size_mb:
                           type: number
+                          minimum: 0
+                          description: Index memory usage in MB
+                          example: 45.7
                         last_search_ms:
                           type: number
+                          minimum: 0
+                          nullable: true
+                          description: Last search time in milliseconds
+                          example: 12.3
+                        availability_pct:
+                          type: number
+                          minimum: 0
+                          maximum: 100
+                          description: Index availability percentage (24h)
+                          example: 99.8
+                        search_quality_score:
+                          type: integer
+                          minimum: 0
+                          maximum: 100
+                          description: Search result quality score
+                          example: 95
+                        created_at:
+                          type: string
+                          format: date-time
+                          description: Index creation timestamp
+                          example: "2024-01-15T10:00:00Z"
+                        last_rebuilt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                          description: Last index rebuild timestamp
+                          example: "2024-01-15T10:00:00Z"
                   performance:
                     type: object
+                    required: [avg_search_time_ms, searches_per_second, memory_usage_mb]
                     properties:
                       avg_search_time_ms:
                         type: number
-                      cache_hit_rate:
+                        minimum: 0
+                        description: Average search time in milliseconds
+                        example: 15.7
+                      p50_search_time_ms:
                         type: number
+                        minimum: 0
+                        description: 50th percentile search time
+                        example: 12.1
+                      p95_search_time_ms:
+                        type: number
+                        minimum: 0
+                        description: 95th percentile search time
+                        example: 28.4
+                      p99_search_time_ms:
+                        type: number
+                        minimum: 0
+                        description: 99th percentile search time
+                        example: 45.1
                       searches_per_second:
                         type: number
+                        minimum: 0
+                        description: Search throughput (QPS)
+                        example: 23.4
+                      peak_searches_per_second:
+                        type: number
+                        minimum: 0
+                        description: Peak search throughput in last hour
+                        example: 67.2
                       memory_usage_mb:
                         type: number
+                        minimum: 0
+                        description: Total memory usage in MB
+                        example: 187.3
+                      cache_hit_rate:
+                        type: number
+                        minimum: 0
+                        maximum: 1
+                        description: Search cache hit rate
+                        example: 0.73
+                      error_rate_pct:
+                        type: number
+                        minimum: 0
+                        maximum: 100
+                        description: Error rate percentage (24h)
+                        example: 0.1
+                      cpu_usage_pct:
+                        type: number
+                        minimum: 0
+                        maximum: 100
+                        nullable: true
+                        description: CPU usage percentage
+                        example: 12.5
                   health_score:
                     type: integer
                     minimum: 0
                     maximum: 100
+                    description: Overall FAISS system health score
+                    example: 97
+                  health_factors:
+                    type: object
+                    description: Factors contributing to health score
+                    properties:
+                      index_availability:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                        example: 100
+                      performance:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                        example: 95
+                      memory_efficiency:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                        example: 90
+                      error_rate:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                        example: 99
+                  diagnostics:
+                    type: object
+                    description: System diagnostic information
+                    properties:
+                      total_searches_24h:
+                        type: integer
+                        minimum: 0
+                        example: 2847
+                      failed_searches_24h:
+                        type: integer
+                        minimum: 0
+                        example: 3
+                      index_rebuild_needed:
+                        type: boolean
+                        example: false
+                      disk_space_warning:
+                        type: boolean
+                        example: false
+                      memory_pressure:
+                        type: boolean
+                        example: false
+                  recommendations:
+                    type: array
+                    items:
+                      type: string
+                    description: Performance and maintenance recommendations
+                    example:
+                      - "Index performance is optimal"
+                      - "Memory usage within normal range"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: Health check timestamp
+                    example: "2024-01-15T14:30:00Z"
+              examples:
+                healthy_faiss:
+                  summary: Healthy FAISS system with all indices loaded
+                  value:
+                    status: "healthy"
+                    faiss_version: "1.7.4"
+                    indices:
+                      "6h":
+                        status: "loaded"
+                        vectors: 13148
+                        size_mb: 45.7
+                        last_search_ms: 12.3
+                        availability_pct: 99.8
+                        search_quality_score: 95
+                        created_at: "2024-01-15T10:00:00Z"
+                        last_rebuilt: "2024-01-15T10:00:00Z"
+                      "24h":
+                        status: "loaded"
+                        vectors: 13148
+                        size_mb: 48.2
+                        last_search_ms: 15.7
+                        availability_pct: 99.9
+                        search_quality_score: 97
+                        created_at: "2024-01-15T10:00:00Z"
+                        last_rebuilt: "2024-01-15T10:00:00Z"
+                    performance:
+                      avg_search_time_ms: 15.7
+                      p50_search_time_ms: 12.1
+                      p95_search_time_ms: 28.4
+                      p99_search_time_ms: 45.1
+                      searches_per_second: 23.4
+                      peak_searches_per_second: 67.2
+                      memory_usage_mb: 187.3
+                      cache_hit_rate: 0.73
+                      error_rate_pct: 0.1
+                      cpu_usage_pct: 12.5
+                    health_score: 97
+                    health_factors:
+                      index_availability: 100
+                      performance: 95
+                      memory_efficiency: 90
+                      error_rate: 99
+                    diagnostics:
+                      total_searches_24h: 2847
+                      failed_searches_24h: 3
+                      index_rebuild_needed: false
+                      disk_space_warning: false
+                      memory_pressure: false
+                    recommendations:
+                      - "Index performance is optimal"
+                      - "Memory usage within normal range"
+                    timestamp: "2024-01-15T14:30:00Z"
+                degraded_faiss:
+                  summary: FAISS system with some performance issues
+                  value:
+                    status: "degraded"
+                    faiss_version: "1.7.4"
+                    indices:
+                      "6h":
+                        status: "loaded"
+                        vectors: 13148
+                        size_mb: 45.7
+                        last_search_ms: 45.2
+                        availability_pct: 97.5
+                        search_quality_score: 88
+                        created_at: "2024-01-15T10:00:00Z"
+                        last_rebuilt: "2024-01-10T08:30:00Z"
+                      "24h":
+                        status: "failed"
+                        vectors: 0
+                        size_mb: 0.0
+                        last_search_ms: null
+                        availability_pct: 45.2
+                        search_quality_score: 0
+                        created_at: "2024-01-15T10:00:00Z"
+                        last_rebuilt: null
+                    performance:
+                      avg_search_time_ms: 78.4
+                      p50_search_time_ms: 65.1
+                      p95_search_time_ms: 125.7
+                      p99_search_time_ms: 189.3
+                      searches_per_second: 8.7
+                      peak_searches_per_second: 12.4
+                      memory_usage_mb: 94.7
+                      cache_hit_rate: 0.42
+                      error_rate_pct: 12.8
+                      cpu_usage_pct: 45.2
+                    health_score: 62
+                    health_factors:
+                      index_availability: 50
+                      performance: 40
+                      memory_efficiency: 75
+                      error_rate: 65
+                    diagnostics:
+                      total_searches_24h: 1247
+                      failed_searches_24h: 159
+                      index_rebuild_needed: true
+                      disk_space_warning: false
+                      memory_pressure: true
+                    recommendations:
+                      - "Rebuild 24h index to restore performance"
+                      - "Investigate memory pressure issues"
+                      - "Consider scaling up index server resources"
+                    timestamp: "2024-01-15T14:30:00Z"
         '401':
           description: Authentication required
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: 401
+                  message: "Invalid authentication token"
+                  timestamp: "2024-01-15T14:30:00Z"
+                  correlation_id: "faiss_health_req_345678"
+        '500':
+          description: Health monitoring system error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: 500
+                  message: "FAISS health monitoring failed"
+                  timestamp: "2024-01-15T14:30:00Z"
+                  correlation_id: "faiss_health_req_345679"
 
   /health/startup:
     get:
@@ -1672,8 +2829,11 @@ components:
 
     AnalogExplorerData:
       type: object
-      description: Complete analog explorer response
-      required: [forecast_horizon, top_analogs, ensemble_stats, generated_at]
+      description: |
+        Comprehensive analog search response with full transparency about data sources,
+        search methodology, and performance metrics. Provides clear indication of
+        whether results are from real FAISS search or fallback data.
+      required: [forecast_horizon, top_analogs, ensemble_stats, generated_at, data_source, search_metadata]
       properties:
         forecast_horizon:
           $ref: '#/components/schemas/ForecastHorizon'
@@ -1681,35 +2841,206 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AnalogPattern'
-          maxItems: 5
-          description: Top 5 most similar patterns
+          minItems: 1
+          maxItems: 200
+          description: Most similar historical weather patterns
+          example:
+            - date: "2023-03-15T12:00:00Z"
+              similarity_score: 0.87
+              initial_conditions:
+                t2m: 24.5
+                u10: 3.2
+                v10: -1.8
+                msl: 101520
         ensemble_stats:
           type: object
           required: [mean_outcomes, outcome_uncertainty, common_events]
           properties:
             mean_outcomes:
               type: object
-              description: Mean outcome for each variable
+              description: Mean outcome for each weather variable across all analogs
               additionalProperties:
                 type: number
                 nullable: true
+              example:
+                t2m: 23.7
+                u10: 2.8
+                v10: -1.5
+                msl: 1014.2
             outcome_uncertainty:
               type: object
-              description: Standard deviation of outcomes
+              description: Standard deviation of outcomes showing forecast uncertainty
               additionalProperties:
                 type: number
                 nullable: true
+              example:
+                t2m: 2.8
+                u10: 1.3
+                v10: 1.1
+                msl: 5.4
             common_events:
               type: array
               items:
                 type: string
-              description: Most common weather events
-              example: ["clear_skies", "light_winds"]
+              description: Most frequently occurring weather events in analog patterns
+              example: ["clear_skies", "light_winds", "stable_pressure"]
+            diversity_score:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: Diversity score of analog patterns (0=identical, 1=maximum diversity)
+              example: 0.73
         generated_at:
           type: string
           format: date-time
-          description: Analysis generation timestamp
-          example: "2024-01-15T12:00:00Z"
+          description: Analysis generation timestamp in UTC
+          example: "2024-01-15T14:30:00Z"
+        data_source:
+          type: string
+          enum: ["faiss", "fallback"]
+          description: |
+            Indicates the data source used for analog search:
+            - "faiss": Real FAISS vector similarity search with historical data
+            - "fallback": High-quality synthetic analog patterns when FAISS unavailable
+          example: "faiss"
+        search_metadata:
+          type: object
+          required: [search_method, total_candidates, search_time_ms, k_neighbors_found, distance_metric]
+          description: Comprehensive metadata about the analog search process
+          properties:
+            search_method:
+              type: string
+              enum: ["faiss", "fallback_mock", "hybrid"]
+              description: Search methodology used
+              example: "faiss"
+            faiss_search_successful:
+              type: boolean
+              description: Whether FAISS search completed successfully
+              example: true
+            indices_used:
+              type: string
+              nullable: true
+              description: FAISS index identifier used for search
+              example: "24h_temperature_v1"
+            total_candidates:
+              type: integer
+              minimum: 0
+              description: Total number of historical patterns searched
+              example: 50000
+            search_time_ms:
+              type: number
+              minimum: 0
+              description: Search execution time in milliseconds
+              example: 15.7
+            k_neighbors_found:
+              type: integer
+              minimum: 0
+              description: Number of analog neighbors successfully found
+              example: 10
+            distance_metric:
+              type: string
+              enum: ["L2", "IP", "COSINE", "L2_fallback"]
+              description: Distance metric used for similarity calculation
+              example: "L2"
+            fallback_reason:
+              type: string
+              nullable: true
+              description: Reason for using fallback data (when data_source is "fallback")
+              example: null
+            quality_score:
+              type: number
+              minimum: 0
+              maximum: 100
+              description: Search result quality score
+              example: 94.5
+            performance_metrics:
+              type: object
+              nullable: true
+              description: Performance metrics from recent searches (available when data_source is "faiss")
+              properties:
+                current_latency_ms:
+                  type: number
+                  minimum: 0
+                  description: Current search latency
+                  example: 15.7
+                p50_latency_ms:
+                  type: number
+                  minimum: 0
+                  description: 50th percentile latency from recent searches
+                  example: 18.2
+                p95_latency_ms:
+                  type: number
+                  minimum: 0
+                  description: 95th percentile latency from recent searches
+                  example: 45.1
+                total_measurements:
+                  type: integer
+                  minimum: 0
+                  description: Number of latency measurements used
+                  example: 47
+                cache_hit:
+                  type: boolean
+                  description: Whether this search result came from cache
+                  example: false
+            validation_checks:
+              type: object
+              description: Quality validation checks performed on search results
+              properties:
+                distance_monotonicity:
+                  type: boolean
+                  description: Whether distances are properly ordered (monotonic)
+                  example: true
+                similarity_bounds_check:
+                  type: boolean
+                  description: Whether similarity scores are within expected bounds
+                  example: true
+                temporal_consistency:
+                  type: boolean
+                  description: Whether temporal patterns are consistent
+                  example: true
+                pattern_diversity_check:
+                  type: boolean
+                  description: Whether patterns show appropriate diversity
+                  example: true
+        request_context:
+          type: object
+          description: Context information about the search request
+          properties:
+            query_variables:
+              type: array
+              items:
+                type: string
+              description: Weather variables used in similarity search
+              example: ["t2m", "u10", "v10", "msl"]
+            query_timestamp:
+              type: string
+              format: date-time
+              description: Timestamp for which analogs were searched
+              example: "2024-01-15T14:30:00Z"
+            search_parameters:
+              type: object
+              description: Parameters used for the search
+              properties:
+                k_requested:
+                  type: integer
+                  minimum: 1
+                  description: Number of analogs requested
+                  example: 10
+                similarity_threshold:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                  nullable: true
+                  description: Minimum similarity threshold applied
+                  example: 0.3
+            environment_config:
+              type: object
+              description: Environment configuration affecting search behavior
+              properties:
+                fallback_enabled:
+                  type: boolean
+                  description: Whether fallback is enabled (ALLOW_ANALOG_FALLBACK)
+                  example: true
 
     ErrorResponse:
       type: object
@@ -1746,10 +3077,16 @@ components:
 tags:
   - name: Forecasting
     description: Weather forecast generation endpoints
+  - name: Analog Search  
+    description: Historical weather pattern analysis and similarity search endpoints
   - name: Monitoring
     description: System health and metrics endpoints
   - name: Analysis
     description: Advanced analysis and research endpoints
+  - name: Health Monitoring
+    description: Comprehensive system health monitoring and diagnostics
+  - name: FAISS Monitoring
+    description: FAISS search infrastructure monitoring and performance metrics
 
 x-code-samples:
   - lang: curl
@@ -1764,6 +3101,25 @@ x-code-samples:
         -H "Authorization: Bearer YOUR_TOKEN" \
         -H "Accept: application/json"
       
+      # Get analog weather patterns with transparency metadata
+      curl -X GET "https://api.adelaideweather.example.com/api/analogs?horizon=24h&k=10" \
+        -H "Authorization: Bearer YOUR_TOKEN" \
+        -H "Accept: application/json"
+      
+      # Advanced analog search with specific variables
+      curl -X GET "https://api.adelaideweather.example.com/api/analogs?horizon=24h&variables=t2m,msl&k=20&query_time=2024-01-15T12:00:00Z" \
+        -H "Authorization: Bearer YOUR_TOKEN" \
+        -H "Accept: application/json"
+      
+      # Check FAISS search engine health
+      curl -X GET "https://api.adelaideweather.example.com/health/faiss" \
+        -H "Authorization: Bearer YOUR_TOKEN" \
+        -H "Accept: application/json"
+      
+      # Get comprehensive system health with FAISS transparency
+      curl -X GET "https://api.adelaideweather.example.com/health/detailed" \
+        -H "Accept: application/json"
+      
       # Check system health
       curl -X GET "https://api.adelaideweather.example.com/health" \
         -H "Accept: application/json"
@@ -1771,6 +3127,8 @@ x-code-samples:
   - lang: python
     source: |
       import requests
+      import json
+      from datetime import datetime
       
       # Configuration
       api_token = "YOUR_TOKEN"
@@ -1794,6 +3152,130 @@ x-code-samples:
           print(f"Confidence: {forecast['variables']['t2m']['confidence']:.1%}")
       else:
           print(f"Error: {response.status_code}")
+      
+      # Get analog patterns with transparency information
+      analog_response = requests.get(
+          f"{base_url}/api/analogs",
+          params={
+              "horizon": "24h",
+              "k": 10,
+              "variables": "t2m,u10,v10,msl"
+          },
+          headers=headers
+      )
+      
+      if analog_response.status_code == 200:
+          analogs = analog_response.json()
+          
+          # Check data source transparency
+          data_source = analogs["data_source"]
+          print(f"Analog data source: {data_source}")
+          
+          if data_source == "faiss":
+              search_time = analogs["search_metadata"]["search_time_ms"]
+              total_patterns = analogs["search_metadata"]["total_candidates"]
+              print(f"FAISS search: {search_time:.1f}ms across {total_patterns:,} patterns")
+              
+              # Check if performance metrics are available
+              perf_metrics = analogs["search_metadata"].get("performance_metrics")
+              if perf_metrics:
+                  p95_latency = perf_metrics["p95_latency_ms"]
+                  print(f"P95 latency: {p95_latency:.1f}ms")
+          
+          elif data_source == "fallback":
+              fallback_reason = analogs["search_metadata"]["fallback_reason"]
+              print(f"Using fallback data: {fallback_reason}")
+          
+          # Display top analog pattern
+          if analogs["top_analogs"]:
+              top_analog = analogs["top_analogs"][0]
+              similarity = top_analog["similarity_score"]
+              analog_date = top_analog["date"]
+              print(f"Top analog: {analog_date} (similarity: {similarity:.2f})")
+              print(f"Outcome: {top_analog['outcome_narrative']}")
+      
+      # Monitor FAISS health and transparency
+      faiss_health_response = requests.get(
+          f"{base_url}/health/faiss",
+          headers=headers
+      )
+      
+      if faiss_health_response.status_code == 200:
+          faiss_health = faiss_health_response.json()
+          print(f"\\nFAISS Status: {faiss_health['status']}")
+          print(f"Health Score: {faiss_health['health_score']}/100")
+          
+          # Check individual index status
+          for horizon, index_info in faiss_health["indices"].items():
+              status = index_info["status"]
+              vectors = index_info["vectors"]
+              availability = index_info["availability_pct"]
+              print(f"  {horizon}: {status}, {vectors:,} vectors, {availability:.1f}% uptime")
+      
+      # Check environment configuration for transparency
+      detailed_health_response = requests.get(f"{base_url}/health/detailed")
+      
+      if detailed_health_response.status_code == 200:
+          health = detailed_health_response.json()
+          
+          # Check analog search configuration
+          analog_search = health["detailed_status"]["analog_search"]
+          fallback_enabled = analog_search["fallback_enabled"]
+          faiss_available = analog_search["data_source_capability"]["faiss_available"]
+          
+          print(f"\\nAnalog Search Configuration:")
+          print(f"  FAISS Available: {faiss_available}")
+          print(f"  Fallback Enabled: {fallback_enabled}")
+          print(f"  Status: {analog_search['status']}")
+          
+          # Show data source distribution
+          transparency = analog_search["transparency_metrics"]
+          faiss_pct = transparency["data_source_distribution"]["faiss_pct"]
+          fallback_pct = transparency["data_source_distribution"]["fallback_pct"]
+          print(f"  Data source usage: {faiss_pct:.1f}% FAISS, {fallback_pct:.1f}% fallback")
+      else:
+          print(f"Health check failed: {detailed_health_response.status_code}")
+      
+      # Example: Detect when using fallback vs real data
+      def check_data_quality(analog_response):
+          """Helper function to assess analog data quality and transparency"""
+          if analog_response.status_code != 200:
+              return {"quality": "error", "message": "Request failed"}
+          
+          data = analog_response.json()
+          data_source = data["data_source"]
+          search_meta = data["search_metadata"]
+          
+          quality_info = {
+              "data_source": data_source,
+              "search_time_ms": search_meta["search_time_ms"],
+              "total_patterns": search_meta["total_candidates"]
+          }
+          
+          if data_source == "faiss":
+              quality_info["quality"] = "high"
+              quality_info["message"] = "Using real FAISS search with historical data"
+              
+              # Check validation results
+              validation = search_meta.get("validation_checks", {})
+              if all(validation.values()):
+                  quality_info["validation"] = "passed"
+              else:
+                  quality_info["validation"] = "failed"
+                  quality_info["quality"] = "medium"
+          
+          elif data_source == "fallback":
+              quality_info["quality"] = "synthetic"
+              quality_info["message"] = "Using high-quality fallback patterns"
+              quality_info["fallback_reason"] = search_meta.get("fallback_reason")
+          
+          return quality_info
+      
+      # Demonstrate quality checking
+      quality = check_data_quality(analog_response)
+      print(f"\\nData Quality Assessment:")
+      print(f"  Quality Level: {quality.get('quality')}")
+      print(f"  Message: {quality.get('message')}")
   
   - lang: javascript
     source: |
@@ -1825,10 +3307,202 @@ x-code-samples:
         }
       }
       
-      // Usage
-      getForecast('24h', 't2m,u10,v10,msl,cape')
-        .then(forecast => {
+      // Analog search with transparency features
+      async function getAnalogPatterns(horizon = '24h', options = {}) {
+        const { variables = 't2m,u10,v10,msl', k = 10, queryTime } = options;
+        
+        const params = new URLSearchParams({
+          horizon,
+          variables,
+          k: k.toString()
+        });
+        
+        if (queryTime) {
+          params.append('query_time', queryTime);
+        }
+        
+        try {
+          const response = await fetch(
+            `${baseURL}/api/analogs?${params}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${apiToken}`,
+                'Accept': 'application/json'
+              }
+            }
+          );
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const analogs = await response.json();
+          
+          // Extract transparency information
+          const dataSource = analogs.data_source;
+          const searchMetadata = analogs.search_metadata;
+          
+          console.log(`Data Source: ${dataSource}`);
+          console.log(`Search Time: ${searchMetadata.search_time_ms}ms`);
+          
+          if (dataSource === 'faiss') {
+            console.log('Using real FAISS search with historical data');
+            console.log(`Searched ${searchMetadata.total_candidates.toLocaleString()} patterns`);
+            
+            // Check performance metrics if available
+            if (searchMetadata.performance_metrics) {
+              const perf = searchMetadata.performance_metrics;
+              console.log(`P95 Latency: ${perf.p95_latency_ms}ms`);
+              console.log(`Cache Hit: ${perf.cache_hit ? 'Yes' : 'No'}`);
+            }
+          } else if (dataSource === 'fallback') {
+            console.log('Using high-quality fallback patterns');
+            console.log(`Reason: ${searchMetadata.fallback_reason || 'FAISS unavailable'}`);
+          }
+          
+          return analogs;
+        } catch (error) {
+          console.error('Analog search failed:', error);
+          throw error;
+        }
+      }
+      
+      // Monitor FAISS health and transparency
+      async function checkFAISSHealth() {
+        try {
+          const response = await fetch(`${baseURL}/health/faiss`, {
+            headers: {
+              'Authorization': `Bearer ${apiToken}`,
+              'Accept': 'application/json'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const health = await response.json();
+          
+          console.log(`FAISS Status: ${health.status}`);
+          console.log(`Health Score: ${health.health_score}/100`);
+          
+          // Check individual indices
+          Object.entries(health.indices).forEach(([horizon, indexInfo]) => {
+            console.log(`  ${horizon}: ${indexInfo.status}, ${indexInfo.vectors.toLocaleString()} vectors, ${indexInfo.availability_pct}% uptime`);
+          });
+          
+          return health;
+        } catch (error) {
+          console.error('FAISS health check failed:', error);
+          throw error;
+        }
+      }
+      
+      // Check system health with analog search transparency
+      async function checkSystemHealth() {
+        try {
+          const response = await fetch(`${baseURL}/health/detailed`);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const health = await response.json();
+          const analogSearch = health.detailed_status.analog_search;
+          
+          console.log('Analog Search Configuration:');
+          console.log(`  FAISS Available: ${analogSearch.data_source_capability.faiss_available}`);
+          console.log(`  Fallback Enabled: ${analogSearch.fallback_enabled}`);
+          console.log(`  Status: ${analogSearch.status}`);
+          
+          // Show transparency metrics
+          const transparency = analogSearch.transparency_metrics;
+          if (transparency) {
+            const distribution = transparency.data_source_distribution;
+            console.log(`  Data Usage: ${distribution.faiss_pct}% FAISS, ${distribution.fallback_pct}% fallback`);
+            
+            const quality = transparency.quality_metrics;
+            console.log(`  Avg Similarity: ${quality.avg_similarity_score.toFixed(3)}`);
+            console.log(`  Pattern Diversity: ${quality.pattern_diversity_score.toFixed(3)}`);
+          }
+          
+          return health;
+        } catch (error) {
+          console.error('Health check failed:', error);
+          throw error;
+        }
+      }
+      
+      // Utility function to assess analog data quality
+      function assessAnalogQuality(analogData) {
+        const dataSource = analogData.data_source;
+        const searchMeta = analogData.search_metadata;
+        
+        const assessment = {
+          dataSource,
+          searchTimeMs: searchMeta.search_time_ms,
+          totalPatterns: searchMeta.total_candidates
+        };
+        
+        if (dataSource === 'faiss') {
+          assessment.quality = 'high';
+          assessment.message = 'Real FAISS search with historical data';
+          
+          // Check validation
+          const validation = searchMeta.validation_checks || {};
+          const allValidationsPassed = Object.values(validation).every(Boolean);
+          assessment.validationPassed = allValidationsPassed;
+          
+          if (!allValidationsPassed) {
+            assessment.quality = 'medium';
+            assessment.warnings = ['Some validation checks failed'];
+          }
+        } else if (dataSource === 'fallback') {
+          assessment.quality = 'synthetic';
+          assessment.message = 'High-quality synthetic patterns';
+          assessment.fallbackReason = searchMeta.fallback_reason;
+        }
+        
+        return assessment;
+      }
+      
+      // Usage examples
+      async function demonstrateTransparencyFeatures() {
+        try {
+          // Get forecast
+          console.log('=== Getting Forecast ===');
+          const forecast = await getForecast('24h', 't2m,u10,v10,msl,cape');
           console.log('Narrative:', forecast.narrative);
           console.log('Risk Assessment:', forecast.risk_assessment);
-        })
-        .catch(error => console.error(error));
+          
+          // Get analogs with transparency
+          console.log('\\n=== Getting Analog Patterns ===');
+          const analogs = await getAnalogPatterns('24h', { k: 10 });
+          
+          // Assess quality
+          const quality = assessAnalogQuality(analogs);
+          console.log('\\n=== Quality Assessment ===');
+          console.log(`Quality Level: ${quality.quality}`);
+          console.log(`Message: ${quality.message}`);
+          
+          if (analogs.top_analogs.length > 0) {
+            const topAnalog = analogs.top_analogs[0];
+            console.log(`\\nTop analog: ${topAnalog.date} (similarity: ${topAnalog.similarity_score.toFixed(3)})`);
+            console.log(`Outcome: ${topAnalog.outcome_narrative}`);
+          }
+          
+          // Check FAISS health
+          console.log('\\n=== FAISS Health ===');
+          await checkFAISSHealth();
+          
+          // Check system health
+          console.log('\\n=== System Health ===');
+          await checkSystemHealth();
+          
+        } catch (error) {
+          console.error('Demonstration failed:', error);
+        }
+      }
+      
+      // Run demonstration
+      demonstrateTransparencyFeatures();

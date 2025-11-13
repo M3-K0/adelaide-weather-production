@@ -1,0 +1,160 @@
+{
+  "timestamp": "2025-11-13T13:50:22.891258+00:00",
+  "environment": {
+    "python_version": "3.12.3 (main, Aug 14 2025, 17:47:21) [GCC 13.3.0]",
+    "platform": "posix",
+    "cpu_count": 32,
+    "memory_total": "unknown"
+  },
+  "benchmarks": {
+    "faiss_search": {
+      "operation": "faiss_search_simulation",
+      "iterations": 100,
+      "timing_ms": {
+        "min": 1.0125110002263682,
+        "max": 1.1002889996234444,
+        "mean": 1.0693928999899072,
+        "median": 1.0770910002975143,
+        "std_dev": 0.023216176256873992,
+        "p95": 1.0933339999610325,
+        "p99": 1.1002889996234444
+      },
+      "throughput_ops_per_sec": 935.1100049471414
+    },
+    "memory_usage": {
+      "initial_memory_mb": 100,
+      "final_memory_mb": 190,
+      "peak_memory_mb": 190,
+      "memory_growth_mb": 90,
+      "memory_samples": [
+        100,
+        110,
+        120,
+        130,
+        140,
+        150,
+        160,
+        170,
+        180,
+        190
+      ],
+      "gc_collections": {
+        "generation_0": 0,
+        "generation_1": 0,
+        "generation_2": 0
+      }
+    },
+    "api_response_times": {
+      "health": {
+        "timing_ms": {
+          "min": 0.8191750002879417,
+          "max": 1.2813100001949351,
+          "mean": 1.035442700049316,
+          "median": 1.0131365002052917,
+          "p95": 1.27442500070174,
+          "p99": 1.2813100001949351
+        },
+        "sla_compliance": {
+          "target_ms": 2.0,
+          "violations": 0,
+          "compliance_rate": 1.0
+        }
+      },
+      "forecast": {
+        "timing_ms": {
+          "min": 40.11343799993483,
+          "max": 59.99962499936373,
+          "mean": 49.56796296002722,
+          "median": 50.3129375001663,
+          "p95": 58.834844000557496,
+          "p99": 59.99962499936373
+        },
+        "sla_compliance": {
+          "target_ms": 100.0,
+          "violations": 0,
+          "compliance_rate": 1.0
+        }
+      },
+      "analogs": {
+        "timing_ms": {
+          "min": 80.20086400028958,
+          "max": 119.5872739999686,
+          "mean": 102.04728564000106,
+          "median": 104.02786350005044,
+          "p95": 118.8730760004546,
+          "p99": 119.5872739999686
+        },
+        "sla_compliance": {
+          "target_ms": 200.0,
+          "violations": 0,
+          "compliance_rate": 1.0
+        }
+      },
+      "metrics": {
+        "timing_ms": {
+          "min": 4.118977999496565,
+          "max": 5.966390000139654,
+          "mean": 5.013752020058746,
+          "median": 4.896851000012248,
+          "p95": 5.861990000084916,
+          "p99": 5.966390000139654
+        },
+        "sla_compliance": {
+          "target_ms": 10.0,
+          "violations": 0,
+          "compliance_rate": 1.0
+        }
+      }
+    },
+    "concurrent_performance": {
+      "1_workers": {
+        "total_time_ms": 24.920105999626685,
+        "individual_task_times": {
+          "mean": 1.0964441999476549,
+          "max": 1.1211099999854923,
+          "min": 1.0412090005047503
+        },
+        "throughput": 802.5648045116506,
+        "efficiency": 0.043998376249446136
+      },
+      "2_workers": {
+        "total_time_ms": 12.048112000229594,
+        "individual_task_times": {
+          "mean": 1.0934771999927761,
+          "max": 1.1164120005560108,
+          "min": 1.0388139999122359
+        },
+        "throughput": 1660.011128682973,
+        "efficiency": 0.18151843209491053
+      },
+      "4_workers": {
+        "total_time_ms": 6.875617999867245,
+        "individual_task_times": {
+          "mean": 1.0911567499078956,
+          "max": 1.1198870006410289,
+          "min": 1.0394339997219504
+        },
+        "throughput": 2908.829431825061,
+        "efficiency": 0.6347977737733328
+      },
+      "8_workers": {
+        "total_time_ms": 6.065399000362959,
+        "individual_task_times": {
+          "mean": 1.1381278501175984,
+          "max": 1.417279000634153,
+          "min": 1.0382600003140396
+        },
+        "throughput": 3297.3923065577687,
+        "efficiency": 1.5011416067427608
+      }
+    }
+  },
+  "summary": {
+    "total_benchmark_time_seconds": 10.79104471206665,
+    "benchmarks_completed": 4,
+    "status": "completed",
+    "recommendations": [
+      "Performance metrics are within acceptable ranges"
+    ]
+  }
+}

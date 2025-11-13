@@ -4,58 +4,140 @@
  */
 
 import React, { useState } from 'react';
-import { AlertTriangle, TrendingUp, Clock, Info } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Clock, Info, Database } from 'lucide-react';
 import type { ForecastResponse, RiskAssessment } from '@/types';
 import { useMetrics } from '@/lib/MetricsProvider';
+import EmptyState from './EmptyState';
+import ErrorBoundary from './ErrorBoundary';
 
 interface ForecastCardProps {
-  forecast: ForecastResponse;
+  forecast: ForecastResponse | null;
   className?: string;
+  /** Loading state */
+  loading?: boolean;
+  /** Error state */
+  error?: string | null;
+  /** Retry callback for failed requests */
+  onRetry?: () => void;
+  /** Show error details */
+  showErrorDetails?: boolean;
 }
 
-export function ForecastCard({ forecast, className = '' }: ForecastCardProps) {
+export function ForecastCard({ 
+  forecast, 
+  className = '',
+  loading = false,
+  error = null,
+  onRetry,
+  showErrorDetails = false
+}: ForecastCardProps) {
   const [showDetails, setShowDetails] = useState(false);
   const [showAnalogs, setShowAnalogs] = useState(false);
   const metrics = useMetrics();
 
-  // Extract temperature data with strict typing
-  const t2m = forecast.variables.t2m;
-  const wind = forecast.wind10m;
-
-  if (!t2m?.available) {
+  // Loading state
+  if (loading) {
     return (
-      <div
-        className={`bg-[#0E1116]/40 border border-[#1C1F26] rounded-lg p-6 opacity-60 ${className}`}
-        style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}
-      >
-        <div className='flex items-start justify-between'>
-          <span className='text-slate-500 text-base font-medium tracking-wide'>
-            {forecast.horizon}
-          </span>
-          <span className='px-2.5 py-1 rounded-full text-xs font-semibold border bg-slate-800/50 border-slate-700 text-slate-500'>
-            N/A
-          </span>
+      <ErrorBoundary componentName="ForecastCard">
+        <div
+          className={`bg-[#0E1116]/40 border border-[#1C1F26] rounded-lg p-6 ${className}`}
+          style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}
+        >
+          <EmptyState
+            type="loading-failed"
+            size="md"
+            title="Loading Forecast"
+            description="Generating weather forecast..."
+            disableAnimations={false}
+          />
         </div>
-
-        <div className='flex-1 flex flex-col items-center justify-center py-8'>
-          <div className='text-slate-600 text-sm text-center'>
-            <div className='mb-2'>Unavailable</div>
-            <div className='text-xs text-slate-700'>
-              Not enough valid analogs
-            </div>
-          </div>
-        </div>
-      </div>
+      </ErrorBoundary>
     );
   }
 
-  // Calculate confidence percentage
-  const confidencePct = t2m.confidence
+  // Error state
+  if (error) {
+    return (
+      <ErrorBoundary componentName="ForecastCard">
+        <div
+          className={`bg-[#0E1116]/40 border border-red-700 rounded-lg p-6 ${className}`}
+          style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}
+        >
+          <EmptyState
+            type="error"
+            title="Forecast Error"
+            description={showErrorDetails ? error : "Unable to load weather forecast. Please try again."}
+            showRetry={!!onRetry}
+            onRetry={onRetry}
+            size="md"
+          />
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  // No forecast data
+  if (!forecast) {
+    return (
+      <ErrorBoundary componentName="ForecastCard">
+        <div
+          className={`bg-[#0E1116]/40 border border-[#1C1F26] rounded-lg p-6 opacity-60 ${className}`}
+          style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}
+        >
+          <EmptyState
+            type="no-forecast"
+            title="No Forecast Data"
+            description="Weather forecast data is not available."
+            showRetry={!!onRetry}
+            onRetry={onRetry}
+            size="md"
+          />
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  // Extract temperature data with null safety
+  const t2m = forecast.variables?.t2m;
+  const wind = forecast.wind10m;
+
+  // Temperature data unavailable
+  if (!t2m?.available) {
+    return (
+      <ErrorBoundary componentName="ForecastCard">
+        <div
+          className={`bg-[#0E1116]/40 border border-[#1C1F26] rounded-lg p-6 opacity-60 ${className}`}
+          style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}
+        >
+          <div className='flex items-start justify-between mb-4'>
+            <span className='text-slate-500 text-base font-medium tracking-wide'>
+              +{forecast.horizon || 'Unknown'}
+            </span>
+            <span className='px-2.5 py-1 rounded-full text-xs font-semibold border bg-slate-800/50 border-slate-700 text-slate-500'>
+              N/A
+            </span>
+          </div>
+
+          <EmptyState
+            type="no-forecast"
+            size="sm"
+            title="Temperature Unavailable"
+            description="Not enough valid analog patterns found for temperature forecasting."
+            showRetry={!!onRetry}
+            onRetry={onRetry}
+          />
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  // Calculate confidence percentage with null safety
+  const confidencePct = t2m?.confidence !== null && t2m?.confidence !== undefined
     ? Math.round(Math.max(0, Math.min(100, t2m.confidence * 100)))
     : 0;
 
   // Risk level styling
-  const getRiskStyling = (level: string) => {
+  const getRiskStyling = (level: string | undefined) => {
     switch (level) {
       case 'extreme':
         return {
@@ -90,10 +172,15 @@ export function ForecastCard({ forecast, className = '' }: ForecastCardProps) {
     }
   };
 
-  // Get highest risk level for card accent
-  const getHighestRisk = (risks: RiskAssessment): string => {
+  // Get highest risk level for card accent with null safety
+  const getHighestRisk = (risks?: RiskAssessment): string => {
+    if (!risks) return 'minimal';
+    
     const levels = ['minimal', 'low', 'moderate', 'high', 'extreme'];
-    const riskValues = Object.values(risks);
+    const riskValues = Object.values(risks).filter(value => value);
+    
+    if (riskValues.length === 0) return 'minimal';
+    
     return riskValues.reduce((highest, current) => {
       const currentIndex = levels.indexOf(current);
       const highestIndex = levels.indexOf(highest);
@@ -115,13 +202,14 @@ export function ForecastCard({ forecast, className = '' }: ForecastCardProps) {
     : { boxShadow: '0 4px 12px rgba(0,0,0,0.4)' };
 
   return (
-    <div
-      className={`bg-[#0E1116] border ${cardBorderClass} rounded-lg p-6 flex flex-col gap-4 hover:border-[#3A3F4A] transition-all focus-within:ring-2 focus-within:ring-cyan-500 focus-within:ring-offset-2 focus-within:ring-offset-[#0A0D12] relative group ${className}`}
-      style={cardGlow}
-      tabIndex={0}
-      role='article'
-      aria-label={`Forecast for ${forecast.horizon}: ${t2m.value?.toFixed(1) || 'N/A'} degrees Celsius with ${confidencePct}% confidence`}
-    >
+    <ErrorBoundary componentName="ForecastCard">
+      <div
+        className={`bg-[#0E1116] border ${cardBorderClass} rounded-lg p-6 flex flex-col gap-4 hover:border-[#3A3F4A] transition-all focus-within:ring-2 focus-within:ring-cyan-500 focus-within:ring-offset-2 focus-within:ring-offset-[#0A0D12] relative group ${className}`}
+        style={cardGlow}
+        tabIndex={0}
+        role='article'
+        aria-label={`Forecast for ${forecast.horizon || 'Unknown horizon'}: ${t2m?.value?.toFixed(1) || 'N/A'} degrees Celsius with ${confidencePct}% confidence`}
+      >
       {/* Header with horizon and confidence */}
       <div className='flex items-start justify-between'>
         <div className='flex items-center gap-2'>
@@ -274,74 +362,120 @@ export function ForecastCard({ forecast, className = '' }: ForecastCardProps) {
       )}
 
       {/* Risk Assessment */}
-      <div className='space-y-2'>
-        <div className='flex items-center gap-2'>
-          <AlertTriangle size={14} className='text-slate-400' />
-          <span className='text-xs font-medium text-slate-300 uppercase tracking-wide'>
-            Risk Assessment
-          </span>
-        </div>
-        <div className='grid grid-cols-2 gap-2 text-xs'>
-          {Object.entries(forecast.risk_assessment).map(([risk, level]) => {
-            const styling = getRiskStyling(level);
-            return (
-              <div
-                key={risk}
-                className={`px-2 py-1 rounded border ${styling.bg} ${styling.border} ${styling.text}`}
-              >
-                <div className='font-medium capitalize'>
-                  {risk.replace('_', ' ')}
+      {forecast.risk_assessment && Object.keys(forecast.risk_assessment).length > 0 ? (
+        <div className='space-y-2'>
+          <div className='flex items-center gap-2'>
+            <AlertTriangle size={14} className='text-slate-400' />
+            <span className='text-xs font-medium text-slate-300 uppercase tracking-wide'>
+              Risk Assessment
+            </span>
+          </div>
+          <div className='grid grid-cols-2 gap-2 text-xs'>
+            {Object.entries(forecast.risk_assessment).map(([risk, level]) => {
+              const styling = getRiskStyling(level);
+              return (
+                <div
+                  key={risk}
+                  className={`px-2 py-1 rounded border ${styling.bg} ${styling.border} ${styling.text}`}
+                >
+                  <div className='font-medium capitalize'>
+                    {risk.replace('_', ' ')}
+                  </div>
+                  <div className='text-[10px] opacity-80 capitalize'>{level || 'unknown'}</div>
                 </div>
-                <div className='text-[10px] opacity-80 capitalize'>{level}</div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className='space-y-2'>
+          <div className='flex items-center gap-2'>
+            <AlertTriangle size={14} className='text-slate-400' />
+            <span className='text-xs font-medium text-slate-300 uppercase tracking-wide'>
+              Risk Assessment
+            </span>
+          </div>
+          <EmptyState
+            type="no-data"
+            size="sm"
+            title="Risk Data Unavailable"
+            description="Risk assessment could not be calculated from available data."
+            dataSource={forecast.data_source === 'fallback' ? 'fallback' : undefined}
+          />
+        </div>
+      )}
 
       {/* Analogs Summary */}
-      <div className='space-y-2'>
-        <button
-          onClick={() => {
-            metrics.trackInteraction(
-              'analogs_toggle',
-              'forecast_card',
-              forecast.horizon
-            );
-            setShowAnalogs(!showAnalogs);
-          }}
-          className='flex items-center gap-2 text-xs font-medium text-slate-300 uppercase tracking-wide hover:text-slate-100 transition-colors'
-        >
-          <TrendingUp size={14} className='text-slate-400' />
-          Historical Analogs
-        </button>
+      {forecast.analogs_summary ? (
+        <div className='space-y-2'>
+          <button
+            onClick={() => {
+              metrics.trackInteraction(
+                'analogs_toggle',
+                'forecast_card',
+                forecast.horizon
+              );
+              setShowAnalogs(!showAnalogs);
+            }}
+            className='flex items-center gap-2 text-xs font-medium text-slate-300 uppercase tracking-wide hover:text-slate-100 transition-colors'
+          >
+            <TrendingUp size={14} className='text-slate-400' />
+            Historical Analogs
+            {forecast.data_source === 'fallback' && (
+              <span className='px-1.5 py-0.5 rounded text-[10px] bg-orange-900/50 border border-orange-700 text-orange-300'>
+                FALLBACK
+              </span>
+            )}
+          </button>
 
-        {showAnalogs && (
-          <div className='space-y-2 text-xs bg-slate-900/50 rounded p-3 border border-slate-700'>
-            <div>
-              <span className='text-slate-400'>Most similar:</span>{' '}
-              <span className='text-slate-200 font-mono'>
-                {forecast.analogs_summary.most_similar_date}
-              </span>
+          {showAnalogs && (
+            <div className='space-y-2 text-xs bg-slate-900/50 rounded p-3 border border-slate-700'>
+              <div>
+                <span className='text-slate-400'>Most similar:</span>{' '}
+                <span className='text-slate-200 font-mono'>
+                  {forecast.analogs_summary.most_similar_date || 'Unknown'}
+                </span>
+              </div>
+              <div>
+                <span className='text-slate-400'>Similarity:</span>{' '}
+                <span className='text-slate-200'>
+                  {forecast.analogs_summary.similarity_score !== null && forecast.analogs_summary.similarity_score !== undefined
+                    ? (forecast.analogs_summary.similarity_score * 100).toFixed(1) + '%'
+                    : 'Unknown'
+                  }
+                </span>
+              </div>
+              <div>
+                <span className='text-slate-400'>Analogs used:</span>{' '}
+                <span className='text-slate-200'>
+                  {forecast.analogs_summary.analog_count || 0}
+                </span>
+              </div>
+              {forecast.analogs_summary.outcome_description && (
+                <div className='text-slate-300 text-[11px] leading-relaxed mt-2'>
+                  {forecast.analogs_summary.outcome_description}
+                </div>
+              )}
             </div>
-            <div>
-              <span className='text-slate-400'>Similarity:</span>{' '}
-              <span className='text-slate-200'>
-                {(forecast.analogs_summary.similarity_score * 100).toFixed(1)}%
-              </span>
-            </div>
-            <div>
-              <span className='text-slate-400'>Analogs used:</span>{' '}
-              <span className='text-slate-200'>
-                {forecast.analogs_summary.analog_count}
-              </span>
-            </div>
-            <div className='text-slate-300 text-[11px] leading-relaxed mt-2'>
-              {forecast.analogs_summary.outcome_description}
-            </div>
+          )}
+        </div>
+      ) : (
+        <div className='space-y-2'>
+          <div className='flex items-center gap-2'>
+            <TrendingUp size={14} className='text-slate-400' />
+            <span className='text-xs font-medium text-slate-300 uppercase tracking-wide'>
+              Historical Analogs
+            </span>
           </div>
-        )}
-      </div>
+          <EmptyState
+            type="no-analogs"
+            size="sm"
+            title="No Analogs Available"
+            description="Historical analog patterns could not be found for this forecast."
+            dataSource={forecast.data_source === 'fallback' ? 'fallback' : undefined}
+          />
+        </div>
+      )}
 
       {/* Narrative and metadata */}
       <div className='space-y-2'>
@@ -358,30 +492,63 @@ export function ForecastCard({ forecast, className = '' }: ForecastCardProps) {
         >
           <Info size={14} className='text-slate-400' />
           Forecast Details
+          {forecast.data_source === 'fallback' && (
+            <span className='px-1.5 py-0.5 rounded text-[10px] bg-orange-900/50 border border-orange-700 text-orange-300'>
+              FALLBACK
+            </span>
+          )}
         </button>
 
         {showDetails && (
           <div className='space-y-3 text-xs bg-slate-900/50 rounded p-3 border border-slate-700'>
-            <div className='text-slate-300 text-[11px] leading-relaxed'>
-              {forecast.narrative}
-            </div>
+            {forecast.narrative ? (
+              <div className='text-slate-300 text-[11px] leading-relaxed'>
+                {forecast.narrative}
+              </div>
+            ) : (
+              <div className='text-slate-500 text-[11px] leading-relaxed italic'>
+                No narrative description available.
+              </div>
+            )}
 
-            <div className='text-slate-300 text-[11px] leading-relaxed'>
-              <strong>Confidence:</strong> {forecast.confidence_explanation}
-            </div>
+            {forecast.confidence_explanation ? (
+              <div className='text-slate-300 text-[11px] leading-relaxed'>
+                <strong>Confidence:</strong> {forecast.confidence_explanation}
+              </div>
+            ) : (
+              <div className='text-slate-500 text-[11px] leading-relaxed italic'>
+                <strong>Confidence:</strong> No explanation available.
+              </div>
+            )}
 
             <div className='flex items-center gap-2 pt-2 border-t border-slate-600'>
               <Clock size={12} className='text-slate-500' />
               <span className='text-slate-500 font-mono'>
-                Generated: {new Date(forecast.generated_at).toLocaleString()}
+                Generated: {forecast.generated_at ? new Date(forecast.generated_at).toLocaleString() : 'Unknown'}
               </span>
             </div>
 
-            <div className='flex items-center gap-2'>
-              <span className='text-slate-500 font-mono'>
-                Latency: {forecast.latency_ms}ms
-              </span>
-            </div>
+            {forecast.latency_ms !== null && forecast.latency_ms !== undefined && (
+              <div className='flex items-center gap-2'>
+                <span className='text-slate-500 font-mono'>
+                  Latency: {forecast.latency_ms}ms
+                </span>
+              </div>
+            )}
+
+            {forecast.data_source && (
+              <div className='flex items-center gap-2'>
+                <Database size={12} className='text-slate-500' />
+                <span className='text-slate-500 font-mono'>
+                  Source: {forecast.data_source}
+                </span>
+                {forecast.data_source === 'fallback' && (
+                  <span className='text-orange-400 text-[10px]'>
+                    (Limited reliability)
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

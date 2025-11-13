@@ -368,18 +368,8 @@ export default function Dashboard() {
                       360
                     : wind?.direction || 0;
 
-                // Generate mock analog matches for demonstration
+                // Use analog count from real forecast data
                 const analogCount = t2m.analog_count || 0;
-                const analogMatches = Array.from(
-                  { length: Math.min(analogCount, 5) },
-                  (_, i) => ({
-                    timestamp: new Date(
-                      Date.now() - (i + 1) * 24 * 60 * 60 * 1000
-                    ).toISOString(),
-                    value: (t2m.value || 0) + (Math.random() - 0.5) * 2,
-                    similarity: 0.95 - i * 0.02
-                  })
-                );
 
                 // Prepare variables for the enhanced card
                 const variables = [
@@ -444,7 +434,6 @@ export default function Dashboard() {
                   cape: cape?.value,
                   latency: `${forecast.latency_ms}ms`,
                   analogCount,
-                  analogMatches,
                   sparklineData:
                     t2m.p05 !== null && t2m.p95 !== null && t2m.value !== null
                       ? [
@@ -522,16 +511,6 @@ export default function Dashboard() {
                       available: true
                     }
                   ],
-                  analogMatches: Array.from(
-                    { length: Math.min(forecast.analogCount, 4) },
-                    (_, j) => ({
-                      timestamp: new Date(
-                        Date.now() - (j + 1) * 24 * 60 * 60 * 1000
-                      ).toISOString(),
-                      value: forecast.temp + (Math.random() - 0.5) * 2,
-                      similarity: 0.95 - j * 0.03
-                    })
-                  ),
                   onVariableToggle: (variableId: string, enabled: boolean) =>
                     console.log(
                       `Demo: Toggle ${variableId} to ${enabled} for ${forecast.horizon}`

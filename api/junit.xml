@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="9" failures="0" skipped="0" tests="9" time="2.384" timestamp="2025-11-14T00:14:01.546820+10:30" hostname="M03K"><testcase classname="" name="pact.provider.test_provider" time="0.000"><error message="collection failure">ImportError while importing test module '/home/micha/adelaide-weather-final/api/pact/provider/test_provider.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pact/provider/test_provider.py:25: in &lt;module&gt;
+    from main import app
+main.py:37: in &lt;module&gt;
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+E   ModuleNotFoundError: No module named 'slowapi'</error></testcase><testcase classname="" name="test_adapter_integration" time="0.000"><error message="collection failure">ImportError while importing test module '/home/micha/adelaide-weather-final/api/test_adapter_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+test_adapter_integration.py:15: in &lt;module&gt;
+    from api.forecast_adapter import ForecastAdapter
+forecast_adapter.py:35: in &lt;module&gt;
+    from core.analog_forecaster import RealTimeAnalogForecaster
+../core/__init__.py:17: in &lt;module&gt;
+    from .environment_config_manager import (
+../core/environment_config_manager.py:30: in &lt;module&gt;
+    import yaml
+E   ModuleNotFoundError: No module named 'yaml'</error></testcase><testcase classname="" name="test_analog_search_integration" time="0.000"><error message="collection failure">ImportError while importing test module '/home/micha/adelaide-weather-final/api/test_analog_search_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+test_analog_search_integration.py:22: in &lt;module&gt;
+    from api.services import (
+services/__init__.py:12: in &lt;module&gt;
+    from .analog_search import (
+services/analog_search.py:35: in &lt;module&gt;
+    from scripts.analog_forecaster import AnalogEnsembleForecaster
+../scripts/analog_forecaster.py:27: in &lt;module&gt;
+    import torch
+E   ModuleNotFoundError: No module named 'torch'</error></testcase><testcase classname="" name="test_analog_search_service" time="0.000"><error message="collection failure">ImportError while importing test module '/home/micha/adelaide-weather-final/api/test_analog_search_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+test_analog_search_service.py:22: in &lt;module&gt;
+    from api.services.analog_search import (
+services/__init__.py:12: in &lt;module&gt;
+    from .analog_search import (
+services/analog_search.py:35: in &lt;module&gt;
+    from scripts.analog_forecaster import AnalogEnsembleForecaster
+../scripts/analog_forecaster.py:27: in &lt;module&gt;
+    import torch
+E   ModuleNotFoundError: No module named 'torch'</error></testcase><testcase classname="" name="test_analog_search_simple" time="0.000"><error message="collection failure">ImportError while importing test module '/home/micha/adelaide-weather-final/api/test_analog_search_simple.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+test_analog_search_simple.py:39: in &lt;module&gt;
+    from api.services.analog_search import (
+services/__init__.py:20: in &lt;module&gt;
+    from .faiss_health_monitoring import (
+services/faiss_health_monitoring.py:42: in &lt;module&gt;
+    from prometheus_client import (
+E   ModuleNotFoundError: No module named 'prometheus_client'</error></testcase><testcase classname="" name="test_api" time="0.000"><error message="collection failure">ImportError while importing test module '/home/micha/adelaide-weather-final/api/test_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+test_api.py:14: in &lt;module&gt;
+    from test_main import app
+test_main.py:20: in &lt;module&gt;
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+E   ModuleNotFoundError: No module named 'slowapi'</error></testcase><testcase classname="" name="test_api_simple" time="0.000"><error message="collection failure">ImportError while importing test module '/home/micha/adelaide-weather-final/api/test_api_simple.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+test_api_simple.py:23: in &lt;module&gt;
+    from api.main import app
+main.py:37: in &lt;module&gt;
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+E   ModuleNotFoundError: No module named 'slowapi'</error></testcase><testcase classname="" name="test_faiss_real_behavior" time="0.000"><error message="collection failure">ImportError while importing test module '/home/micha/adelaide-weather-final/api/test_faiss_real_behavior.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+test_faiss_real_behavior.py:48: in &lt;module&gt;
+    from test_main import app
+test_main.py:20: in &lt;module&gt;
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+E   ModuleNotFoundError: No module named 'slowapi'</error></testcase><testcase classname="" name="test_main" time="0.000"><error message="collection failure">ImportError while importing test module '/home/micha/adelaide-weather-final/api/test_main.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+test_main.py:20: in &lt;module&gt;
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+E   ModuleNotFoundError: No module named 'slowapi'</error></testcase></testsuite></testsuites>

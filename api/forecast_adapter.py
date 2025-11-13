@@ -129,6 +129,12 @@ class ForecastAdapter:
             
             if not forecast_result:
                 logger.warning(f"Core forecaster returned no results for {horizon}")
+                # Check if fallback is allowed via environment variable
+                allow_fallback = os.getenv("ALLOW_ANALOG_FALLBACK", "false") == "true"
+                
+                if not allow_fallback:
+                    raise RuntimeError("Service Unavailable: Core forecaster failed and fallback disabled")
+                
                 return self._generate_fallback_response(variables)
             
             # Convert forecaster output to API format
@@ -171,6 +177,12 @@ class ForecastAdapter:
             
         except Exception as e:
             logger.warning(f"AnalogSearchService failed, falling back to mock: {e}")
+            # Check if fallback is allowed via environment variable
+            allow_fallback = os.getenv("ALLOW_ANALOG_FALLBACK", "false") == "true"
+            
+            if not allow_fallback:
+                raise RuntimeError("Service Unavailable: AnalogSearchService failed and fallback disabled")
+            
             return self._generate_mock_analog_fallback(horizon_hours)
     
     def _generate_mock_analog_fallback(self, horizon_hours: int) -> Dict[str, Any]:
@@ -183,6 +195,12 @@ class ForecastAdapter:
         Returns:
             Mock analog results compatible with forecaster expectations
         """
+        # Check if fallback is allowed via environment variable
+        allow_fallback = os.getenv("ALLOW_ANALOG_FALLBACK", "false") == "true"
+        
+        if not allow_fallback:
+            raise RuntimeError("Service Unavailable: Mock analog fallback disabled")
+        
         # Generate realistic-looking analog indices and distances
         num_analogs = min(50, 100)  # Typical analog count
         
@@ -205,6 +223,8 @@ class ForecastAdapter:
                 'search_time_ms': np.random.uniform(10, 50),
                 'k_neighbors': num_analogs,
                 'distance_metric': 'L2_fallback',
+                'search_method': 'fallback',
+                'faiss_search_successful': False,
                 'fallback_mode': True
             }
         }

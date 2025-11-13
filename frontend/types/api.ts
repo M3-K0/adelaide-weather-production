@@ -154,6 +154,29 @@ export interface AnalogExplorerData {
   };
   /** Data generation timestamp */
   generated_at: string;
+  /** Data source used for analog search - 'faiss' for FAISS vector search, 'fallback' for mock/degraded mode */
+  data_source: 'faiss' | 'fallback';
+  /** Detailed metadata about the search operation including performance metrics and quality indicators */
+  search_metadata: {
+    /** Search method used */
+    search_method: string;
+    /** Whether FAISS search was successful */
+    faiss_search_successful: boolean;
+    /** Indices used for search */
+    indices_used?: string;
+    /** Total number of candidates searched */
+    total_candidates?: number;
+    /** Search time in milliseconds */
+    search_time_ms?: number;
+    /** Number of neighbors found */
+    k_neighbors_found?: number;
+    /** Distance metric used */
+    distance_metric?: string;
+    /** Fallback reason if search failed */
+    fallback_reason?: string;
+    /** Any additional metadata */
+    [key: string]: string | number | boolean | undefined;
+  };
 }
 
 // ============================================================================
@@ -335,6 +358,24 @@ export function isHealthResponse(response: any): response is HealthResponse {
     'ready' in response &&
     'checks' in response &&
     Array.isArray(response.checks)
+  );
+}
+
+/** Type guard to check if response is analog explorer data */
+export function isAnalogExplorerData(response: any): response is AnalogExplorerData {
+  return (
+    typeof response === 'object' &&
+    response !== null &&
+    'forecast_horizon' in response &&
+    'top_analogs' in response &&
+    'ensemble_stats' in response &&
+    'generated_at' in response &&
+    'data_source' in response &&
+    'search_metadata' in response &&
+    Array.isArray(response.top_analogs) &&
+    typeof response.data_source === 'string' &&
+    (response.data_source === 'faiss' || response.data_source === 'fallback') &&
+    typeof response.search_metadata === 'object'
   );
 }
 

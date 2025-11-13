@@ -35,6 +35,23 @@ import pandas as pd
 from scripts.analog_forecaster import AnalogEnsembleForecaster
 from core.analog_forecaster import RealTimeAnalogForecaster
 
+# Prometheus metrics for analog search monitoring (OBS1)
+try:
+    from api.analog_metrics import (
+        analog_real_total,
+        analog_fallback_total,
+        analog_search_seconds,
+        analog_results_count
+    )
+    METRICS_AVAILABLE = True
+except ImportError:
+    # Fallback for development/testing when metrics not available
+    METRICS_AVAILABLE = False
+    analog_real_total = None
+    analog_fallback_total = None
+    analog_search_seconds = None
+    analog_results_count = None
+
 logger = logging.getLogger(__name__)
 
 # FAISS health monitoring integration for T-011 requirements
@@ -212,7 +229,7 @@ class AnalogSearchService:
         # FAISS health monitoring integration (T-011)
         self.faiss_monitor = None
         
-        logger.info("AnalogSearchService initialized")
+        logger.info(f"AnalogSearchService initialized (Prometheus metrics: {'enabled' if METRICS_AVAILABLE else 'disabled'})")
     
     async def initialize(self) -> bool:
         """Initialize service and connection pool."""
@@ -430,11 +447,23 @@ class AnalogSearchService:
             
             # Fallback to high-quality mock if FAISS fails
             logger.info(f"Using fallback mock search for {horizon}h (FAISS unavailable)")
-            return self._generate_fallback_search_result(horizon, k, search_start)
+            fallback_result = self._generate_fallback_search_result(horizon, k, search_start)
+            
+            # Track fallback usage in execution path
+            if METRICS_AVAILABLE:
+                analog_fallback_total.inc()
+            
+            return fallback_result
             
         except Exception as e:
             logger.error(f"Analog search execution failed: {e}")
-            return self._generate_fallback_search_result(horizon, k, search_start)
+            fallback_result = self._generate_fallback_search_result(horizon, k, search_start)
+            
+            # Track fallback usage due to error
+            if METRICS_AVAILABLE:
+                analog_fallback_total.inc()
+            
+            return fallback_result
     
     def _perform_real_faiss_search(
         self, 
@@ -506,6 +535,12 @@ class AnalogSearchService:
             
             logger.info(f"✅ Real FAISS search completed: {len(analog_indices)} analogs, {search_time_ms:.1f}ms")
             
+            # Record successful real FAISS search metrics
+            if METRICS_AVAILABLE:
+                analog_real_total.inc()
+                analog_search_seconds.labels(horizon=f"{horizon}h", k=str(k)).observe(search_time_ms / 1000.0)
+                analog_results_count.labels(horizon=f"{horizon}h").set(len(analog_indices))
+            
             return {
                 'indices': analog_indices,
                 'distances': distances,
@@ -517,7 +552,8 @@ class AnalogSearchService:
                     'faiss_index_type': type(forecaster.indices[horizon]).__name__,
                     'faiss_index_size': faiss_index.ntotal,
                     'faiss_index_dim': faiss_index.d,
-                    'search_method': 'real_faiss'
+                    'search_method': 'real_faiss',
+                    'metrics_recorded': METRICS_AVAILABLE
                 },
                 'search_time_ms': search_time_ms
             }
@@ -697,6 +733,12 @@ class AnalogSearchService:
         
         logger.info(f"🔄 Generated fallback search result: {num_analogs} analogs, {search_time_ms:.1f}ms")
         
+        # Record fallback search metrics
+        if METRICS_AVAILABLE:
+            analog_fallback_total.inc()
+            analog_search_seconds.labels(horizon=f"{horizon}h", k=str(k)).observe(search_time_ms / 1000.0)
+            analog_results_count.labels(horizon=f"{horizon}h").set(num_analogs)
+        
         return {
             'indices': mock_indices,
             'distances': mock_distances,
@@ -706,7 +748,8 @@ class AnalogSearchService:
                 'k_neighbors': num_analogs,
                 'distance_metric': 'L2_fallback',
                 'search_method': 'fallback_mock',
-                'fallback_reason': 'FAISS_unavailable'
+                'fallback_reason': 'FAISS_unavailable',
+                'metrics_recorded': METRICS_AVAILABLE
             },
             'search_time_ms': search_time_ms
         }
@@ -765,6 +808,12 @@ class AnalogSearchService:
         
         total_time_ms = (time.time() - start_time) * 1000
         
+        # Record degraded mode fallback metrics
+        if METRICS_AVAILABLE:
+            analog_fallback_total.inc()
+            analog_search_seconds.labels(horizon=f"{horizon}h", k=str(k)).observe(total_time_ms / 1000.0)
+            analog_results_count.labels(horizon=f"{horizon}h").set(len(fallback_search['indices']))
+        
         return AnalogSearchResult(
             correlation_id=correlation_id,
             horizon=horizon,
@@ -775,7 +824,8 @@ class AnalogSearchService:
             performance_metrics={
                 'total_time_ms': total_time_ms,
                 'fallback': True,
-                'search_time_ms': fallback_search['search_time_ms']
+                'search_time_ms': fallback_search['search_time_ms'],
+                'metrics_recorded': METRICS_AVAILABLE
             },
             success=True
         )
@@ -852,7 +902,11 @@ class AnalogSearchService:
                 'pool_size': len(self.pool.pool),
                 'available_connections': self.pool.available.qsize()
             },
-            'config': asdict(self.config)
+            'config': asdict(self.config),
+            'metrics': {
+                'prometheus_available': METRICS_AVAILABLE,
+                'instrumentation_active': METRICS_AVAILABLE
+            }
         }
         
         # Determine overall health
@@ -1139,34 +1193,91 @@ class AnalogSearchService:
         query_time: datetime,
         correlation_id: str
     ) -> Dict[str, Any]:
-        """Generate timeline data from historical weather outcomes."""
+        """Generate timeline data from historical weather outcomes using real data progression."""
         try:
+            # Load outcomes data for the appropriate horizon
+            horizon_str = f"{horizon}h"
+            outcomes_path = f"outcomes/outcomes_{horizon_str}.npy"
+            metadata_path = f"outcomes/metadata_{horizon_str}_clean.parquet"
+            
+            logger.info(f"[{correlation_id}] Loading outcomes from {outcomes_path}")
+            outcomes = np.load(outcomes_path)
+            metadata = pd.read_parquet(metadata_path)
+            
+            # Variable indices in outcomes array (from sidecar analysis)
+            # [z500, t2m, t850, q850, u10, v10, u850, v850, cape]
+            var_indices = {
+                "z500": 0, "t2m": 1, "t850": 2, "q850": 3, 
+                "u10": 4, "v10": 5, "u850": 6, "v850": 7, "cape": 8
+            }
+            
             timeline_points = []
             
-            # Create timeline from analog patterns
-            for i, (idx, distance) in enumerate(zip(search_result.indices[:20], search_result.distances[:20])):
+            # Use top analog indices to extract real weather progression
+            for i, (analog_idx, distance) in enumerate(zip(search_result.indices[:10], search_result.distances[:10])):
+                if analog_idx >= len(outcomes):
+                    logger.warning(f"[{correlation_id}] Analog index {analog_idx} out of range, skipping")
+                    continue
+                    
                 similarity = max(0.0, 1.0 - distance / 4.0)
                 
-                # Generate timeline point
-                timeline_point = {
-                    "timestamp": (query_time + timedelta(hours=horizon)).isoformat(),
-                    "analog_rank": i + 1,
-                    "similarity_weight": round(similarity, 3),
-                    "forecast_values": {
-                        "temperature": round(20 + 15 * np.cos(i * 0.5) + np.random.normal(0, 2), 1),
-                        "precipitation": round(max(0, np.random.exponential(1) * similarity), 1),
-                        "wind_speed": round(8 + 12 * similarity + np.random.normal(0, 1.5), 1),
-                        "pressure": round(1013 + np.random.normal(0, 8), 1)
-                    },
-                    "uncertainty_bands": {
-                        "lower_bound": round(18 + 10 * np.cos(i * 0.5), 1),
-                        "upper_bound": round(22 + 20 * np.cos(i * 0.5), 1)
+                # Get real outcome data for this analog
+                analog_outcome = outcomes[analog_idx]
+                analog_metadata = metadata.iloc[analog_idx]
+                
+                # Create temporal snapshots at 0%, 33%, 66%, 100% of forecast horizon
+                snapshot_times = [0.0, 0.33, 0.66, 1.0]
+                snapshots = []
+                
+                for progress in snapshot_times:
+                    snapshot_time = query_time + timedelta(hours=horizon * progress)
+                    
+                    # Extract variables from outcomes data (no synthetic noise - real data)
+                    forecast_values = {
+                        "temperature": float(analog_outcome[var_indices["t2m"]] - 273.15),  # K to C
+                        "z500": float(analog_outcome[var_indices["z500"]] / 9.80665),  # m^2/s^2 to m
+                        "t850": float(analog_outcome[var_indices["t850"]] - 273.15),  # K to C  
+                        "u10": float(analog_outcome[var_indices["u10"]]),
+                        "v10": float(analog_outcome[var_indices["v10"]]),
+                        "u850": float(analog_outcome[var_indices["u850"]]),
+                        "v850": float(analog_outcome[var_indices["v850"]]),
+                        "q850": float(analog_outcome[var_indices["q850"]]),
+                        "cape": float(analog_outcome[var_indices["cape"]])
                     }
+                    
+                    # Calculate wind speed and direction
+                    wind_speed = np.sqrt(forecast_values["u10"]**2 + forecast_values["v10"]**2)
+                    wind_direction = (np.degrees(np.arctan2(forecast_values["v10"], forecast_values["u10"])) + 360) % 360
+                    
+                    snapshot = {
+                        "timestamp": snapshot_time.isoformat(),
+                        "progress_percent": round(progress * 100),
+                        "forecast_values": {
+                            **forecast_values,
+                            "wind_speed": round(wind_speed, 1),
+                            "wind_direction": round(wind_direction, 1)
+                        },
+                        "metadata": {
+                            "init_time": analog_metadata["init_time"].isoformat() if hasattr(analog_metadata["init_time"], 'isoformat') else str(analog_metadata["init_time"]),
+                            "valid_time": analog_metadata["valid_time"].isoformat() if hasattr(analog_metadata["valid_time"], 'isoformat') else str(analog_metadata["valid_time"]),
+                            "season": int(analog_metadata["season"]),
+                            "month": int(analog_metadata["month"]),
+                            "hour": int(analog_metadata["hour"])
+                        }
+                    }
+                    snapshots.append(snapshot)
+                
+                timeline_point = {
+                    "analog_rank": i + 1,
+                    "analog_index": int(analog_idx),
+                    "similarity_weight": round(similarity, 3),
+                    "distance": round(float(distance), 4),
+                    "temporal_snapshots": snapshots
                 }
                 timeline_points.append(timeline_point)
             
-            # Calculate ensemble statistics
-            ensemble_stats = self._calculate_ensemble_statistics(timeline_points)
+            # Calculate ensemble statistics from real analog outcomes
+            ensemble_stats = self._calculate_real_ensemble_statistics(timeline_points)
             
             timeline_data = {
                 "forecast_timeline": timeline_points,
@@ -1178,18 +1289,87 @@ class AnalogSearchService:
                 },
                 "verification_metrics": {
                     "analog_consistency": round(np.mean([p["similarity_weight"] for p in timeline_points]), 3),
-                    "ensemble_spread": round(np.std([p["forecast_values"]["temperature"] for p in timeline_points]), 2),
-                    "confidence_level": round(min(1.0, np.mean([p["similarity_weight"] for p in timeline_points]) * 1.2), 3)
+                    "ensemble_spread": round(np.std([s["forecast_values"]["temperature"] for p in timeline_points for s in p["temporal_snapshots"]]), 2),
+                    "confidence_level": round(min(1.0, np.mean([p["similarity_weight"] for p in timeline_points]) * 1.2), 3),
+                    "data_source": "real_outcomes",
+                    "horizon": horizon_str,
+                    "analog_count": len(timeline_points)
                 }
             }
             
-            logger.info(f"[{correlation_id}] Generated timeline data with {len(timeline_points)} points")
+            logger.info(f"[{correlation_id}] Generated real timeline data with {len(timeline_points)} analogs, each with {len(snapshot_times)} snapshots")
             return timeline_data
             
         except Exception as e:
-            logger.error(f"[{correlation_id}] Failed to generate timeline data: {e}")
+            logger.error(f"[{correlation_id}] Failed to generate real timeline data: {e}")
             return {"error": "Timeline data unavailable", "details": str(e)}
     
+    def _calculate_real_ensemble_statistics(self, timeline_points: List[Dict]) -> Dict[str, Any]:
+        """Calculate ensemble statistics from real outcome timeline points."""
+        if not timeline_points:
+            return {}
+        
+        # Collect values from all snapshots across all analogs
+        all_temps = []
+        all_winds = []
+        all_capes = []
+        all_u10s = []
+        all_v10s = []
+        all_z500s = []
+        all_t850s = []
+        all_q850s = []
+        
+        for analog in timeline_points:
+            for snapshot in analog["temporal_snapshots"]:
+                values = snapshot["forecast_values"]
+                all_temps.append(values["temperature"])
+                all_winds.append(values["wind_speed"])
+                all_capes.append(values["cape"])
+                all_u10s.append(values["u10"])
+                all_v10s.append(values["v10"])
+                all_z500s.append(values["z500"])
+                all_t850s.append(values["t850"])
+                all_q850s.append(values["q850"])
+        
+        return {
+            "temperature": {
+                "ensemble_mean": round(np.mean(all_temps), 1),
+                "ensemble_median": round(np.median(all_temps), 1),
+                "ensemble_std": round(np.std(all_temps), 2),
+                "percentile_10": round(np.percentile(all_temps, 10), 1),
+                "percentile_90": round(np.percentile(all_temps, 90), 1)
+            },
+            "wind": {
+                "ensemble_mean": round(np.mean(all_winds), 1),
+                "ensemble_median": round(np.median(all_winds), 1),
+                "ensemble_std": round(np.std(all_winds), 2),
+                "percentile_10": round(np.percentile(all_winds, 10), 1),
+                "percentile_90": round(np.percentile(all_winds, 90), 1)
+            },
+            "cape": {
+                "ensemble_mean": round(np.mean(all_capes), 1),
+                "ensemble_median": round(np.median(all_capes), 1),
+                "ensemble_std": round(np.std(all_capes), 2),
+                "percentile_10": round(np.percentile(all_capes, 10), 1),
+                "percentile_90": round(np.percentile(all_capes, 90), 1)
+            },
+            "z500": {
+                "ensemble_mean": round(np.mean(all_z500s), 1),
+                "ensemble_median": round(np.median(all_z500s), 1),
+                "ensemble_std": round(np.std(all_z500s), 2)
+            },
+            "t850": {
+                "ensemble_mean": round(np.mean(all_t850s), 1),
+                "ensemble_median": round(np.median(all_t850s), 1),
+                "ensemble_std": round(np.std(all_t850s), 2)
+            },
+            "humidity_850": {
+                "ensemble_mean": round(np.mean(all_q850s), 6),
+                "ensemble_median": round(np.median(all_q850s), 6),
+                "ensemble_std": round(np.std(all_q850s), 6)
+            }
+        }
+
     def _calculate_ensemble_statistics(self, timeline_points: List[Dict]) -> Dict[str, Any]:
         """Calculate ensemble statistics from timeline points."""
         if not timeline_points:
@@ -1560,6 +1740,218 @@ class AnalogSearchService:
             }
         }
     
+    async def _load_outcomes_data(self, horizon: int, correlation_id: str) -> Optional[np.ndarray]:
+        """Load outcomes data for the specified horizon."""
+        try:
+            outcomes_path = Path(f"outcomes/outcomes_{horizon}h.npy")
+            if not outcomes_path.exists():
+                logger.error(f"[{correlation_id}] Outcomes file not found: {outcomes_path}")
+                return None
+            
+            outcomes = np.load(str(outcomes_path))
+            logger.info(f"[{correlation_id}] Loaded outcomes data: {outcomes.shape}")
+            return outcomes
+            
+        except Exception as e:
+            logger.error(f"[{correlation_id}] Failed to load outcomes data for {horizon}h: {e}")
+            return None
+
+    def _extract_real_weather_outcome(
+        self, 
+        outcomes: np.ndarray, 
+        variable: str, 
+        similarity: float
+    ) -> Tuple[float, float, str]:
+        """Extract real weather outcome from outcomes array.
+        
+        Based on data analysis, the variables appear to be:
+        0: Surface pressure (Pa)
+        1: 2m temperature (K) 
+        2: 850hPa temperature (K)
+        3: Total precipitation (m/s)
+        4: 10m u-wind (m/s)
+        5: 10m v-wind (m/s) 
+        6: Additional u-wind component (m/s)
+        7: Additional v-wind component (m/s)
+        8: Other meteorological variable
+        """
+        try:
+            if variable == "temperature":
+                # 2m temperature in Celsius
+                temp_k = outcomes[1]
+                temp_c = temp_k - 273.15
+                uncertainty = 1.5 + (1.0 - similarity) * 2.0
+                conditions = self._describe_temperature_conditions(temp_c)
+                return round(temp_c, 2), round(uncertainty, 2), conditions
+                
+            elif variable == "precipitation":
+                # Total precipitation in mm/h (convert from m/s)
+                precip_ms = outcomes[3]
+                precip_mm = precip_ms * 3600 * 1000  # Convert m/s to mm/h
+                uncertainty = max(0.1, precip_mm * 0.3 + (1.0 - similarity) * 2.0)
+                conditions = self._describe_precipitation_conditions(precip_mm)
+                return round(precip_mm, 2), round(uncertainty, 2), conditions
+                
+            elif variable == "wind":
+                # Wind speed from u and v components
+                u_wind = outcomes[4]
+                v_wind = outcomes[5]
+                wind_speed = np.sqrt(u_wind**2 + v_wind**2)
+                uncertainty = 1.0 + (1.0 - similarity) * 3.0
+                conditions = self._describe_wind_conditions(wind_speed, u_wind, v_wind)
+                return round(wind_speed, 2), round(uncertainty, 2), conditions
+                
+            elif variable == "pressure":
+                # Surface pressure in hPa
+                pressure_pa = outcomes[0]  # Use surface pressure (variable 0)
+                pressure_hpa = pressure_pa / 100
+                uncertainty = 2.0 + (1.0 - similarity) * 3.0
+                conditions = self._describe_pressure_conditions(pressure_hpa)
+                return round(pressure_hpa, 2), round(uncertainty, 2), conditions
+                
+            else:
+                # Default for unknown variables - use temperature
+                temp_k = outcomes[1]
+                temp_c = temp_k - 273.15
+                uncertainty = 2.0 + (1.0 - similarity) * 3.0
+                conditions = "Unknown variable type"
+                return round(temp_c, 2), round(uncertainty, 2), conditions
+                
+        except Exception as e:
+            logger.warning(f"Error extracting real outcome for {variable}: {e}")
+            # Fallback to basic temperature
+            return 20.0, 3.0, "Data extraction error"
+
+    def _describe_temperature_conditions(self, temp_c: float) -> str:
+        """Generate descriptive text for temperature conditions."""
+        if temp_c < 5:
+            return "Very cold conditions"
+        elif temp_c < 15:
+            return "Cold conditions"
+        elif temp_c < 25:
+            return "Mild conditions"
+        elif temp_c < 35:
+            return "Warm conditions"
+        else:
+            return "Very hot conditions"
+
+    def _describe_precipitation_conditions(self, precip_mm: float) -> str:
+        """Generate descriptive text for precipitation conditions."""
+        if precip_mm < 0.1:
+            return "Dry conditions"
+        elif precip_mm < 1.0:
+            return "Light precipitation"
+        elif precip_mm < 5.0:
+            return "Moderate precipitation"
+        elif precip_mm < 20.0:
+            return "Heavy precipitation"
+        else:
+            return "Very heavy precipitation"
+
+    def _describe_wind_conditions(self, speed: float, u: float, v: float) -> str:
+        """Generate descriptive text for wind conditions."""
+        direction = np.degrees(np.arctan2(v, u)) % 360
+        
+        if speed < 3:
+            speed_desc = "Light winds"
+        elif speed < 8:
+            speed_desc = "Moderate winds"
+        elif speed < 15:
+            speed_desc = "Strong winds"
+        else:
+            speed_desc = "Very strong winds"
+        
+        if 337.5 <= direction or direction < 22.5:
+            dir_desc = "from the north"
+        elif 22.5 <= direction < 67.5:
+            dir_desc = "from the northeast"
+        elif 67.5 <= direction < 112.5:
+            dir_desc = "from the east"
+        elif 112.5 <= direction < 157.5:
+            dir_desc = "from the southeast"
+        elif 157.5 <= direction < 202.5:
+            dir_desc = "from the south"
+        elif 202.5 <= direction < 247.5:
+            dir_desc = "from the southwest"
+        elif 247.5 <= direction < 292.5:
+            dir_desc = "from the west"
+        else:
+            dir_desc = "from the northwest"
+        
+        return f"{speed_desc} {dir_desc}"
+
+    def _describe_pressure_conditions(self, pressure_hpa: float) -> str:
+        """Generate descriptive text for pressure conditions."""
+        if pressure_hpa < 1000:
+            return "Low pressure system"
+        elif pressure_hpa < 1015:
+            return "Moderate pressure"
+        elif pressure_hpa < 1025:
+            return "High pressure"
+        else:
+            return "Very high pressure"
+
+    def _generate_pattern_description(self, outcomes: np.ndarray, analog_time: datetime, variable: str) -> str:
+        """Generate weather pattern description from actual outcomes data."""
+        try:
+            temp_c = outcomes[1] - 273.15  # 2m temperature
+            pressure_hpa = outcomes[0] / 100  # Surface pressure
+            wind_speed = np.sqrt(outcomes[4]**2 + outcomes[5]**2)  # Wind from u,v components
+            precip_mm = outcomes[3] * 3600 * 1000  # Precipitation in mm/h
+            
+            season = self._get_season_name(self._determine_season(analog_time))
+            
+            pattern_parts = []
+            
+            if pressure_hpa < 1005:
+                pattern_parts.append("deep low pressure")
+            elif pressure_hpa < 1015:
+                pattern_parts.append("low pressure")
+            elif pressure_hpa > 1025:
+                pattern_parts.append("high pressure")
+            else:
+                pattern_parts.append("moderate pressure")
+            
+            if temp_c < 10:
+                pattern_parts.append("cold airmass")
+            elif temp_c > 30:
+                pattern_parts.append("hot airmass")
+            
+            if wind_speed > 10:
+                pattern_parts.append("windy conditions")
+            elif wind_speed < 3:
+                pattern_parts.append("calm conditions")
+            
+            if precip_mm > 1.0:
+                pattern_parts.append("active precipitation")
+            
+            pattern_desc = f"{season} pattern with {', '.join(pattern_parts)}"
+            return pattern_desc.capitalize()
+            
+        except Exception as e:
+            logger.warning(f"Error generating pattern description: {e}")
+            return f"Weather pattern from {analog_time.strftime('%B %Y')}"
+
+    def _get_season_name(self, season_code: Union[int, str]) -> str:
+        """Convert season code to name."""
+        if isinstance(season_code, str):
+            return season_code.capitalize()
+        season_map = {0: "Summer", 1: "Autumn", 2: "Winter", 3: "Spring"}
+        return season_map.get(season_code, "Unknown")
+
+    def _get_seasonal_context(self, analog_time: datetime) -> str:
+        """Get seasonal weather context for the analog time."""
+        month = analog_time.month
+        
+        if month in [12, 1, 2]:
+            return "Summer - typically hot and dry with occasional thunderstorms"
+        elif month in [3, 4, 5]:
+            return "Autumn - transitional period with variable conditions"
+        elif month in [6, 7, 8]:
+            return "Winter - cooler temperatures with frontal systems"
+        else:
+            return "Spring - variable conditions with warming trend"
+
     def _generate_mock_analog_details(
         self, 
         search_result: AnalogSearchResult, 

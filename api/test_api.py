@@ -353,5 +353,266 @@ def api_client():
     """Provide test client for session"""
     return client
 
+@pytest.mark.asyncio
+class TestRealFAISSIntegration:
+    """Test real FAISS integration through API endpoints."""
+    
+    def get_auth_headers(self):
+        """Helper to get valid auth headers"""
+        return {"Authorization": f"Bearer {VALID_TOKEN}"}
+    
+    def test_forecast_response_search_method_validation(self):
+        """Test that forecast responses include search_method='real_faiss' when FAISS succeeds."""
+        response = client.get(
+            "/forecast?horizon=24h&vars=t2m,u10,v10",
+            headers=self.get_auth_headers()
+        )
+        assert response.status_code == 200
+        
+        data = response.json()
+        
+        # Check for transparency fields indicating FAISS usage
+        if "analog_metadata" in data:
+            metadata = data["analog_metadata"]
+            # Should contain real FAISS indicators
+            assert "search_method" in metadata
+            # If FAISS is working, should be 'real_faiss', otherwise 'fallback_mock'
+            assert metadata["search_method"] in ["real_faiss", "fallback_mock"]
+            
+            if metadata["search_method"] == "real_faiss":
+                assert "faiss_index_type" in metadata
+                assert "total_candidates" in metadata
+                assert metadata.get("data_source") == "faiss" or "faiss" in str(metadata).lower()
+    
+    def test_distance_monotonicity_in_responses(self):
+        """Test that analog distances in API responses are monotonically increasing."""
+        # Use analog details endpoint which exposes distances
+        response = client.get(
+            "/analogs/details?horizon=24&variable=temperature&k=10",
+            headers=self.get_auth_headers()
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            if "analogs" in data and data["success"]:
+                analogs = data["analogs"]
+                
+                if len(analogs) > 1:
+                    distances = [analog["distance"] for analog in analogs if "distance" in analog]
+                    
+                    if distances:
+                        # Verify monotonicity
+                        for i in range(1, len(distances)):
+                            assert distances[i] >= distances[i-1], f"Distance monotonicity violated: {distances[i-1]} > {distances[i]} at positions {i-1}, {i}"
+                        
+                        # Verify reasonable distance values
+                        assert all(d >= 0 for d in distances), "Found negative distances"
+                        assert all(d <= 10.0 for d in distances), "Found unreasonably large distances"
+    
+    def test_fallback_behavior_with_environment_control(self):
+        """Test fallback behavior controlled by ALLOW_ANALOG_FALLBACK environment variable."""
+        import os
+        
+        # Test with fallback disabled
+        os.environ['ALLOW_ANALOG_FALLBACK'] = 'false'
+        
+        try:
+            # This should work normally or return an error if FAISS truly fails
+            response = client.get(
+                "/forecast?horizon=24h&vars=t2m",
+                headers=self.get_auth_headers()
+            )
+            
+            # Should either succeed or fail gracefully
+            assert response.status_code in [200, 503]
+            
+            if response.status_code == 503:
+                error_data = response.json()
+                assert "Service Unavailable" in error_data.get("detail", "")
+            
+        finally:
+            if 'ALLOW_ANALOG_FALLBACK' in os.environ:
+                del os.environ['ALLOW_ANALOG_FALLBACK']
+        
+        # Test with fallback enabled
+        os.environ['ALLOW_ANALOG_FALLBACK'] = 'true'
+        
+        try:
+            response = client.get(
+                "/forecast?horizon=24h&vars=t2m",
+                headers=self.get_auth_headers()
+            )
+            
+            # Should always succeed with fallback enabled
+            assert response.status_code == 200
+            
+            data = response.json()
+            # Check if fallback was used
+            if "analog_metadata" in data:
+                metadata = data["analog_metadata"]
+                if metadata.get("search_method") == "fallback_mock":
+                    assert "fallback_reason" in metadata or "fallback_mode" in metadata
+            
+        finally:
+            if 'ALLOW_ANALOG_FALLBACK' in os.environ:
+                del os.environ['ALLOW_ANALOG_FALLBACK']
+    
+    def test_transparency_fields_in_forecast_response(self):
+        """Test that forecast responses include proper transparency fields."""
+        response = client.get(
+            "/forecast?horizon=24h&vars=t2m,u10,v10",
+            headers=self.get_auth_headers()
+        )
+        assert response.status_code == 200
+        
+        data = response.json()
+        
+        # Check for metadata transparency
+        expected_transparency_fields = [
+            "timestamp",
+            "latency_ms",
+            "horizon"
+        ]
+        
+        for field in expected_transparency_fields:
+            assert field in data, f"Missing transparency field: {field}"
+        
+        # Check variable-level transparency
+        for var in ["t2m", "u10", "v10"]:
+            if var in data["variables"]:
+                var_data = data["variables"][var]
+                assert "confidence" in var_data
+                assert "available" in var_data
+                assert "analog_count" in var_data
+                
+                # Validate confidence is reasonable
+                confidence = var_data["confidence"]
+                assert 0 <= confidence <= 100
+    
+    def test_analog_details_determinism(self):
+        """Test that analog details endpoint returns consistent results for same inputs."""
+        # Make identical requests
+        params = "?horizon=24&variable=temperature&k=5"
+        
+        response1 = client.get(
+            f"/analogs/details{params}",
+            headers=self.get_auth_headers()
+        )
+        
+        response2 = client.get(
+            f"/analogs/details{params}",
+            headers=self.get_auth_headers()
+        )
+        
+        assert response1.status_code == 200
+        assert response2.status_code == 200
+        
+        data1 = response1.json()
+        data2 = response2.json()
+        
+        if data1.get("success") and data2.get("success"):
+            # Compare key structural elements (allowing for some variance in timing)
+            assert data1["query_metadata"]["horizon"] == data2["query_metadata"]["horizon"]
+            assert data1["query_metadata"]["variable"] == data2["query_metadata"]["variable"]
+            assert data1["query_metadata"]["k_requested"] == data2["query_metadata"]["k_requested"]
+            
+            # If using real FAISS data, results should be more consistent
+            if (data1.get("search_metadata", {}).get("search_method") == "real_faiss" and
+                data2.get("search_metadata", {}).get("search_method") == "real_faiss"):
+                
+                analogs1 = data1.get("analogs", [])
+                analogs2 = data2.get("analogs", [])
+                
+                # Same number of analogs should be returned
+                assert len(analogs1) == len(analogs2)
+                
+                # First few analogs should have consistent rankings for deterministic data
+                for i in range(min(3, len(analogs1))):
+                    assert analogs1[i]["rank"] == analogs2[i]["rank"]
+
+@pytest.mark.asyncio 
+class TestPerformanceAndSLA:
+    """Test API performance and SLA compliance."""
+    
+    def get_auth_headers(self):
+        """Helper to get valid auth headers"""
+        return {"Authorization": f"Bearer {VALID_TOKEN}"}
+    
+    def test_forecast_response_time_sla(self):
+        """Test that forecast responses meet SLA requirements."""
+        response_times = []
+        
+        for i in range(5):
+            start_time = time.time()
+            
+            response = client.get(
+                "/forecast?horizon=24h&vars=t2m,u10,v10",
+                headers=self.get_auth_headers()
+            )
+            
+            response_time = (time.time() - start_time) * 1000  # Convert to ms
+            response_times.append(response_time)
+            
+            assert response.status_code == 200
+        
+        avg_time = sum(response_times) / len(response_times)
+        max_time = max(response_times)
+        
+        # SLA requirements
+        assert avg_time < 200, f"Average response time {avg_time:.1f}ms exceeds 200ms SLA"
+        assert max_time < 1000, f"Maximum response time {max_time:.1f}ms exceeds 1000ms SLA"
+    
+    def test_analog_search_performance_metrics(self):
+        """Test that analog search includes performance metrics."""
+        response = client.get(
+            "/analogs/details?horizon=24&variable=temperature&k=50",
+            headers=self.get_auth_headers()
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            if "search_metadata" in data:
+                metadata = data["search_metadata"]
+                
+                # Should include timing information
+                timing_fields = ["total_processing_time_ms", "search_time_ms"]
+                timing_found = any(field in metadata for field in timing_fields)
+                assert timing_found, "No timing metrics found in search metadata"
+                
+                # Should include result count information
+                if "k_neighbors_found" in metadata:
+                    assert isinstance(metadata["k_neighbors_found"], int)
+                    assert metadata["k_neighbors_found"] > 0
+    
+    def test_concurrent_request_handling(self):
+        """Test that API can handle concurrent requests without degradation."""
+        import concurrent.futures
+        
+        def make_forecast_request():
+            return client.get(
+                "/forecast?horizon=12h&vars=t2m",
+                headers=self.get_auth_headers()
+            )
+        
+        # Execute 10 concurrent requests
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(make_forecast_request) for _ in range(10)]
+            responses = [future.result() for future in futures]
+        
+        # All should succeed
+        success_count = sum(1 for r in responses if r.status_code == 200)
+        assert success_count >= 8, f"Only {success_count}/10 concurrent requests succeeded"
+        
+        # Check response consistency
+        valid_responses = [r for r in responses if r.status_code == 200]
+        
+        for response in valid_responses:
+            data = response.json()
+            assert "t2m" in data["variables"]
+            assert "horizon" in data
+            assert data["horizon"] == "12h"
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

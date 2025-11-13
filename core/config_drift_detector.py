@@ -1223,6 +1223,94 @@ class ConfigurationDriftDetector:
                         metadata={"security_concern": True}
                     )
                     events.append(event)
+                
+                # Advanced token entropy validation for API_TOKEN
+                if var == 'API_TOKEN':
+                    try:
+                        # Import TokenEntropyValidator
+                        import sys
+                        from pathlib import Path
+                        api_path = Path(__file__).parent.parent / "api"
+                        sys.path.insert(0, str(api_path))
+                        from token_rotation_cli import TokenEntropyValidator
+                        
+                        # Validate token security
+                        is_valid, issues = TokenEntropyValidator.validate_token(value)
+                        
+                        if not is_valid:
+                            # Calculate detailed metrics for recommendations
+                            metrics = TokenEntropyValidator.calculate_entropy(value)
+                            
+                            # Generate specific recommendations
+                            recommendations = []
+                            if len(value) < TokenEntropyValidator.MIN_TOKEN_LENGTH:
+                                recommendations.append(f"Increase token length to at least {TokenEntropyValidator.MIN_TOKEN_LENGTH} characters")
+                            
+                            if metrics.entropy_bits < TokenEntropyValidator.MIN_ENTROPY_BITS:
+                                recommendations.append(f"Increase token entropy to at least {TokenEntropyValidator.MIN_ENTROPY_BITS} bits (current: {metrics.entropy_bits:.1f})")
+                            
+                            if metrics.charset_diversity < TokenEntropyValidator.MIN_CHARSET_DIVERSITY:
+                                recommendations.append(f"Use diverse character sets including uppercase, lowercase, digits, and special characters (current diversity: {metrics.charset_diversity:.2f})")
+                            
+                            if metrics.pattern_score < 0.5:
+                                recommendations.append("Avoid repetitive patterns and sequential characters")
+                            
+                            # Add recommendation for using the token rotation CLI
+                            recommendations.append("Use 'python api/token_rotation_cli.py generate' to create a secure token")
+                            
+                            event = DriftEvent(
+                                event_id=f"weak_token_drift_{int(time.time())}_{hash(value) % 10000}",
+                                drift_type=DriftType.SECURITY_DRIFT,
+                                severity=DriftSeverity.CRITICAL,
+                                source_path=f"ENV:{var}",
+                                description=f"Weak API token detected with insufficient security properties",
+                                detected_at=snapshot.timestamp,
+                                metadata={
+                                    "security_concern": True,
+                                    "token_security_analysis": {
+                                        "length": metrics.length,
+                                        "entropy_bits": metrics.entropy_bits,
+                                        "charset_diversity": metrics.charset_diversity,
+                                        "pattern_score": metrics.pattern_score,
+                                        "security_level": metrics.security_level,
+                                        "validation_issues": issues,
+                                        "recommendations": recommendations,
+                                        "minimum_requirements": {
+                                            "min_length": TokenEntropyValidator.MIN_TOKEN_LENGTH,
+                                            "min_entropy_bits": TokenEntropyValidator.MIN_ENTROPY_BITS,
+                                            "min_charset_diversity": TokenEntropyValidator.MIN_CHARSET_DIVERSITY
+                                        }
+                                    }
+                                }
+                            )
+                            events.append(event)
+                            
+                    except ImportError as e:
+                        # Fallback validation if TokenEntropyValidator is not available
+                        logger.warning(f"TokenEntropyValidator not available: {e}")
+                        if len(value) < 32:
+                            event = DriftEvent(
+                                event_id=f"short_token_drift_{int(time.time())}_{hash(value) % 10000}",
+                                drift_type=DriftType.SECURITY_DRIFT,
+                                severity=DriftSeverity.CRITICAL,
+                                source_path=f"ENV:{var}",
+                                description=f"API token is too short (minimum 32 characters required)",
+                                detected_at=snapshot.timestamp,
+                                metadata={
+                                    "security_concern": True,
+                                    "fallback_validation": True,
+                                    "token_length": len(value),
+                                    "recommendations": [
+                                        "Generate a longer token with at least 32 characters",
+                                        "Use a cryptographically secure random generator"
+                                    ]
+                                }
+                            )
+                            events.append(event)
+                            
+                    except Exception as e:
+                        # Log error but don't fail the drift detection
+                        logger.error(f"Error during token validation: {e}")
         
         return events
     

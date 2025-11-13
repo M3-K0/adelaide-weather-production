@@ -501,7 +501,17 @@ class AnalogExplorerData(BaseModel):
                     "outcome_uncertainty": {"t2m": 2.8, "msl": 5.4},
                     "common_events": ["Cloud cover increased"]
                 },
-                "generated_at": "2024-01-15T14:30:00Z"
+                "generated_at": "2024-01-15T14:30:00Z",
+                "data_source": "faiss",
+                "search_metadata": {
+                    "search_method": "faiss",
+                    "faiss_search_successful": True,
+                    "indices_used": "24h_temperature_v1",
+                    "total_candidates": 50000,
+                    "search_time_ms": 15.7,
+                    "k_neighbors_found": 10,
+                    "distance_metric": "L2"
+                }
             }
         }
     )
@@ -527,6 +537,24 @@ class AnalogExplorerData(BaseModel):
         description="ISO 8601 timestamp when this analysis was generated",
         examples=["2024-01-15T14:30:00Z", "2024-01-15T14:30:00.123Z"],
         pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$"
+    )
+    data_source: Literal['faiss', 'fallback'] = Field(
+        ...,
+        description="Data source used for analog search - 'faiss' for FAISS vector search, 'fallback' for mock/degraded mode",
+        examples=["faiss", "fallback"]
+    )
+    search_metadata: Dict[str, Union[str, int, float, bool]] = Field(
+        ...,
+        description="Detailed metadata about the search operation including performance metrics and quality indicators",
+        examples=[{
+            "search_method": "faiss",
+            "faiss_search_successful": True,
+            "indices_used": "24h_temperature_v1",
+            "total_candidates": 50000,
+            "search_time_ms": 15.7,
+            "k_neighbors_found": 10,
+            "distance_metric": "L2"
+        }]
     )
     
     @field_validator('top_analogs')

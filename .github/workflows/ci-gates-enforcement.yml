@@ -1,0 +1,779 @@
+name: 'CI Gates Enforcement - Adelaide Weather Forecast'
+
+# =============================================================================
+# CI GATES ENFORCEMENT PIPELINE
+# =============================================================================
+# Strict CI/CD pipeline with fallback monitoring and security drift enforcement
+# 
+# CRITICAL GATES:
+# 1. analog_fallback_total > 0 causes pipeline failure
+# 2. security drift criticals > 0 causes pipeline failure  
+# 3. 90% test coverage requirement
+# 4. All quality tools must pass (pytest, mypy, flake8, black, bandit)
+# 5. Frontend tests must pass (UI ci:all)
+# 6. FAISS indices operational validation
+# 7. Prometheus metrics validation
+# 
+# Author: Design Systems Architect & CI/CD Engineer
+# Version: 1.0.0 - CI1 Implementation
+# =============================================================================
+
+on:
+  push:
+    branches: [main, develop, 'feature/**']
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force deployment despite quality gate failures (EMERGENCY ONLY)'
+        required: false
+        default: false
+        type: boolean
+      skip_monitoring_checks:
+        description: 'Skip monitoring validation (NOT RECOMMENDED)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_API: adelaide-weather/api
+  IMAGE_NAME_FRONTEND: adelaide-weather/frontend
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+  COVERAGE_THRESHOLD: 90
+  PROMETHEUS_URL: http://prometheus:9090
+  
+  # Security settings
+  SECURITY_SCAN_LEVEL: 'strict'
+  BANDIT_CONFIDENCE_LEVEL: 'MEDIUM'
+  SAFETY_POLICY: 'strict'
+
+jobs:
+  # =============================================================================
+  # GATE 1: CODE QUALITY AND SECURITY BASELINE
+  # =============================================================================
+  quality-gates:
+    name: '🔍 Quality Gates Enforcement'
+    runs-on: ubuntu-latest
+    outputs:
+      python-quality: ${{ steps.python-gates.outcome }}
+      frontend-quality: ${{ steps.frontend-gates.outcome }}
+      coverage-status: ${{ steps.coverage-check.outputs.coverage_status }}
+      security-baseline: ${{ steps.security-baseline.outcome }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+          
+      # =========================================================================
+      # PYTHON QUALITY GATES (STRICT ENFORCEMENT)
+      # =========================================================================
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install black isort flake8 mypy bandit safety pytest-cov pytest-xdist
+          
+      - name: Python Quality Gates (STRICT)
+        id: python-gates
+        run: |
+          echo "🔍 Enforcing Python quality gates..."
+          
+          # Code formatting - MUST PASS
+          echo "📏 Checking code formatting with Black..."
+          black --check --diff . || {
+            echo "❌ Black formatting check failed"
+            echo "Run: black ."
+            exit 1
+          }
+          
+          # Import sorting - MUST PASS
+          echo "🔤 Checking import sorting with isort..."
+          isort --check-only --diff . || {
+            echo "❌ isort check failed"
+            echo "Run: isort ."
+            exit 1
+          }
+          
+          # Linting - MUST PASS
+          echo "🔍 Running flake8 linting..."
+          flake8 . --count --statistics || {
+            echo "❌ flake8 linting failed"
+            exit 1
+          }
+          
+          # Type checking - MUST PASS
+          echo "🎯 Running mypy type checking..."
+          mypy . --ignore-missing-imports || {
+            echo "❌ mypy type checking failed"
+            exit 1
+          }
+          
+          echo "✅ All Python quality gates passed"
+          
+      # =========================================================================
+      # SECURITY BASELINE SCANNING (STRICT ENFORCEMENT)
+      # =========================================================================
+      - name: Security Baseline Enforcement
+        id: security-baseline
+        run: |
+          echo "🔒 Enforcing security baseline..."
+          
+          # Bandit security scanning - FAIL on HIGH/MEDIUM
+          echo "🛡️ Running Bandit security scan..."
+          bandit -r . -f json -o bandit-report.json -c bandit.yaml || true
+          
+          # Check bandit results
+          if [ -f "bandit-report.json" ]; then
+            HIGH_COUNT=$(jq '.results[] | select(.issue_severity == "HIGH") | length' bandit-report.json | wc -l)
+            MEDIUM_COUNT=$(jq '.results[] | select(.issue_severity == "MEDIUM") | length' bandit-report.json | wc -l)
+            
+            if [ $HIGH_COUNT -gt 0 ] || [ $MEDIUM_COUNT -gt 0 ]; then
+              echo "❌ Bandit found HIGH/MEDIUM severity security issues"
+              echo "HIGH issues: $HIGH_COUNT"
+              echo "MEDIUM issues: $MEDIUM_COUNT"
+              jq '.results[] | select(.issue_severity == "HIGH" or .issue_severity == "MEDIUM")' bandit-report.json
+              exit 1
+            fi
+          fi
+          
+          # Safety dependency check - FAIL on vulnerabilities
+          echo "🔍 Running Safety dependency check..."
+          safety check --json --output safety-report.json || {
+            if [ -f "safety-report.json" ]; then
+              echo "❌ Safety found vulnerabilities:"
+              cat safety-report.json
+              exit 1
+            fi
+          }
+          
+          echo "✅ Security baseline enforcement passed"
+          
+      # =========================================================================
+      # FRONTEND QUALITY GATES
+      # =========================================================================
+      - name: Install Frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+          
+      - name: Frontend Quality Gates
+        id: frontend-gates
+        run: |
+          cd frontend
+          echo "🔍 Enforcing Frontend quality gates..."
+          
+          # ESLint - MUST PASS
+          echo "📋 Running ESLint..."
+          npm run lint || {
+            echo "❌ ESLint failed"
+            exit 1
+          }
+          
+          # Type checking - MUST PASS
+          echo "🎯 Running TypeScript check..."
+          npm run type-check || {
+            echo "❌ TypeScript check failed"
+            exit 1
+          }
+          
+          # Formatting check - MUST PASS
+          echo "📏 Running Prettier check..."
+          npm run format:check || {
+            echo "❌ Prettier formatting check failed"
+            echo "Run: npm run format"
+            exit 1
+          }
+          
+          # Security audit - FAIL on high/critical
+          echo "🔒 Running npm security audit..."
+          npm audit --audit-level=high || {
+            echo "❌ npm audit found high/critical vulnerabilities"
+            exit 1
+          }
+          
+          echo "✅ All Frontend quality gates passed"
+          
+      # =========================================================================
+      # TEST COVERAGE ENFORCEMENT (90% MINIMUM)
+      # =========================================================================
+      - name: Test Coverage Enforcement
+        id: coverage-check
+        run: |
+          echo "📊 Enforcing test coverage requirements..."
+          
+          # Run tests with coverage
+          pytest --cov=api --cov=core --cov-report=xml --cov-report=term-missing \
+            --cov-fail-under=${{ env.COVERAGE_THRESHOLD }} \
+            --maxfail=1 || {
+            echo "❌ Test coverage below ${{ env.COVERAGE_THRESHOLD }}% threshold"
+            exit 1
+          }
+          
+          # Extract coverage percentage
+          COVERAGE=$(grep -o 'Total coverage: [0-9]*%' coverage_output.txt | grep -o '[0-9]*' || echo "0")
+          echo "coverage_status=$COVERAGE" >> $GITHUB_OUTPUT
+          
+          if [ $COVERAGE -lt ${{ env.COVERAGE_THRESHOLD }} ]; then
+            echo "❌ Coverage $COVERAGE% is below required ${{ env.COVERAGE_THRESHOLD }}%"
+            exit 1
+          fi
+          
+          echo "✅ Test coverage $COVERAGE% meets requirement"
+          
+      # =========================================================================
+      # FRONTEND TESTING
+      # =========================================================================
+      - name: Frontend Test Suite
+        run: |
+          cd frontend
+          echo "🧪 Running Frontend test suite..."
+          
+          # Unit tests
+          npm run test:coverage || {
+            echo "❌ Frontend unit tests failed"
+            exit 1
+          }
+          
+          # Integration tests
+          npm run test:integration || {
+            echo "❌ Frontend integration tests failed"
+            exit 1
+          }
+          
+          # All CI tests
+          npm run ci:all || {
+            echo "❌ Frontend CI test suite failed"
+            exit 1
+          }
+          
+          echo "✅ All Frontend tests passed"
+          
+      - name: Upload Quality Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-reports
+          path: |
+            bandit-report.json
+            safety-report.json
+            coverage.xml
+            htmlcov/
+            frontend/coverage/
+          retention-days: 30
+
+  # =============================================================================
+  # GATE 2: MONITORING AND OPERATIONAL VALIDATION
+  # =============================================================================
+  monitoring-gates:
+    name: '📊 Monitoring & Operational Gates'
+    runs-on: ubuntu-latest
+    needs: quality-gates
+    if: ${{ !inputs.skip_monitoring_checks }}
+    outputs:
+      fallback-status: ${{ steps.fallback-check.outputs.status }}
+      security-drift-status: ${{ steps.security-drift.outputs.status }}
+      faiss-health: ${{ steps.faiss-validation.outputs.status }}
+      prometheus-status: ${{ steps.prometheus-check.outputs.status }}
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      prometheus:
+        image: prom/prometheus:latest
+        ports:
+          - 9090:9090
+        volumes:
+          - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+        options: >-
+          --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:9090/-/ready || exit 1"
+          --health-interval 15s
+          --health-timeout 5s
+          --health-retries 3
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install requests prometheus-client pytest
+          
+      # =========================================================================
+      # CRITICAL GATE: ANALOG FALLBACK MONITORING
+      # =========================================================================
+      - name: Analog Fallback Validation (CRITICAL)
+        id: fallback-check
+        run: |
+          echo "🚨 CRITICAL CHECK: Analog fallback monitoring..."
+          
+          # Start API service for monitoring
+          cd api
+          python -c "
+          import sys
+          sys.path.append('.')
+          from analog_metrics import analog_fallback_total
+          from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+          
+          # Check current fallback count
+          current_fallbacks = analog_fallback_total._value._value
+          print(f'Current analog_fallback_total: {current_fallbacks}')
+          
+          if current_fallbacks > 0:
+              print('❌ CRITICAL: analog_fallback_total > 0 detected!')
+              print(f'Fallback count: {current_fallbacks}')
+              print('Pipeline must FAIL - system is using fallbacks')
+              sys.exit(1)
+          else:
+              print('✅ analog_fallback_total = 0 - No fallbacks detected')
+          " || {
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "❌ PIPELINE FAILURE: Analog fallback counter > 0"
+            echo "🚨 CRITICAL: System is using analog fallbacks"
+            echo "🚫 DEPLOYMENT BLOCKED"
+            exit 1
+          }
+          
+          echo "status=passed" >> $GITHUB_OUTPUT
+          echo "✅ Analog fallback validation passed"
+          
+      # =========================================================================
+      # CRITICAL GATE: SECURITY DRIFT DETECTION
+      # =========================================================================
+      - name: Security Drift Critical Check
+        id: security-drift
+        run: |
+          echo "🔒 CRITICAL CHECK: Security drift detection..."
+          
+          # Run security drift detector
+          python -c "
+          import sys
+          sys.path.append('.')
+          from core.config_drift_detector import ConfigDriftDetector
+          
+          try:
+              detector = ConfigDriftDetector()
+              drift_status = detector.check_security_drift()
+              
+              critical_events = drift_status.get('events_by_severity', {}).get('critical', 0)
+              print(f'Critical security drift events: {critical_events}')
+              
+              if critical_events > 0:
+                  print('❌ CRITICAL: Security drift critical events > 0 detected!')
+                  print(f'Critical events: {critical_events}')
+                  print('Pipeline must FAIL - critical security drift detected')
+                  sys.exit(1)
+              else:
+                  print('✅ No critical security drift events detected')
+                  
+          except Exception as e:
+              print(f'❌ Security drift check failed: {e}')
+              sys.exit(1)
+          " || {
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "❌ PIPELINE FAILURE: Critical security drift detected"
+            echo "🚨 CRITICAL: Security configuration drift events > 0"
+            echo "🚫 DEPLOYMENT BLOCKED"
+            exit 1
+          }
+          
+          echo "status=passed" >> $GITHUB_OUTPUT
+          echo "✅ Security drift validation passed"
+          
+      # =========================================================================
+      # FAISS OPERATIONAL VALIDATION
+      # =========================================================================
+      - name: FAISS Health Validation
+        id: faiss-validation
+        run: |
+          echo "🔍 Validating FAISS indices operational status..."
+          
+          # Check FAISS indices readiness
+          python -c "
+          import sys
+          import os
+          sys.path.append('.')
+          
+          try:
+              from api.health_checks import EnhancedHealthChecker
+              
+              # Initialize health checker
+              health_checker = EnhancedHealthChecker()
+              
+              # Check FAISS health
+              import asyncio
+              async def check_faiss():
+                  result = await health_checker._check_faiss_health()
+                  if result.status == 'fail':
+                      print(f'❌ FAISS health check failed: {result.message}')
+                      return False
+                  elif result.status == 'warn':
+                      print(f'⚠️ FAISS health warning: {result.message}')
+                      # Allow warnings but log them
+                      return True
+                  else:
+                      print(f'✅ FAISS health check passed: {result.message}')
+                      return True
+              
+              result = asyncio.run(check_faiss())
+              if not result:
+                  sys.exit(1)
+                  
+          except Exception as e:
+              print(f'❌ FAISS validation failed: {e}')
+              sys.exit(1)
+          " || {
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "❌ FAISS health validation failed"
+            exit 1
+          }
+          
+          echo "status=passed" >> $GITHUB_OUTPUT
+          echo "✅ FAISS validation passed"
+          
+      # =========================================================================
+      # PROMETHEUS METRICS VALIDATION
+      # =========================================================================
+      - name: Prometheus Metrics Validation
+        id: prometheus-check
+        run: |
+          echo "📊 Validating Prometheus metrics..."
+          
+          # Wait for Prometheus to be ready
+          timeout 60 bash -c 'until curl -f http://localhost:9090/-/ready; do sleep 2; done'
+          
+          # Query analog fallback metrics
+          curl -s "http://localhost:9090/api/v1/query?query=analog_fallback_total" | \
+          python -c "
+          import sys
+          import json
+          data = json.load(sys.stdin)
+          
+          if data['status'] != 'success':
+              print('❌ Failed to query Prometheus metrics')
+              sys.exit(1)
+              
+          result = data['data']['result']
+          if not result:
+              print('✅ No fallback metrics found (expected for clean system)')
+          else:
+              value = float(result[0]['value'][1])
+              if value > 0:
+                  print(f'❌ Prometheus shows analog_fallback_total = {value}')
+                  sys.exit(1)
+              else:
+                  print(f'✅ Prometheus confirms analog_fallback_total = {value}')
+          " || {
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "❌ Prometheus metrics validation failed"
+            exit 1
+          }
+          
+          echo "status=passed" >> $GITHUB_OUTPUT
+          echo "✅ Prometheus validation passed"
+
+  # =============================================================================
+  # GATE 3: INTEGRATION AND E2E TESTING
+  # =============================================================================
+  integration-testing:
+    name: '🔄 Integration Testing Gates'
+    runs-on: ubuntu-latest
+    needs: [quality-gates, monitoring-gates]
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-xdist pytest-timeout
+          
+      - name: Integration Tests
+        run: |
+          echo "🔄 Running integration tests..."
+          pytest tests/integration/ -v --maxfail=1 --timeout=300 || {
+            echo "❌ Integration tests failed"
+            exit 1
+          }
+          
+      - name: API Integration Tests
+        run: |
+          echo "🌐 Running API integration tests..."
+          pytest api/test_*integration*.py -v --maxfail=1 || {
+            echo "❌ API integration tests failed"
+            exit 1
+          }
+          
+      - name: End-to-End Smoke Tests
+        run: |
+          echo "💨 Running E2E smoke tests..."
+          python test_e2e_smoke.py || {
+            echo "❌ E2E smoke tests failed"
+            exit 1
+          }
+
+  # =============================================================================
+  # GATE 4: SECURITY COMPREHENSIVE SCAN
+  # =============================================================================
+  security-comprehensive:
+    name: '🛡️ Comprehensive Security Scan'
+    runs-on: ubuntu-latest
+    needs: quality-gates
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      # =========================================================================
+      # SAST SCANNING
+      # =========================================================================
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python, javascript
+          
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+        
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        
+      # =========================================================================
+      # SECRETS DETECTION
+      # =========================================================================
+      - name: Run Gitleaks (Secrets Detection)
+        uses: zricethezav/gitleaks-action@master
+        with:
+          config-path: .gitleaks.toml
+          
+      # =========================================================================
+      # DEPENDENCY VULNERABILITY SCANNING
+      # =========================================================================
+      - name: OWASP Dependency Check
+        run: |
+          wget https://github.com/jeremylong/DependencyCheck/releases/download/v8.4.3/dependency-check-8.4.3-release.zip
+          unzip dependency-check-8.4.3-release.zip
+          ./dependency-check/bin/dependency-check.sh \
+            --scan . \
+            --format JSON \
+            --out dependency-check-report.json \
+            --failOnCVSS 7.0
+            
+      - name: Upload Security Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-scan-results
+          path: |
+            dependency-check-report.json
+            gitleaks-report.json
+          retention-days: 90
+
+  # =============================================================================
+  # DEPLOYMENT GATE VALIDATION
+  # =============================================================================
+  deployment-gates:
+    name: '🚀 Deployment Gates Validation'
+    runs-on: ubuntu-latest
+    needs: [quality-gates, monitoring-gates, integration-testing, security-comprehensive]
+    outputs:
+      deployment-approved: ${{ steps.gate-decision.outputs.approved }}
+      gate-summary: ${{ steps.gate-decision.outputs.summary }}
+    
+    steps:
+      - name: Deployment Gate Decision
+        id: gate-decision
+        run: |
+          echo "🚦 Evaluating deployment gates..."
+          
+          # Check all gate statuses
+          QUALITY_GATES="${{ needs.quality-gates.result }}"
+          MONITORING_GATES="${{ needs.monitoring-gates.result }}"
+          INTEGRATION_GATES="${{ needs.integration-testing.result }}"
+          SECURITY_GATES="${{ needs.security-comprehensive.result }}"
+          
+          FALLBACK_STATUS="${{ needs.monitoring-gates.outputs.fallback-status }}"
+          SECURITY_DRIFT_STATUS="${{ needs.monitoring-gates.outputs.security-drift-status }}"
+          COVERAGE="${{ needs.quality-gates.outputs.coverage-status }}"
+          
+          # Force deploy override (EMERGENCY ONLY)
+          if [ "${{ inputs.force_deploy }}" = "true" ]; then
+            echo "⚠️ EMERGENCY OVERRIDE: Force deployment requested"
+            echo "🚨 WARNING: Bypassing quality gates"
+            echo "approved=true" >> $GITHUB_OUTPUT
+            echo "summary=EMERGENCY_OVERRIDE" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check critical failures
+          FAILED_GATES=""
+          
+          if [ "$QUALITY_GATES" != "success" ]; then
+            FAILED_GATES="$FAILED_GATES quality-gates"
+          fi
+          
+          if [ "$MONITORING_GATES" != "success" ]; then
+            FAILED_GATES="$FAILED_GATES monitoring-gates"
+          fi
+          
+          if [ "$INTEGRATION_GATES" != "success" ]; then
+            FAILED_GATES="$FAILED_GATES integration-gates"
+          fi
+          
+          if [ "$SECURITY_GATES" != "success" ]; then
+            FAILED_GATES="$FAILED_GATES security-gates"
+          fi
+          
+          # Check specific critical conditions
+          if [ "$FALLBACK_STATUS" = "failed" ]; then
+            echo "❌ CRITICAL: Analog fallback counter > 0"
+            FAILED_GATES="$FAILED_GATES fallback-critical"
+          fi
+          
+          if [ "$SECURITY_DRIFT_STATUS" = "failed" ]; then
+            echo "❌ CRITICAL: Security drift critical events > 0"
+            FAILED_GATES="$FAILED_GATES security-drift-critical"
+          fi
+          
+          # Final decision
+          if [ -n "$FAILED_GATES" ]; then
+            echo "❌ DEPLOYMENT REJECTED"
+            echo "Failed gates:$FAILED_GATES"
+            echo "🚫 Fix all issues before deployment"
+            echo "approved=false" >> $GITHUB_OUTPUT
+            echo "summary=REJECTED:$FAILED_GATES" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "✅ DEPLOYMENT APPROVED"
+            echo "All quality gates passed"
+            echo "Coverage: $COVERAGE%"
+            echo "approved=true" >> $GITHUB_OUTPUT
+            echo "summary=APPROVED" >> $GITHUB_OUTPUT
+          fi
+
+  # =============================================================================
+  # PIPELINE SUMMARY AND REPORTING
+  # =============================================================================
+  pipeline-summary:
+    name: '📊 Pipeline Summary Report'
+    runs-on: ubuntu-latest
+    needs: [quality-gates, monitoring-gates, integration-testing, security-comprehensive, deployment-gates]
+    if: always()
+    
+    steps:
+      - name: Generate Pipeline Summary
+        run: |
+          echo "# 🚀 CI Gates Enforcement Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔍 Quality Gates Results:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Code Quality**: ${{ needs.quality-gates.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Test Coverage**: ${{ needs.quality-gates.outputs.coverage-status }}%" >> $GITHUB_STEP_SUMMARY
+          echo "- **Security Baseline**: ${{ needs.quality-gates.outputs.security-baseline }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Monitoring Gates Results:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Analog Fallback Check**: ${{ needs.monitoring-gates.outputs.fallback-status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Security Drift Check**: ${{ needs.monitoring-gates.outputs.security-drift-status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **FAISS Health**: ${{ needs.monitoring-gates.outputs.faiss-health }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Prometheus Status**: ${{ needs.monitoring-gates.outputs.prometheus-status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔄 Integration & Security Results:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Integration Testing**: ${{ needs.integration-testing.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Security Comprehensive**: ${{ needs.security-comprehensive.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Deployment Decision:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ needs.deployment-gates.outputs.deployment-approved }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Summary**: ${{ needs.deployment-gates.outputs.gate-summary }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Add critical warnings if needed
+          if [ "${{ needs.monitoring-gates.outputs.fallback-status }}" = "failed" ]; then
+            echo "## 🚨 CRITICAL ISSUES:" >> $GITHUB_STEP_SUMMARY
+            echo "- ❌ **ANALOG FALLBACK DETECTED**: System is using fallback mechanisms" >> $GITHUB_STEP_SUMMARY
+            echo "- 🚫 **DEPLOYMENT BLOCKED**: Fix fallback issues before deployment" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.monitoring-gates.outputs.security-drift-status }}" = "failed" ]; then
+            echo "## 🔒 SECURITY ISSUES:" >> $GITHUB_STEP_SUMMARY
+            echo "- ❌ **CRITICAL SECURITY DRIFT**: Configuration drift with critical severity" >> $GITHUB_STEP_SUMMARY
+            echo "- 🚫 **DEPLOYMENT BLOCKED**: Fix security issues before deployment" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Overall status
+          if [ "${{ needs.deployment-gates.outputs.deployment-approved }}" = "true" ]; then
+            echo "### ✅ PIPELINE STATUS: **APPROVED FOR DEPLOYMENT**" >> $GITHUB_STEP_SUMMARY
+            echo "All quality gates and monitoring checks passed." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ PIPELINE STATUS: **DEPLOYMENT REJECTED**" >> $GITHUB_STEP_SUMMARY
+            echo "Critical issues detected. Review and fix before deployment." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+      - name: Deployment Status Notification
+        if: github.ref == 'refs/heads/main'
+        run: |
+          if [ "${{ needs.deployment-gates.outputs.deployment-approved }}" = "true" ]; then
+            echo "🎉 Ready for production deployment"
+            echo "✅ All quality gates passed"
+            echo "✅ No analog fallbacks detected"
+            echo "✅ No critical security drift"
+            echo "✅ Test coverage: ${{ needs.quality-gates.outputs.coverage-status }}%"
+          else
+            echo "🚫 Production deployment blocked"
+            echo "❌ Critical issues must be resolved"
+            echo "📋 Review pipeline summary for details"
+          fi

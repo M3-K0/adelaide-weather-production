@@ -1,0 +1,252 @@
+{
+  "validation_summary": {
+    "timestamp": "2025-11-13T23:06:31.242257",
+    "base_directory": "/home/micha/adelaide-weather-final",
+    "variable_order": [
+      "z500",
+      "t2m",
+      "t850",
+      "q850",
+      "u10",
+      "v10",
+      "u850",
+      "v850",
+      "cape"
+    ],
+    "expected_variable_count": 9,
+    "horizons_tested": [
+      6,
+      12,
+      24,
+      48
+    ],
+    "total_horizons": 4,
+    "valid_horizons": 0,
+    "invalid_horizons": 4,
+    "missing_files": 0
+  },
+  "horizon_results": {
+    "6": {
+      "horizon": 6,
+      "outcomes": {
+        "horizon": 6,
+        "file_exists": true,
+        "file_path": "outcomes/outcomes_6h.npy",
+        "shape": [
+          7168,
+          9
+        ],
+        "expected_variables": 9,
+        "actual_variables": 9,
+        "n_samples": 7168,
+        "shape_valid": true,
+        "dtype": "float32",
+        "file_size_mb": 0.25,
+        "errors": []
+      },
+      "metadata": {
+        "horizon": 6,
+        "file_exists": true,
+        "file_path": "outcomes/metadata_6h_clean.parquet",
+        "n_rows": 7168,
+        "n_columns": 7,
+        "expected_rows": 7168,
+        "rows_match": true,
+        "file_size_mb": 0.13,
+        "columns": [
+          "init_time",
+          "month",
+          "hour",
+          "day_of_year",
+          "season",
+          "lead_time",
+          "valid_time"
+        ],
+        "errors": []
+      },
+      "faiss": {
+        "horizon": 6,
+        "file_exists": true,
+        "file_path": "indices/faiss_6h_flatip.faiss",
+        "ntotal": 6574,
+        "dimension": 256,
+        "expected_count": 7168,
+        "count_matches": false,
+        "index_type": "IndexFlatIP",
+        "file_size_mb": 6.42,
+        "errors": [
+          "Vector count mismatch: expected 7168, got 6574"
+        ]
+      },
+      "all_valid": false,
+      "all_files_exist": true
+    },
+    "12": {
+      "horizon": 12,
+      "outcomes": {
+        "horizon": 12,
+        "file_exists": true,
+        "file_path": "outcomes/outcomes_12h.npy",
+        "shape": [
+          7168,
+          9
+        ],
+        "expected_variables": 9,
+        "actual_variables": 9,
+        "n_samples": 7168,
+        "shape_valid": true,
+        "dtype": "float32",
+        "file_size_mb": 0.25,
+        "errors": []
+      },
+      "metadata": {
+        "horizon": 12,
+        "file_exists": true,
+        "file_path": "outcomes/metadata_12h_clean.parquet",
+        "n_rows": 7168,
+        "n_columns": 7,
+        "expected_rows": 7168,
+        "rows_match": true,
+        "file_size_mb": 0.15,
+        "columns": [
+          "init_time",
+          "month",
+          "hour",
+          "day_of_year",
+          "season",
+          "lead_time",
+          "valid_time"
+        ],
+        "errors": []
+      },
+      "faiss": {
+        "horizon": 12,
+        "file_exists": true,
+        "file_path": "indices/faiss_12h_flatip.faiss",
+        "ntotal": 6574,
+        "dimension": 256,
+        "expected_count": 7168,
+        "count_matches": false,
+        "index_type": "IndexFlatIP",
+        "file_size_mb": 6.42,
+        "errors": [
+          "Vector count mismatch: expected 7168, got 6574"
+        ]
+      },
+      "all_valid": false,
+      "all_files_exist": true
+    },
+    "24": {
+      "horizon": 24,
+      "outcomes": {
+        "horizon": 24,
+        "file_exists": true,
+        "file_path": "outcomes/outcomes_24h.npy",
+        "shape": [
+          14336,
+          9
+        ],
+        "expected_variables": 9,
+        "actual_variables": 9,
+        "n_samples": 14336,
+        "shape_valid": true,
+        "dtype": "float32",
+        "file_size_mb": 0.49,
+        "errors": []
+      },
+      "metadata": {
+        "horizon": 24,
+        "file_exists": true,
+        "file_path": "outcomes/metadata_24h_clean.parquet",
+        "n_rows": 14336,
+        "n_columns": 7,
+        "expected_rows": 14336,
+        "rows_match": true,
+        "file_size_mb": 0.26,
+        "columns": [
+          "init_time",
+          "month",
+          "hour",
+          "day_of_year",
+          "season",
+          "lead_time",
+          "valid_time"
+        ],
+        "errors": []
+      },
+      "faiss": {
+        "horizon": 24,
+        "file_exists": true,
+        "file_path": "indices/faiss_24h_flatip.faiss",
+        "ntotal": 13148,
+        "dimension": 256,
+        "expected_count": 14336,
+        "count_matches": false,
+        "index_type": "IndexFlatIP",
+        "file_size_mb": 12.84,
+        "errors": [
+          "Vector count mismatch: expected 14336, got 13148"
+        ]
+      },
+      "all_valid": false,
+      "all_files_exist": true
+    },
+    "48": {
+      "horizon": 48,
+      "outcomes": {
+        "horizon": 48,
+        "file_exists": true,
+        "file_path": "outcomes/outcomes_48h.npy",
+        "shape": [
+          14336,
+          9
+        ],
+        "expected_variables": 9,
+        "actual_variables": 9,
+        "n_samples": 14336,
+        "shape_valid": true,
+        "dtype": "float32",
+        "file_size_mb": 0.49,
+        "errors": []
+      },
+      "metadata": {
+        "horizon": 48,
+        "file_exists": true,
+        "file_path": "outcomes/metadata_48h_clean.parquet",
+        "n_rows": 14336,
+        "n_columns": 7,
+        "expected_rows": 14336,
+        "rows_match": true,
+        "file_size_mb": 0.26,
+        "columns": [
+          "init_time",
+          "month",
+          "hour",
+          "day_of_year",
+          "season",
+          "lead_time",
+          "valid_time"
+        ],
+        "errors": []
+      },
+      "faiss": {
+        "horizon": 48,
+        "file_exists": true,
+        "file_path": "indices/faiss_48h_flatip.faiss",
+        "ntotal": 13148,
+        "dimension": 256,
+        "expected_count": 14336,
+        "count_matches": false,
+        "index_type": "IndexFlatIP",
+        "file_size_mb": 12.84,
+        "errors": [
+          "Vector count mismatch: expected 14336, got 13148"
+        ]
+      },
+      "all_valid": false,
+      "all_files_exist": true
+    }
+  },
+  "errors": [],
+  "warnings": []
+}

@@ -188,93 +188,236 @@ const createMockMetricsSummary = (): MetricsSummary => ({
   }
 });
 
-const createMockAnalogExplorerData = (): AnalogExplorerData => ({
-  query_pattern: {
-    date: '2024-01-15T12:00:00Z',
-    horizon: '24h',
-    variables: ['t2m', 'cape', 'msl']
-  },
+const createMockAnalogExplorerData = (useFaissData: boolean = true): AnalogExplorerData => ({
+  forecast_horizon: '24h',
   top_analogs: [
     {
       date: '2023-08-15T12:00:00Z',
       similarity_score: 0.89,
-      outcome_actual: 24.2,
-      outcome_forecast: 23.8,
-      outcome_description: 'Warm day with isolated thunderstorms',
+      initial_conditions: {
+        t2m: 20.5,
+        cape: 1250,
+        msl: 1013.2,
+        u10: 3.2,
+        v10: -1.8,
+        r850: 65,
+        tp6h: null,
+        t850: null,
+        z500: null
+      },
       timeline: [
         {
           hours_offset: 0,
-          t2m: 20.5,
-          cape: 1250,
-          msl: 1013.2,
-          precipitation: 0.0
+          values: {
+            t2m: 20.5,
+            cape: 1250,
+            msl: 1013.2,
+            u10: 3.2,
+            v10: -1.8,
+            r850: 65,
+            tp6h: 0.0,
+            t850: null,
+            z500: null
+          },
+          events: [],
+          temperature_trend: 'stable',
+          pressure_trend: 'stable'
         },
         {
           hours_offset: 6,
-          t2m: 23.8,
-          cape: 1850,
-          msl: 1011.8,
-          precipitation: 0.0
+          values: {
+            t2m: 23.8,
+            cape: 1850,
+            msl: 1011.8,
+            u10: 4.1,
+            v10: -2.3,
+            r850: 72,
+            tp6h: 0.0,
+            t850: null,
+            z500: null
+          },
+          events: ['Cloud cover increased'],
+          temperature_trend: 'rising',
+          pressure_trend: 'falling'
         },
         {
           hours_offset: 12,
-          t2m: 24.2,
-          cape: 2100,
-          msl: 1010.5,
-          precipitation: 2.5
+          values: {
+            t2m: 24.2,
+            cape: 2100,
+            msl: 1010.5,
+            u10: 2.8,
+            v10: -3.1,
+            r850: 85,
+            tp6h: 2.5,
+            t850: null,
+            z500: null
+          },
+          events: ['Thunderstorm development', 'Heavy precipitation'],
+          temperature_trend: 'rising',
+          pressure_trend: 'falling'
         },
         {
           hours_offset: 24,
-          t2m: 22.1,
-          cape: 800,
-          msl: 1012.1,
-          precipitation: 0.0
+          values: {
+            t2m: 22.1,
+            cape: 800,
+            msl: 1012.1,
+            u10: 1.9,
+            v10: -1.2,
+            r850: 58,
+            tp6h: 0.0,
+            t850: null,
+            z500: null
+          },
+          events: ['Clearing skies'],
+          temperature_trend: 'falling',
+          pressure_trend: 'rising'
         }
-      ]
+      ],
+      outcome_narrative: 'Warm day with isolated thunderstorms developing in the afternoon, followed by clearing conditions',
+      location: {
+        latitude: -34.9285,
+        longitude: 138.6007,
+        name: 'Adelaide, SA'
+      },
+      season_info: {
+        month: 8,
+        season: 'winter'
+      }
     },
     {
       date: '2023-07-22T12:00:00Z',
       similarity_score: 0.85,
-      outcome_actual: 23.9,
-      outcome_forecast: 24.1,
-      outcome_description: 'Hot and humid with afternoon storms',
+      initial_conditions: {
+        t2m: 21.2,
+        cape: 1180,
+        msl: 1012.8,
+        u10: 2.8,
+        v10: -1.5,
+        r850: 68,
+        tp6h: null,
+        t850: null,
+        z500: null
+      },
       timeline: [
         {
           hours_offset: 0,
-          t2m: 21.2,
-          cape: 1180,
-          msl: 1012.8,
-          precipitation: 0.0
+          values: {
+            t2m: 21.2,
+            cape: 1180,
+            msl: 1012.8,
+            u10: 2.8,
+            v10: -1.5,
+            r850: 68,
+            tp6h: 0.0,
+            t850: null,
+            z500: null
+          },
+          events: [],
+          temperature_trend: 'stable',
+          pressure_trend: 'stable'
         },
         {
           hours_offset: 6,
-          t2m: 24.1,
-          cape: 1920,
-          msl: 1011.2,
-          precipitation: 0.0
+          values: {
+            t2m: 24.1,
+            cape: 1920,
+            msl: 1011.2,
+            u10: 3.5,
+            v10: -2.1,
+            r850: 75,
+            tp6h: 0.0,
+            t850: null,
+            z500: null
+          },
+          events: ['Humidity rising'],
+          temperature_trend: 'rising',
+          pressure_trend: 'falling'
         },
         {
           hours_offset: 12,
-          t2m: 23.9,
-          cape: 2250,
-          msl: 1009.8,
-          precipitation: 4.2
+          values: {
+            t2m: 23.9,
+            cape: 2250,
+            msl: 1009.8,
+            u10: 4.2,
+            v10: -2.8,
+            r850: 88,
+            tp6h: 4.2,
+            t850: null,
+            z500: null
+          },
+          events: ['Storm cells forming', 'Moderate precipitation'],
+          temperature_trend: 'stable',
+          pressure_trend: 'falling'
         },
         {
           hours_offset: 24,
-          t2m: 21.8,
-          cape: 650,
-          msl: 1013.5,
-          precipitation: 0.0
+          values: {
+            t2m: 21.8,
+            cape: 650,
+            msl: 1013.5,
+            u10: 2.1,
+            v10: -1.4,
+            r850: 62,
+            tp6h: 0.0,
+            t850: null,
+            z500: null
+          },
+          events: ['Pressure recovery'],
+          temperature_trend: 'falling',
+          pressure_trend: 'rising'
         }
-      ]
+      ],
+      outcome_narrative: 'Hot and humid conditions leading to afternoon storm development with moderate rainfall',
+      location: {
+        latitude: -34.9285,
+        longitude: 138.6007,
+        name: 'Adelaide, SA'
+      },
+      season_info: {
+        month: 7,
+        season: 'winter'
+      }
     }
   ],
-  statistics: {
-    total_patterns_searched: 15000,
-    search_time_ms: 85,
-    confidence_score: 0.87,
-    seasonal_context: 'Summer'
+  ensemble_stats: {
+    mean_outcomes: {
+      t2m: 23.0,
+      cape: 1450,
+      msl: 1011.8,
+      u10: 3.1,
+      v10: -2.0,
+      r850: 71,
+      tp6h: 1.5,
+      t850: null,
+      z500: null
+    },
+    outcome_uncertainty: {
+      t2m: 1.8,
+      cape: 450,
+      msl: 2.1,
+      u10: 0.8,
+      v10: 0.7,
+      r850: 12,
+      tp6h: 2.1,
+      t850: null,
+      z500: null
+    },
+    common_events: ['Thunderstorm development', 'Cloud cover increased', 'Pressure falling']
+  },
+  generated_at: '2024-01-15T12:00:00Z',
+  data_source: useFaissData ? 'faiss' : 'fallback',
+  search_metadata: {
+    search_method: useFaissData ? 'real_faiss' : 'fallback_mock',
+    faiss_search_successful: useFaissData,
+    indices_used: useFaissData ? '24h_temperature_v1' : undefined,
+    total_candidates: useFaissData ? 50000 : 1000,
+    search_time_ms: useFaissData ? 15.7 : 125.3,
+    k_neighbors_found: 10,
+    distance_metric: useFaissData ? 'L2' : 'L2_fallback',
+    fallback_reason: useFaissData ? undefined : 'FAISS service unavailable'
   }
 });
 
@@ -355,13 +498,39 @@ export const handlers = [
   }),
 
   // Analog Explorer API endpoints
+  // Frontend analogs API endpoint (proxying to backend)
+  rest.get('http://localhost:3000/api/analogs', (req, res, ctx) => {
+    const error = req.url.searchParams.get('error');
+    const fallback = req.url.searchParams.get('fallback');
+    
+    if (error === 'no_analogs') {
+      const noAnalogsData = createMockAnalogExplorerData();
+      noAnalogsData.top_analogs = [];
+      return res(ctx.json(noAnalogsData));
+    }
+    
+    if (error === 'server_error') {
+      return res(ctx.status(500), ctx.json(createApiError(500, 'ANALOG_ERROR', 'Analog search failed')));
+    }
+    
+    if (error === 'backend_unavailable') {
+      return res(ctx.status(503), ctx.json({
+        error: 'Backend service unavailable - analog data degraded',
+        details: 'Unable to reach real-time analog search service. Data quality may be reduced.'
+      }));
+    }
+    
+    // Return fallback data if requested
+    const useFaissData = fallback !== 'true';
+    return res(ctx.json(createMockAnalogExplorerData(useFaissData)));
+  }),
+
   rest.post('http://localhost:8000/api/analogs/explore', (req, res, ctx) => {
     const error = req.url.searchParams.get('error');
     
     if (error === 'no_analogs') {
       const noAnalogsData = createMockAnalogExplorerData();
       noAnalogsData.top_analogs = [];
-      noAnalogsData.statistics.total_patterns_searched = 0;
       return res(ctx.json(noAnalogsData));
     }
     
@@ -487,7 +656,8 @@ export const mockApiResponses = {
     error: () => createApiError(500, 'METRICS_ERROR', 'Metrics unavailable')
   },
   analogs: {
-    success: () => createMockAnalogExplorerData(),
+    success: () => createMockAnalogExplorerData(true),
+    fallback: () => createMockAnalogExplorerData(false),
     noAnalogs: () => {
       const data = createMockAnalogExplorerData();
       data.top_analogs = [];

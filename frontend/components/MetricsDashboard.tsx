@@ -30,6 +30,8 @@ import {
 } from '@/lib/metricsApi';
 import AccuracyChart from './AccuracyChart';
 import PerformanceIndicators from './PerformanceIndicators';
+import EmptyState from './EmptyState';
+import ErrorBoundary from './ErrorBoundary';
 
 // ============================================================================
 // Types and Interfaces
@@ -46,6 +48,8 @@ interface DashboardState {
   loading: boolean;
   error: string | null;
   lastUpdated: Date | null;
+  dataSource?: 'api' | 'cache' | 'fallback';
+  isEmpty?: boolean;
 }
 
 interface FilterState {
@@ -91,26 +95,32 @@ const VARIABLE_DISPLAY_NAMES: Record<WeatherVariable, string> = {
 // ============================================================================
 
 const LoadingSpinner: React.FC = () => (
-  <div className="flex items-center justify-center p-8">
-    <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
-    <span className="ml-2 text-gray-400">Loading metrics...</span>
-  </div>
+  <ErrorBoundary componentName="MetricsDashboard-LoadingSpinner">
+    <EmptyState
+      type="loading-failed"
+      title="Loading Metrics"
+      description="Fetching system performance and forecast accuracy data..."
+      size="lg"
+      disableAnimations={false}
+    />
+  </ErrorBoundary>
 );
 
-const ErrorDisplay: React.FC<{ error: string; onRetry: () => void }> = ({ error, onRetry }) => (
-  <div className="bg-red-950/20 border border-red-700 rounded-lg p-4">
-    <div className="flex items-center gap-2 mb-2">
-      <AlertCircle className="w-5 h-5 text-red-400" />
-      <h3 className="text-red-400 font-medium">Error Loading Metrics</h3>
-    </div>
-    <p className="text-red-300 text-sm mb-3">{error}</p>
-    <button
-      onClick={onRetry}
-      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors"
-    >
-      Retry
-    </button>
-  </div>
+const ErrorDisplay: React.FC<{ error: string; onRetry: () => void; showDetails?: boolean }> = ({ 
+  error, 
+  onRetry,
+  showDetails = false 
+}) => (
+  <ErrorBoundary componentName="MetricsDashboard-ErrorDisplay">
+    <EmptyState
+      type="error"
+      title="Metrics Error"
+      description={showDetails ? error : "Unable to load metrics data. Please try again."}
+      showRetry={true}
+      onRetry={onRetry}
+      size="lg"
+    />
+  </ErrorBoundary>
 );
 
 const StatusBadge: React.FC<{ status: 'good' | 'warning' | 'critical'; children: React.ReactNode }> = ({ 
@@ -152,6 +162,8 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({
     loading: true,
     error: null,
     lastUpdated: null,
+    dataSource: undefined,
+    isEmpty: false,
   });
 
   const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER);
@@ -161,7 +173,7 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({
   // Fetch metrics data
   const fetchMetrics = useCallback(async (showLoading = true) => {
     if (showLoading) {
-      setState(prev => ({ ...prev, loading: true, error: null }));
+      setState(prev => ({ ...prev, loading: true, error: null, isEmpty: false }));
     }
 
     try {
@@ -172,17 +184,33 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({
         includeConfidence: filter.includeConfidence,
       });
 
+      // Check if data is empty or contains no meaningful content
+      const isEmpty = !data || 
+        (!data.forecast_accuracy?.length && 
+         !data.performance_metrics?.length && 
+         !data.system_health?.length);
+
+      // Determine data source (add fallback logic if needed)
+      const dataSource: DashboardState['dataSource'] = data?.data_source as any || 'api';
+
       setState({
         data,
         loading: false,
         error: null,
         lastUpdated: new Date(),
+        dataSource,
+        isEmpty,
       });
     } catch (error) {
+      console.error('Error fetching metrics:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load metrics';
+      
       setState(prev => ({
         ...prev,
         loading: false,
-        error: error instanceof Error ? error.message : 'Failed to load metrics',
+        error: errorMessage,
+        isEmpty: false,
       }));
     }
   }, [filter]);
@@ -251,18 +279,18 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({
 
   // Calculate overall system status
   const overallStatus = useMemo(() => {
-    if (!state.data) return 'warning';
+    if (!state.data || state.isEmpty) return 'warning';
     
-    const criticalMetrics = state.data.performance_metrics.filter(m => m.status === 'critical').length;
-    const downComponents = state.data.system_health.filter(h => h.status === 'down').length;
-    const avgAccuracy = state.data.forecast_accuracy.length > 0 
+    const criticalMetrics = state.data.performance_metrics?.filter(m => m.status === 'critical').length || 0;
+    const downComponents = state.data.system_health?.filter(h => h.status === 'down').length || 0;
+    const avgAccuracy = state.data.forecast_accuracy?.length > 0 
       ? state.data.forecast_accuracy.reduce((sum, a) => sum + a.accuracy_percent, 0) / state.data.forecast_accuracy.length
       : 0;
     
     if (criticalMetrics > 0 || downComponents > 0 || avgAccuracy < 80) return 'critical';
     if (avgAccuracy < 90) return 'warning';
     return 'good';
-  }, [state.data]);
+  }, [state.data, state.isEmpty]);
 
   if (state.loading && !state.data) {
     return <LoadingSpinner />;
@@ -272,8 +300,28 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({
     return <ErrorDisplay error={state.error} onRetry={() => fetchMetrics()} />;
   }
 
+  // Handle empty data state
+  if (state.isEmpty || !state.data) {
+    return (
+      <ErrorBoundary componentName="MetricsDashboard-Empty">
+        <div className={`space-y-6 ${className}`}>
+          <EmptyState
+            type="no-metrics"
+            title="No Metrics Available"
+            description={`No metrics data found for the selected time range (${filter.timeRange}). Try adjusting your filters or check back later.`}
+            showRetry={true}
+            onRetry={() => fetchMetrics()}
+            size="lg"
+            dataSource={state.dataSource === 'fallback' ? 'fallback' : undefined}
+          />
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
   return (
-    <div className={`space-y-6 ${className}`}>
+    <ErrorBoundary componentName="MetricsDashboard">
+      <div className={`space-y-6 ${className}`}>
       {/* Dashboard Header */}
       <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -287,6 +335,16 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({
                overallStatus === 'warning' ? 'Attention Needed' :
                'Critical Issues'}
             </StatusBadge>
+            {state.dataSource === 'fallback' && (
+              <div className="px-2 py-1 bg-orange-900/50 border border-orange-700 text-orange-300 rounded text-xs font-medium">
+                FALLBACK DATA
+              </div>
+            )}
+            {state.dataSource === 'cache' && (
+              <div className="px-2 py-1 bg-blue-900/50 border border-blue-700 text-blue-300 rounded text-xs font-medium">
+                CACHED
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -400,27 +458,51 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({
 
       {/* Error Display */}
       {state.error && (
-        <ErrorDisplay error={state.error} onRetry={() => fetchMetrics()} />
+        <ErrorDisplay error={state.error} onRetry={() => fetchMetrics()} showDetails={false} />
       )}
 
       {/* Dashboard Content */}
       {state.data && (
         <>
           {/* Performance Overview */}
-          <PerformanceIndicators
-            performanceData={state.data.performance_metrics}
-            healthData={state.data.system_health}
-            trendData={state.data.trends.performance_trends}
-          />
+          {state.data.performance_metrics && state.data.system_health ? (
+            <ErrorBoundary componentName="PerformanceIndicators">
+              <PerformanceIndicators
+                performanceData={state.data.performance_metrics}
+                healthData={state.data.system_health}
+                trendData={state.data.trends?.performance_trends}
+              />
+            </ErrorBoundary>
+          ) : (
+            <EmptyState
+              type="no-metrics"
+              title="Performance Data Unavailable"
+              description="System performance indicators could not be loaded."
+              size="md"
+              dataSource={state.dataSource === 'fallback' ? 'fallback' : undefined}
+            />
+          )}
 
           {/* Accuracy Analysis */}
-          <AccuracyChart
-            accuracyData={state.data.forecast_accuracy}
-            trendData={state.data.trends.accuracy_trends}
-            selectedHorizons={filter.horizons}
-            selectedVariables={filter.variables}
-            timeRange={filter.timeRange}
-          />
+          {state.data.forecast_accuracy && state.data.forecast_accuracy.length > 0 ? (
+            <ErrorBoundary componentName="AccuracyChart">
+              <AccuracyChart
+                accuracyData={state.data.forecast_accuracy}
+                trendData={state.data.trends?.accuracy_trends}
+                selectedHorizons={filter.horizons}
+                selectedVariables={filter.variables}
+                timeRange={filter.timeRange}
+              />
+            </ErrorBoundary>
+          ) : (
+            <EmptyState
+              type="no-data"
+              title="No Accuracy Data"
+              description="Forecast accuracy data is not available for the selected filters."
+              size="md"
+              dataSource={state.dataSource === 'fallback' ? 'fallback' : undefined}
+            />
+          )}
 
           {/* Quick Stats Summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -428,10 +510,15 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({
               <div className="flex items-center gap-2 mb-2">
                 <Activity className="w-5 h-5 text-blue-400" />
                 <h3 className="text-sm font-medium text-gray-300">Average Accuracy</h3>
+                {state.dataSource === 'fallback' && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-orange-900/50 border border-orange-700 text-orange-300">
+                    FALLBACK
+                  </span>
+                )}
               </div>
               <p className="text-2xl font-bold text-blue-400">
-                {state.data.forecast_accuracy.length > 0 
-                  ? (state.data.forecast_accuracy.reduce((sum, a) => sum + a.accuracy_percent, 0) / state.data.forecast_accuracy.length).toFixed(1)
+                {state.data.forecast_accuracy?.length > 0 
+                  ? (state.data.forecast_accuracy.reduce((sum, a) => sum + (a.accuracy_percent || 0), 0) / state.data.forecast_accuracy.length).toFixed(1)
                   : '0.0'
                 }%
               </p>
@@ -441,10 +528,15 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle className="w-5 h-5 text-emerald-400" />
                 <h3 className="text-sm font-medium text-gray-300">System Uptime</h3>
+                {state.dataSource === 'fallback' && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-orange-900/50 border border-orange-700 text-orange-300">
+                    FALLBACK
+                  </span>
+                )}
               </div>
               <p className="text-2xl font-bold text-emerald-400">
-                {state.data.system_health.length > 0 
-                  ? (state.data.system_health.reduce((sum, h) => sum + h.uptime_percent, 0) / state.data.system_health.length).toFixed(1)
+                {state.data.system_health?.length > 0 
+                  ? (state.data.system_health.reduce((sum, h) => sum + (h.uptime_percent || 0), 0) / state.data.system_health.length).toFixed(1)
                   : '0.0'
                 }%
               </p>
@@ -455,9 +547,14 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({
                 <Calendar className="w-5 h-5 text-amber-400" />
                 <h3 className="text-sm font-medium text-gray-300">Data Coverage</h3>
               </div>
-              <p className="text-2xl font-bold text-amber-400">
-                {filter.timeRange}
-              </p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-2xl font-bold text-amber-400">
+                  {filter.timeRange}
+                </p>
+                {state.dataSource === 'cache' && (
+                  <span className="text-xs text-blue-400">(cached)</span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -486,6 +583,7 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({
         </>
       )}
     </div>
+    </ErrorBoundary>
   );
 };
 

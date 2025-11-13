@@ -1,0 +1,305 @@
+# =============================================================================
+# MONITORING GATES CONFIGURATION
+# =============================================================================
+# Configuration for CI/CD pipeline monitoring gates enforcement
+# 
+# This file defines the critical thresholds and settings for the CI/CD pipeline
+# quality gates related to monitoring, metrics, and operational health.
+#
+# Author: Design Systems Architect & Monitoring Engineer  
+# Version: 1.0.0 - CI1 Implementation
+# =============================================================================
+
+# Critical monitoring thresholds
+thresholds:
+  # Analog fallback enforcement (CRITICAL)
+  analog_fallback:
+    max_fallbacks: 0
+    critical: true
+    block_deployment: true
+    description: "No analog fallbacks allowed in production deployment"
+    
+  # Security drift detection (CRITICAL)  
+  security_drift:
+    max_critical_events: 0
+    max_high_events: 5
+    critical: true
+    block_deployment: true
+    description: "No critical security drift events allowed"
+    
+  # Test coverage requirements
+  test_coverage:
+    minimum_percentage: 90
+    critical: true
+    block_deployment: true
+    description: "Minimum 90% test coverage required"
+    
+  # FAISS health requirements
+  faiss_health:
+    minimum_indices: 6  # Allow some degradation but require core functionality
+    critical: false
+    block_deployment: false
+    description: "FAISS health check - non-blocking but monitored"
+    
+  # Performance baselines
+  performance:
+    max_response_time_p95: 2000  # milliseconds
+    max_memory_usage: 85  # percentage
+    max_cpu_usage: 80     # percentage
+    critical: false
+    block_deployment: false
+    description: "Performance baseline validation"
+
+# Quality gates configuration
+quality_gates:
+  # Python code quality
+  python:
+    tools:
+      - name: "black"
+        required: true
+        command: "black --check --diff ."
+        description: "Code formatting with Black"
+        
+      - name: "isort" 
+        required: true
+        command: "isort --check-only --diff ."
+        description: "Import sorting with isort"
+        
+      - name: "flake8"
+        required: true
+        command: "flake8 . --count --statistics"
+        description: "Code linting with flake8"
+        
+      - name: "mypy"
+        required: true
+        command: "mypy . --ignore-missing-imports"
+        description: "Type checking with mypy"
+        
+      - name: "bandit"
+        required: true
+        command: "bandit -r . -f json -o bandit-report.json"
+        description: "Security scanning with bandit"
+        fail_on_medium: true
+        fail_on_high: true
+        
+      - name: "safety"
+        required: true 
+        command: "safety check --json --output safety-report.json"
+        description: "Dependency vulnerability scanning"
+        
+  # Frontend code quality
+  frontend:
+    tools:
+      - name: "eslint"
+        required: true
+        command: "npm run lint"
+        description: "ESLint linting"
+        
+      - name: "typescript"
+        required: true
+        command: "npm run type-check"
+        description: "TypeScript type checking"
+        
+      - name: "prettier"
+        required: true
+        command: "npm run format:check"  
+        description: "Code formatting with Prettier"
+        
+      - name: "npm-audit"
+        required: true
+        command: "npm audit --audit-level=high"
+        description: "npm security audit"
+
+# Test execution configuration
+testing:
+  # Test execution requirements
+  execution:
+    timeout_seconds: 300
+    max_failures: 1
+    parallel_execution: true
+    
+  # Test types
+  test_suites:
+    - name: "unit_tests"
+      command: "pytest --cov=api --cov=core --cov-report=xml --cov-fail-under=90"
+      required: true
+      critical: true
+      
+    - name: "integration_tests" 
+      command: "pytest tests/integration/ -v --maxfail=1"
+      required: true
+      critical: true
+      
+    - name: "api_integration_tests"
+      command: "pytest api/test_*integration*.py -v --maxfail=1"
+      required: true
+      critical: false
+      
+    - name: "e2e_smoke_tests"
+      command: "python test_e2e_smoke.py"
+      required: true
+      critical: false
+      
+    - name: "frontend_unit_tests"
+      command: "cd frontend && npm run test:coverage"
+      required: true
+      critical: true
+      
+    - name: "frontend_integration_tests"
+      command: "cd frontend && npm run test:integration" 
+      required: true
+      critical: true
+      
+    - name: "frontend_ci_all"
+      command: "cd frontend && npm run ci:all"
+      required: true
+      critical: true
+
+# Security scanning configuration  
+security:
+  # SAST (Static Application Security Testing)
+  sast:
+    tools:
+      - name: "codeql"
+        enabled: true
+        languages: ["python", "javascript"]
+        
+      - name: "bandit"
+        enabled: true
+        confidence_level: "MEDIUM"
+        severity_level: "MEDIUM"
+        
+    fail_on_high: true
+    fail_on_critical: true
+    
+  # Secrets detection
+  secrets:
+    tools:
+      - name: "gitleaks"
+        enabled: true
+        config_file: ".gitleaks.toml"
+        
+    fail_on_secrets: true
+    
+  # Dependency scanning
+  dependencies:
+    tools:
+      - name: "owasp_dependency_check"
+        enabled: true
+        cvss_threshold: 7.0
+        
+      - name: "safety"
+        enabled: true
+        policy: "strict"
+        
+    fail_on_vulnerabilities: true
+
+# Monitoring integration
+monitoring:
+  # Prometheus configuration
+  prometheus:
+    url: "http://prometheus:9090"
+    timeout_seconds: 15
+    required_metrics:
+      - "analog_real_total"
+      - "analog_fallback_total" 
+      - "analog_search_seconds"
+      - "analog_results_count"
+      
+  # Health endpoints
+  health_endpoints:
+    - path: "/health/live"
+      timeout_seconds: 10
+      required: true
+      
+    - path: "/health/ready"
+      timeout_seconds: 10  
+      required: true
+      
+    - path: "/health/faiss"
+      timeout_seconds: 30
+      required: true
+      critical: false
+      
+    - path: "/health/security"
+      timeout_seconds: 30
+      required: true
+      critical: true
+      
+  # Metrics validation
+  metrics_validation:
+    analog_fallback_total:
+      max_value: 0
+      critical: true
+      
+    security_drift_critical_events:
+      max_value: 0
+      critical: true
+
+# Deployment configuration  
+deployment:
+  # Deployment gates
+  gates:
+    quality_gates_pass: true
+    test_coverage_met: true
+    security_baseline_pass: true
+    no_analog_fallbacks: true
+    no_critical_security_drift: true
+    faiss_operational: false  # Warning only
+    
+  # Emergency overrides
+  emergency_override:
+    enabled: true
+    requires_approval: true
+    audit_log: true
+    notification_required: true
+    
+  # Environments
+  environments:
+    staging:
+      auto_deploy_on_develop: true
+      require_all_gates: true
+      
+    production:
+      auto_deploy_on_main: false
+      require_all_gates: true
+      require_manual_approval: true
+      
+# Notification configuration
+notifications:
+  # Channels
+  channels:
+    slack:
+      webhook_url_secret: "SLACK_WEBHOOK_URL"
+      channel: "#deployments"
+      
+    email:
+      enabled: false
+      
+  # Triggers
+  triggers:
+    on_failure: true
+    on_success: true
+    on_critical_failure: true
+    on_emergency_override: true
+    
+# Pipeline execution settings
+pipeline:
+  # Timeouts
+  timeouts:
+    total_pipeline: 3600  # 1 hour
+    quality_gates: 600    # 10 minutes
+    testing: 1200         # 20 minutes
+    security_scan: 900    # 15 minutes
+    
+  # Retry configuration
+  retry:
+    max_attempts: 2
+    retry_on_infrastructure_failure: true
+    retry_on_transient_failure: true
+    
+  # Caching
+  caching:
+    docker_layer_cache: true
+    dependency_cache: true
+    test_cache: false  # Always run fresh tests

@@ -92,6 +92,7 @@ class EnhancedHealthChecker:
         self.redis_client = None
         self.last_health_check = None
         self.performance_history: List[Dict[str, float]] = []
+        self.drift_detector = None
         
         # Initialize Redis connection if available
         try:
@@ -99,6 +100,17 @@ class EnhancedHealthChecker:
             self.redis_client = redis.from_url(redis_url, decode_responses=True)
         except Exception as e:
             logger.warning(f"Redis not available: {e}")
+        
+        # Initialize configuration drift detector
+        try:
+            from core.config_drift_detector import ConfigurationDriftDetector
+            project_root = Path(__file__).parent.parent
+            self.drift_detector = ConfigurationDriftDetector(
+                project_root=project_root,
+                start_monitoring=False  # Don't start background monitoring in health checks
+            )
+        except Exception as e:
+            logger.warning(f"Configuration drift detector not available: {e}")
     
     async def perform_liveness_check(self) -> Dict[str, Any]:
         """
@@ -219,6 +231,7 @@ class EnhancedHealthChecker:
         performance_check = await self._check_performance_baselines()
         data_integrity_check = await self._check_data_integrity()
         faiss_check = await self._check_faiss_health()
+        config_drift_check = await self._check_configuration_drift()
         system_metrics = await self._get_system_metrics()
         
         # Collect all checks
@@ -229,6 +242,7 @@ class EnhancedHealthChecker:
         all_checks.append(performance_check)
         all_checks.append(data_integrity_check)
         all_checks.append(faiss_check)
+        all_checks.append(config_drift_check)
         
         # Determine overall status
         failed_checks = [c for c in all_checks if c.status == "fail"]
@@ -1162,3 +1176,111 @@ class EnhancedHealthChecker:
             },
             "degraded_mode": degraded_mode
         }
+    
+    async def _check_configuration_drift(self) -> HealthCheckResult:
+        """Check for configuration drift including weak token detection."""
+        start_time = time.time()
+        
+        try:
+            if self.drift_detector is None:
+                return HealthCheckResult(
+                    name="configuration_drift",
+                    status="warn",
+                    message="Configuration drift detector not available",
+                    details={"monitoring_available": False},
+                    duration_ms=(time.time() - start_time) * 1000,
+                    timestamp=datetime.now(timezone.utc)
+                )
+            
+            # Perform drift detection
+            drift_events = self.drift_detector.detect_drift(generate_report=False)
+            
+            duration_ms = (time.time() - start_time) * 1000
+            
+            # Categorize events by severity
+            critical_events = [e for e in drift_events if e.is_critical()]
+            high_events = [e for e in drift_events if str(e.severity) == "high"]
+            medium_events = [e for e in drift_events if str(e.severity) == "medium"]
+            low_events = [e for e in drift_events if str(e.severity) == "low"]
+            
+            # Focus on security-related events for detailed reporting
+            security_events = [e for e in drift_events if str(e.drift_type) == "DriftType.SECURITY_DRIFT"]
+            token_events = [e for e in security_events if "weak_token" in e.event_id or "token" in e.description.lower()]
+            
+            # Determine overall status
+            if critical_events:
+                status = "fail"
+                message = f"{len(critical_events)} critical configuration drift events detected"
+            elif high_events:
+                status = "warn" 
+                message = f"{len(high_events)} high-priority drift events detected"
+            elif medium_events:
+                status = "warn"
+                message = f"{len(medium_events)} medium-priority drift events detected"
+            else:
+                status = "pass"
+                message = "No critical configuration drift detected"
+            
+            # Prepare detailed information for token security events
+            token_security_details = {}
+            if token_events:
+                for event in token_events:
+                    token_analysis = event.metadata.get("token_security_analysis", {})
+                    if token_analysis:
+                        token_security_details = {
+                            "weak_token_detected": True,
+                            "entropy_bits": token_analysis.get("entropy_bits", 0),
+                            "charset_diversity": token_analysis.get("charset_diversity", 0),
+                            "security_level": token_analysis.get("security_level", "UNKNOWN"),
+                            "validation_issues": token_analysis.get("validation_issues", []),
+                            "recommendations": token_analysis.get("recommendations", []),
+                            "minimum_requirements": token_analysis.get("minimum_requirements", {})
+                        }
+                        break  # Use first token event for details
+            
+            return HealthCheckResult(
+                name="configuration_drift",
+                status=status,
+                message=message,
+                details={
+                    "monitoring_active": True,
+                    "total_events": len(drift_events),
+                    "events_by_severity": {
+                        "critical": len(critical_events),
+                        "high": len(high_events),
+                        "medium": len(medium_events),
+                        "low": len(low_events)
+                    },
+                    "security_events": len(security_events),
+                    "token_security": token_security_details,
+                    "drift_events": [
+                        {
+                            "event_id": e.event_id,
+                            "drift_type": str(e.drift_type),
+                            "severity": str(e.severity),
+                            "source_path": e.source_path,
+                            "description": e.description,
+                            "detected_at": e.detected_at,
+                            "metadata": e.metadata
+                        }
+                        for e in drift_events[:10]  # Limit to first 10 events for health endpoint
+                    ]
+                },
+                duration_ms=duration_ms,
+                timestamp=datetime.now(timezone.utc)
+            )
+            
+        except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error(f"Configuration drift check failed: {e}")
+            return HealthCheckResult(
+                name="configuration_drift",
+                status="fail",
+                message=f"Configuration drift check failed: {str(e)}",
+                details={
+                    "error_type": type(e).__name__,
+                    "monitoring_available": self.drift_detector is not None
+                },
+                duration_ms=duration_ms,
+                timestamp=datetime.now(timezone.utc)
+            )
