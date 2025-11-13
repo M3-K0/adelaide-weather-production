@@ -21,6 +21,7 @@ Version: 1.0.0 - Critical Path Implementation
 
 import asyncio
 import logging
+import os
 import time
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -553,6 +554,7 @@ class AnalogSearchService:
                     'faiss_index_size': faiss_index.ntotal,
                     'faiss_index_dim': faiss_index.d,
                     'search_method': 'real_faiss',
+                    'faiss_search_successful': True,
                     'metrics_recorded': METRICS_AVAILABLE
                 },
                 'search_time_ms': search_time_ms
@@ -707,6 +709,11 @@ class AnalogSearchService:
     
     def _generate_fallback_search_result(self, horizon: int, k: int, search_start: float) -> Dict[str, Any]:
         """Generate high-quality fallback search results when FAISS is unavailable."""
+        # Check if fallback is allowed by environment variable
+        if os.getenv("ALLOW_ANALOG_FALLBACK", "false").lower() != "true":
+            raise RuntimeError("Service Unavailable: FAISS analog search failed and fallback is disabled. "
+                             "Set ALLOW_ANALOG_FALLBACK=true to enable fallback mode.")
+        
         # Use horizon-specific realistic data sizes based on validation system
         expected_sizes = {6: 6574, 12: 6574, 24: 13148, 48: 13148}
         total_candidates = expected_sizes.get(horizon, 10000)
@@ -714,20 +721,21 @@ class AnalogSearchService:
         # Generate more realistic analog count
         num_analogs = min(k, 50)
         
-        # Generate realistic indices (non-overlapping)
-        mock_indices = np.random.choice(total_candidates, size=num_analogs, replace=False)
+        # Generate deterministic indices based on horizon and k for consistency
+        # Use modulo arithmetic to ensure reproducible but varied indices
+        base_offset = hash(f"{horizon}_{k}") % 1000
+        mock_indices = np.array([(base_offset + i * 17) % total_candidates for i in range(num_analogs)])
         
-        # Generate realistic distances with proper monotonicity
-        # Start with exponential distribution and sort to ensure monotonicity
-        base_distances = np.random.exponential(scale=1.5, size=num_analogs)
-        mock_distances = np.sort(base_distances)
+        # Generate deterministic distances with proper monotonicity
+        # Use horizon and similarity-based distance calculation instead of random
+        base_distance = 0.1 + (horizon / 48.0) * 0.3  # Distance increases with forecast horizon
+        mock_distances = np.array([base_distance + i * 0.05 for i in range(num_analogs)])
         
-        # Add small random variations while maintaining monotonicity
+        # Ensure strict monotonicity without random variations
         for i in range(1, len(mock_distances)):
-            # Ensure each distance is at least as large as the previous
-            min_distance = mock_distances[i-1] + 0.001
-            if mock_distances[i] < min_distance:
-                mock_distances[i] = min_distance + np.random.exponential(0.1)
+            # Guarantee each distance is larger than previous
+            if mock_distances[i] <= mock_distances[i-1]:
+                mock_distances[i] = mock_distances[i-1] + 0.001
         
         search_time_ms = (time.time() - search_start) * 1000
         
@@ -748,6 +756,7 @@ class AnalogSearchService:
                 'k_neighbors': num_analogs,
                 'distance_metric': 'L2_fallback',
                 'search_method': 'fallback_mock',
+                'faiss_search_successful': False,
                 'fallback_reason': 'FAISS_unavailable',
                 'metrics_recorded': METRICS_AVAILABLE
             },
@@ -1017,7 +1026,6 @@ class AnalogSearchService:
                 "analogs": analog_details,
                 "search_metadata": {
                     **search_result.search_metadata,
-                    "faiss_search_successful": True,
                     "total_processing_time_ms": total_time_ms
                 },
                 "timeline_data": timeline_data,
@@ -1093,8 +1101,8 @@ class AnalogSearchService:
                         "reliability_class": self._classify_reliability(similarity_score, distance)
                     },
                     "pattern_characteristics": {
-                        "synoptic_similarity": round(similarity_score * 0.9 + np.random.normal(0, 0.05), 3),
-                        "local_similarity": round(similarity_score * 1.1 + np.random.normal(0, 0.03), 3),
+                        "synoptic_similarity": round(similarity_score * 0.9, 3),
+                        "local_similarity": round(similarity_score * 1.1, 3),
                         "seasonal_adjustment": round(self._calculate_seasonal_adjustment(analog_time), 3)
                     }
                 }
@@ -1119,30 +1127,35 @@ class AnalogSearchService:
         base_uncertainty = 0.1 + (horizon / 48.0) * 0.2  # Increase uncertainty with horizon
         
         if variable == "temperature":
-            # Seasonal temperature pattern
+            # Seasonal temperature pattern - deterministic based on day of year
             seasonal_temp = 20 + 10 * np.cos(2 * np.pi * analog_time.timetuple().tm_yday / 365)
-            variation = np.random.normal(0, 3 * (1 - similarity))
+            # Deterministic variation based on similarity score instead of random
+            variation = 3 * (1 - similarity) * np.sin(analog_time.hour * np.pi / 12)
             outcome = seasonal_temp + variation
             uncertainty = base_uncertainty * 5  # 5°C base uncertainty
             
         elif variable == "precipitation":
-            # Precipitation with seasonal bias
+            # Precipitation with seasonal bias - deterministic
             seasonal_factor = 1.5 if analog_time.month in [6, 7, 8] else 0.8  # Winter bias
-            base_precip = seasonal_factor * np.random.exponential(2)
+            # Use deterministic exponential-like function instead of random
+            base_precip = seasonal_factor * (2.0 + analog_time.hour / 24.0 * similarity)
             outcome = base_precip * (0.5 + similarity)
             uncertainty = base_uncertainty * outcome  # Relative uncertainty
             
         elif variable == "wind":
-            # Wind speed with diurnal variation
+            # Wind speed with diurnal variation - deterministic
             diurnal_factor = 1.2 if 10 <= analog_time.hour <= 16 else 0.8
             base_wind = diurnal_factor * (8 + 6 * similarity)
-            outcome = base_wind + np.random.normal(0, 2)
+            # Deterministic variation based on time and similarity
+            variation = 2 * np.sin(analog_time.hour * np.pi / 12) * (1 - similarity)
+            outcome = base_wind + variation
             uncertainty = base_uncertainty * 10  # 10 km/h base uncertainty
             
         else:  # pressure or other
-            # Atmospheric pressure
+            # Atmospheric pressure - deterministic
             seasonal_pressure = 1013 + 5 * np.cos(2 * np.pi * analog_time.timetuple().tm_yday / 365)
-            variation = np.random.normal(0, 8 * (1 - similarity))
+            # Deterministic variation based on similarity and hour
+            variation = 8 * (1 - similarity) * np.cos(analog_time.hour * np.pi / 12)
             outcome = seasonal_pressure + variation
             uncertainty = base_uncertainty * 15  # 15 hPa base uncertainty
         
@@ -1165,7 +1178,13 @@ class AnalogSearchService:
         if similarity > 0.8:
             return "stable"
         elif similarity > 0.6:
-            return np.random.choice(["increasing", "decreasing", "stable"])
+            # Deterministic choice based on similarity value instead of random
+            if similarity > 0.75:
+                return "stable"
+            elif similarity > 0.68:
+                return "increasing"
+            else:
+                return "decreasing"
         else:
             return "variable"
     
@@ -1665,7 +1684,7 @@ class AnalogSearchService:
             likely_patterns = ["transitional_pattern", "weak_front", "stable_anticyclone"]
         
         return {
-            "dominant_pattern": np.random.choice(likely_patterns),
+            "dominant_pattern": likely_patterns[int(mean_similarity * len(likely_patterns)) % len(likely_patterns)],
             "pattern_confidence": round(mean_similarity, 3),
             "synoptic_features": {
                 "pressure_gradient": "moderate" if mean_similarity > 0.6 else "weak",
@@ -1958,6 +1977,11 @@ class AnalogSearchService:
         variable: str
     ) -> List[Dict[str, Any]]:
         """Generate high-quality mock analog details when metadata unavailable."""
+        # Check if fallback is allowed by environment variable
+        if os.getenv("ALLOW_ANALOG_FALLBACK", "false").lower() != "true":
+            raise RuntimeError("Service Unavailable: Real analog details unavailable and fallback is disabled. "
+                             "Set ALLOW_ANALOG_FALLBACK=true to enable fallback mode.")
+        
         mock_details = []
         
         for i, (idx, distance) in enumerate(zip(search_result.indices, search_result.distances)):
@@ -1966,8 +1990,8 @@ class AnalogSearchService:
                 
             similarity = max(0.0, 1.0 - distance / 4.0)
             
-            # Generate realistic historical date
-            days_back = np.random.randint(1, 3653)  # 1-10 years back
+            # Generate deterministic historical date based on index and distance
+            days_back = (idx * 137 + int(distance * 100)) % 3653 + 1  # 1-10 years back, deterministic
             historical_date = datetime.now() - timedelta(days=days_back)
             
             outcome_value, outcome_uncertainty = self._generate_variable_outcome(
@@ -1996,8 +2020,8 @@ class AnalogSearchService:
                     "reliability_class": self._classify_reliability(similarity, distance)
                 },
                 "pattern_characteristics": {
-                    "synoptic_similarity": round(similarity * 0.95 + np.random.normal(0, 0.03), 3),
-                    "local_similarity": round(similarity * 1.05 + np.random.normal(0, 0.02), 3),
+                    "synoptic_similarity": round(similarity * 0.95, 3),
+                    "local_similarity": round(similarity * 1.05, 3),
                     "seasonal_adjustment": round(self._calculate_seasonal_adjustment(historical_date), 3)
                 }
             }
