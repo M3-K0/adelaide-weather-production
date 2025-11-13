@@ -1,0 +1,17 @@
+📊 target_load Load Test Results
+================================
+
+📈 Performance Metrics:
+   Total Requests: 73
+   Success Rate: 53.4%
+   Error Rate: 46.6%
+
+⏱️  Response Times:
+   Average: 3247.2 ms
+   P50 (Median): 12124 ms
+   P95: 0 ms
+   P99: 0 ms
+
+🚀 Throughput:
+   1.14 req/s
+   68.4 req/min

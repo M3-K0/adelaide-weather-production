@@ -1,6 +1,6 @@
 {
   "authentication": {
-    "validToken": "test-token-12345",
+    "validToken": "dev-token-change-in-production",
     "invalidToken": "invalid-token-xyz",
     "expiredToken": "expired-token-abc",
     "malformedToken": "malformed.token.here"
@@ -234,7 +234,7 @@
     
     "powerUser": {
       "description": "Experienced meteorologist user",
-      "apiKey": "test-token-12345",
+      "apiKey": "dev-token-change-in-production",
       "preferences": {
         "defaultHorizon": "12h",
         "defaultVariables": ["t2m", "u10", "v10", "msl", "cape"],

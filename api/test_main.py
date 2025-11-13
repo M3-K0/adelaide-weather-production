@@ -50,6 +50,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 # Metrics
 REQUEST_COUNT = Counter('api_requests_total', 'Total API requests', ['method', 'endpoint', 'status'])
+FORECAST_REQUESTS = Counter('forecast_requests_total', 'Total forecast requests', ['horizon'])
 REQUEST_DURATION = Histogram('response_duration_seconds', 'Forecast request duration')
 SECURITY_VIOLATIONS = Counter('security_violations_total', 'Total security violations', ['violation_type'])
 VALIDATION_ERRORS = Counter('validation_errors_total', 'Total validation errors', ['error_type'])
@@ -365,21 +366,40 @@ async def get_forecast(
         # Generate real forecast using forecasting adapter  
         from forecast_adapter import ForecastAdapter
         adapter = ForecastAdapter()
-        forecast_result = adapter.forecast_with_uncertainty(horizon, requested_vars)
+        forecast_result = await adapter.forecast_with_uncertainty(horizon, requested_vars)
+        
+        # Update metrics
+        FORECAST_REQUESTS.labels(horizon=horizon).inc()
         
         # Convert to expected format
         variables = {}
         for var in requested_vars:
             if var in forecast_result:
                 result = forecast_result[var]
-                variables[var] = VariableResult(
-                    value=result["value"],
-                    p05=result["p05"], 
-                    p95=result["p95"],
-                    confidence=result["confidence"],
-                    available=result["available"],
-                    analog_count=result.get("analog_count", 0)
-                )
+                # Handle unavailable variables safely
+                if result["value"] is None or not result["available"]:
+                    variables[var] = VariableData(
+                        value=0.0,  # Default value
+                        p05=0.0, 
+                        p95=0.0,
+                        confidence=0.0,
+                        available=False,
+                        analog_count=0
+                    )
+                else:
+                    # Ensure confidence is within valid range (0-100)
+                    confidence = result["confidence"] or 0.0
+                    if confidence > 100.0:
+                        confidence = min(confidence / 10.0, 100.0)  # Scale down if needed
+                    
+                    variables[var] = VariableData(
+                        value=result["value"],
+                        p05=result["p05"], 
+                        p95=result["p95"],
+                        confidence=confidence,
+                        available=result["available"],
+                        analog_count=result.get("analog_count", 0)
+                    )
         
         # Calculate wind if both u10 and v10 are present
         wind10m = None

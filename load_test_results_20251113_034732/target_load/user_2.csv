@@ -1,0 +1,7 @@
+user,request,endpoint,status_code,response_time_ms,timestamp
+2,1,delay/1,200,10057,2025-11-12T17:18:28Z
+2,2,get?horizon=12h&vars=t2m,u10,v10,200,2824,2025-11-12T17:18:40Z
+2,3,get?horizon=6h&vars=t2m,200,4596,2025-11-12T17:18:44Z
+2,4,get?horizon=12h&vars=t2m,u10,v10,200,3517,2025-11-12T17:18:51Z
+2,5,status/200,200,1837,2025-11-12T17:18:58Z
+2,6,get?horizon=48h&vars=t2m,u10,v10,msl,cape,200,28429,2025-11-12T17:19:01Z

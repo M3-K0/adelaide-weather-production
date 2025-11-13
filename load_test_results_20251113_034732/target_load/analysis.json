@@ -1,0 +1,23 @@
+{
+  "scenario": "target_load",
+  "total_requests": 73,
+  "successful_requests": 39,
+  "error_requests": 34,
+  "timeout_requests": 0,
+  "success_rate": 53.42,
+  "error_rate": 46.58,
+  "response_time": {
+    "min_ms": 1325,
+    "max_ms": 0,
+    "avg_ms": 3247.19,
+    "std_dev_ms": 4445.09,
+    "p50_ms": 12124,
+    "p95_ms": 0,
+    "p99_ms": 0
+  },
+  "throughput": {
+    "requests_per_second": 1.14,
+    "requests_per_minute": 68.44
+  },
+  "duration_seconds": 64
+}

@@ -9,6 +9,9 @@
 - [Administrative Endpoints](#administrative-endpoints)
 - [Real-time Monitoring](#real-time-monitoring)
 - [FAISS Analog Forecasting](#faiss-analog-forecasting)
+  - [Analog Pattern Analysis](#analog-pattern-analysis)
+  - [FAISS Search Methodology](#faiss-search-methodology)
+  - [Integration Examples](#integration-examples)
 - [Error Handling](#error-handling)
 - [Rate Limiting](#rate-limiting)
 - [Integration Examples](#integration-examples)
@@ -577,46 +580,100 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 ### Analog Pattern Analysis
 
-#### GET /analogs
-Detailed historical analog patterns for current atmospheric conditions.
+#### GET /api/analogs
+Comprehensive analog weather pattern search with detailed FAISS-based historical pattern matching.
 
 **Authentication Required:** Yes
 
+**Overview:**
+The `/api/analogs` endpoint provides in-depth historical weather pattern analysis by searching through vast FAISS-indexed databases to find atmospheric conditions most similar to current or specified conditions. This endpoint is particularly valuable for:
+
+- Understanding historical precedents for current weather patterns
+- Analyzing uncertainty through ensemble statistics 
+- Exploring detailed weather evolution timelines
+- Meteorological pattern recognition and research
+- Risk assessment based on historical outcomes
+
 **Parameters:**
-- `horizon` (optional): Forecast horizon to analyze - `6h`, `12h`, `24h`, `48h` (default: `24h`)
+
+| Parameter | Type | Required | Default | Description | Validation |
+|-----------|------|----------|---------|-------------|-----------|
+| `horizon` | string | No | `24h` | Forecast horizon to analyze | Must be one of: `6h`, `12h`, `24h`, `48h` |
+| `variables` | string | No | `t2m,u10,v10,msl` | Comma-separated weather variables | Valid variables: `t2m`, `u10`, `v10`, `msl`, `r850`, `tp6h`, `cape`, `t850`, `z500` |
+| `k` | integer | No | 10 | Number of analog patterns to return | Range: 1-200 |
+| `query_time` | string | No | current time | ISO 8601 datetime for analog search | Must be within 5 years past to 30 days future |
+
+**Examples:**
 
 ```bash
+# Basic analog search for 24h horizon
 curl -H "Authorization: Bearer $TOKEN" \
   "http://localhost/api/analogs?horizon=24h"
+
+# Advanced search with specific variables and more analogs
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost/api/analogs?horizon=12h&variables=t2m,msl,cape&k=20"
+
+# Historical analog search for specific time
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost/api/analogs?horizon=48h&query_time=2024-01-15T12:00:00Z&k=5"
 ```
 
-**Response:**
+**Response Format:**
+
+The response follows the `AnalogExplorerData` schema with comprehensive pattern analysis:
+
 ```json
 {
   "forecast_horizon": "24h",
   "top_analogs": [
     {
       "date": "2023-03-15T12:00:00Z",
-      "similarity_score": 0.85,
+      "similarity_score": 0.89,
       "initial_conditions": {
-        "t2m": 24.8,
-        "msl": 1014.5,
-        "u10": 3.1,
-        "v10": -1.5
+        "t2m": 22.1,
+        "msl": 1013.4,
+        "u10": 2.5,
+        "v10": -1.2
       },
       "timeline": [
         {
-          "hours_offset": 6,
+          "hours_offset": 0,
+          "values": {
+            "t2m": 22.1,
+            "msl": 1013.4
+          },
+          "events": null,
+          "temperature_trend": "stable",
+          "pressure_trend": "stable"
+        },
+        {
+          "hours_offset": 12,
+          "values": {
+            "t2m": 24.5,
+            "msl": 1015.2
+          },
+          "events": ["Cloud cover increased"],
+          "temperature_trend": "rising",
+          "pressure_trend": "rising"
+        },
+        {
+          "hours_offset": 24,
           "values": {
             "t2m": 26.2,
-            "msl": 1013.8
+            "msl": 1016.8
           },
-          "events": ["clear_skies"],
+          "events": ["Clear skies returned"],
           "temperature_trend": "rising",
-          "pressure_trend": "falling"
+          "pressure_trend": "rising"
         }
       ],
-      "outcome_narrative": "Clear conditions continued with gradual temperature rise",
+      "outcome_narrative": "Pattern showed stable conditions evolving into typical autumn weather with gradual warming and pressure rise over 24 hours.",
+      "location": {
+        "latitude": -34.9285,
+        "longitude": 138.6007,
+        "name": "Adelaide Weather Station"
+      },
       "season_info": {
         "month": 3,
         "season": "autumn"
@@ -625,18 +682,284 @@ curl -H "Authorization: Bearer $TOKEN" \
   ],
   "ensemble_stats": {
     "mean_outcomes": {
-      "t2m": 25.3,
-      "msl": 1015.2
+      "t2m": 23.7,
+      "msl": 1014.2,
+      "u10": 4.1,
+      "v10": -2.3
     },
     "outcome_uncertainty": {
-      "t2m": 2.1,
-      "msl": 1.8
+      "t2m": 2.8,
+      "msl": 5.4,
+      "u10": 3.2,
+      "v10": 2.9
     },
-    "common_events": ["clear_skies", "light_winds"]
+    "common_events": [
+      "Cloud cover increased",
+      "Wind direction shifted",
+      "Pressure began rising"
+    ]
   },
-  "generated_at": "2024-01-15T12:00:00Z"
+  "generated_at": "2024-01-15T14:30:00Z"
 }
 ```
+
+**Response Fields Explanation:**
+
+- **`forecast_horizon`**: The forecast horizon for which analogs were searched
+- **`top_analogs`**: Array of most similar historical patterns, ordered by similarity score
+  - **`date`**: ISO 8601 datetime of historical pattern occurrence
+  - **`similarity_score`**: Similarity to current conditions (0-1, higher = more similar)
+  - **`initial_conditions`**: Weather conditions at the start of historical pattern
+  - **`timeline`**: Chronological sequence of weather evolution during the pattern
+  - **`outcome_narrative`**: Human-readable description of what happened historically
+  - **`location`**: Geographic coordinates where pattern was observed
+  - **`season_info`**: Temporal context (month and season)
+- **`ensemble_stats`**: Statistical summary across all analog patterns
+  - **`mean_outcomes`**: Mean final values across all analogs for each variable
+  - **`outcome_uncertainty`**: Standard deviation of outcomes (uncertainty measure)
+  - **`common_events`**: Weather events that occurred in multiple patterns
+- **`generated_at`**: ISO 8601 timestamp when analysis was generated
+
+**FAISS Search Methodology:**
+
+The analog search uses advanced FAISS (Facebook AI Similarity Search) indexing for high-performance pattern matching:
+
+1. **Embedding Generation**: Current atmospheric conditions are converted to high-dimensional vectors using trained meteorological embeddings
+2. **Index Selection**: Horizon-specific FAISS indices (6h, 12h, 24h, 48h) ensure optimal pattern matching for the requested timeframe
+3. **Similarity Search**: L2 distance metrics identify the most similar historical atmospheric patterns
+4. **Post-processing**: Results include temporal context, geographical information, and meteorological narrative analysis
+
+**Performance Characteristics:**
+- **Search Time**: 100-300ms depending on horizon and k value
+- **Index Size**: ~13,000 historical patterns per horizon
+- **Memory Usage**: Optimized for production deployment with connection pooling
+- **Accuracy**: Similarity scores >0.8 indicate strong pattern matches
+
+**Rate Limiting:**
+- **Rate Limit**: 60 requests/minute (same as forecast endpoints)
+- **Headers**: Standard rate limiting headers included in response
+- **Burst Protection**: Automatic throttling during high usage periods
+
+**Error Responses:**
+
+```json
+// 400 Bad Request - Invalid parameters
+{
+  "error": {
+    "code": 400,
+    "message": "Invalid analog request parameters: Parameter 'k' must be an integer between 1 and 200",
+    "timestamp": "2024-01-15T14:30:00Z",
+    "correlation_id": "req_123456"
+  }
+}
+
+// 503 Service Unavailable - FAISS service issues
+{
+  "error": {
+    "code": 503,
+    "message": "Analog search service not available",
+    "timestamp": "2024-01-15T14:30:00Z",
+    "correlation_id": "req_123456"
+  }
+}
+
+// 500 Internal Server Error - Search failure
+{
+  "error": {
+    "code": 500,
+    "message": "Analog search failed: FAISS index not accessible",
+    "timestamp": "2024-01-15T14:30:00Z",
+    "correlation_id": "req_123456"
+  }
+}
+```
+
+**Integration Examples:**
+
+#### Python Integration
+```python
+import requests
+import json
+from typing import Dict, Any
+
+class AnalogSearchClient:
+    def __init__(self, base_url: str, api_token: str):
+        self.base_url = base_url.rstrip('/')
+        self.headers = {
+            'Authorization': f'Bearer {api_token}',
+            'Accept': 'application/json'
+        }
+    
+    def search_analogs(self, horizon: str = '24h', variables: str = None, 
+                      k: int = 10, query_time: str = None) -> Dict[str, Any]:
+        """Search for historical analog weather patterns."""
+        params = {'horizon': horizon, 'k': k}
+        if variables:
+            params['variables'] = variables
+        if query_time:
+            params['query_time'] = query_time
+            
+        response = requests.get(
+            f'{self.base_url}/api/analogs',
+            headers=self.headers,
+            params=params
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    def analyze_pattern_reliability(self, analogs_response: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze the reliability of analog patterns."""
+        top_analogs = analogs_response['top_analogs']
+        ensemble_stats = analogs_response['ensemble_stats']
+        
+        # Calculate reliability metrics
+        avg_similarity = sum(a['similarity_score'] for a in top_analogs) / len(top_analogs)
+        min_similarity = min(a['similarity_score'] for a in top_analogs)
+        
+        # Assess uncertainty from ensemble statistics
+        temp_uncertainty = ensemble_stats['outcome_uncertainty'].get('t2m', 0)
+        pressure_uncertainty = ensemble_stats['outcome_uncertainty'].get('msl', 0)
+        
+        reliability = "high" if avg_similarity > 0.8 and temp_uncertainty < 3.0 else \
+                     "medium" if avg_similarity > 0.6 and temp_uncertainty < 5.0 else "low"
+        
+        return {
+            "reliability_class": reliability,
+            "average_similarity": avg_similarity,
+            "minimum_similarity": min_similarity,
+            "temperature_uncertainty_celsius": temp_uncertainty,
+            "pressure_uncertainty_hpa": pressure_uncertainty / 100,  # Convert Pa to hPa
+            "pattern_count": len(top_analogs),
+            "common_events": ensemble_stats['common_events']
+        }
+
+# Usage example
+client = AnalogSearchClient('http://localhost/api', 'your-token-here')
+
+# Search for winter storm analogs
+analogs = client.search_analogs(
+    horizon='48h',
+    variables='t2m,msl,cape,tp6h',
+    k=15,
+    query_time='2024-01-15T12:00:00Z'
+)
+
+print(f"Found {len(analogs['top_analogs'])} similar patterns")
+print(f"Best match from: {analogs['top_analogs'][0]['date']}")
+print(f"Similarity score: {analogs['top_analogs'][0]['similarity_score']:.3f}")
+
+# Analyze reliability
+reliability = client.analyze_pattern_reliability(analogs)
+print(f"Pattern reliability: {reliability['reliability_class']}")
+print(f"Average similarity: {reliability['average_similarity']:.3f}")
+```
+
+#### JavaScript Integration
+```javascript
+class AnalogSearchAPI {
+    constructor(baseUrl, apiToken) {
+        this.baseUrl = baseUrl.replace(/\/$/, '');
+        this.headers = {
+            'Authorization': `Bearer ${apiToken}`,
+            'Accept': 'application/json'
+        };
+    }
+
+    async searchAnalogs({horizon = '24h', variables = null, k = 10, queryTime = null} = {}) {
+        const params = new URLSearchParams({horizon, k});
+        if (variables) params.append('variables', variables);
+        if (queryTime) params.append('query_time', queryTime);
+
+        const response = await fetch(`${this.baseUrl}/api/analogs?${params}`, {
+            headers: this.headers
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(`Analog search failed: ${error.error.message}`);
+        }
+
+        return response.json();
+    }
+
+    generatePatternSummary(analogsResponse) {
+        const {top_analogs, ensemble_stats} = analogsResponse;
+        
+        const avgSimilarity = top_analogs.reduce((sum, a) => sum + a.similarity_score, 0) / top_analogs.length;
+        const bestMatch = top_analogs[0];
+        
+        return {
+            summary: `Found ${top_analogs.length} similar patterns with average similarity of ${(avgSimilarity * 100).toFixed(1)}%`,
+            bestMatch: {
+                date: new Date(bestMatch.date).toLocaleDateString(),
+                similarity: (bestMatch.similarity_score * 100).toFixed(1),
+                narrative: bestMatch.outcome_narrative
+            },
+            reliability: avgSimilarity > 0.8 ? 'High' : avgSimilarity > 0.6 ? 'Medium' : 'Low',
+            commonEvents: ensemble_stats.common_events,
+            uncertainty: {
+                temperature: ensemble_stats.outcome_uncertainty.t2m?.toFixed(1) + '°C' || 'N/A',
+                pressure: ensemble_stats.outcome_uncertainty.msl ? 
+                    (ensemble_stats.outcome_uncertainty.msl / 100).toFixed(1) + ' hPa' : 'N/A'
+            }
+        };
+    }
+}
+
+// Usage example
+const analogAPI = new AnalogSearchAPI('http://localhost/api', 'your-token-here');
+
+async function analyzeCurrentConditions() {
+    try {
+        const analogs = await analogAPI.searchAnalogs({
+            horizon: '24h',
+            variables: 't2m,msl,cape',
+            k: 10
+        });
+
+        const summary = analogAPI.generatePatternSummary(analogs);
+        console.log('Pattern Analysis:', summary);
+
+        // Display results in UI
+        document.getElementById('similarity-score').textContent = summary.bestMatch.similarity + '%';
+        document.getElementById('pattern-narrative').textContent = summary.bestMatch.narrative;
+        document.getElementById('reliability-level').textContent = summary.reliability;
+        
+    } catch (error) {
+        console.error('Analog search failed:', error.message);
+    }
+}
+```
+
+**Best Practices:**
+
+1. **Optimal Parameter Selection**:
+   - Use `k=10-20` for general analysis, `k=5` for quick previews
+   - Match horizon to your forecast needs (6h for nowcasting, 48h for extended forecasting)
+   - Include relevant variables for your use case (add CAPE for convection analysis)
+
+2. **Performance Optimization**:
+   - Cache results for 10-15 minutes to reduce API load
+   - Use smaller k values for real-time applications
+   - Batch requests when analyzing multiple time periods
+
+3. **Reliability Assessment**:
+   - High similarity scores (>0.8) indicate strong pattern matches
+   - Large uncertainty values suggest pattern diversity
+   - Common events help identify recurring meteorological phenomena
+
+4. **Error Handling**:
+   - Implement retry logic for 503 service unavailable errors
+   - Validate parameters before making requests
+   - Handle correlation IDs for debugging and support
+
+**Monitoring Integration:**
+
+The analog search service integrates with the system's monitoring infrastructure:
+- **Prometheus Metrics**: Search performance and success rates via `/metrics`
+- **Health Checks**: FAISS-specific health monitoring via `/health/faiss`
+- **Correlation IDs**: Every request includes tracking for debugging
+- **Performance Alerts**: Automatic alerts for slow searches or failures
 
 ### FAISS Index Health
 

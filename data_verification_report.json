@@ -1,0 +1,589 @@
+{
+  "verification_time": "2025-11-13 03:15:47 UTC",
+  "base_directory": "/home/micha/adelaide-weather-final",
+  "faiss_indices": {
+    "faiss_48h_flatip.faiss": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 12.839886665344238,
+      "modified": 1762278095.6597488,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 8.684635162353516,
+      "total_vectors": 13148,
+      "vector_dimension": 256,
+      "index_type": "IndexFlatIP",
+      "is_trained": true,
+      "memory_usage_mb": 0,
+      "search_test": {
+        "search_time_ms": 0.33211708068847656,
+        "returned_results": 10,
+        "valid_indices": true
+      }
+    },
+    "faiss_6h_flatip.faiss": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 6.419964790344238,
+      "modified": 1762278093.987746,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 1.8041133880615234,
+      "total_vectors": 6574,
+      "vector_dimension": 256,
+      "index_type": "IndexFlatIP",
+      "is_trained": true,
+      "memory_usage_mb": 0,
+      "search_test": {
+        "search_time_ms": 0.10132789611816406,
+        "returned_results": 10,
+        "valid_indices": true
+      }
+    },
+    "faiss_24h_flatip.faiss": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 12.839886665344238,
+      "modified": 1762278094.8237474,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 2.4449825286865234,
+      "total_vectors": 13148,
+      "vector_dimension": 256,
+      "index_type": "IndexFlatIP",
+      "is_trained": true,
+      "memory_usage_mb": 0,
+      "search_test": {
+        "search_time_ms": 0.2315044403076172,
+        "returned_results": 10,
+        "valid_indices": true
+      }
+    },
+    "faiss_6h_ivfpq.faiss": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.5659828186035156,
+      "modified": 1762278094.3277466,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 0.16045570373535156,
+      "total_vectors": 6574,
+      "vector_dimension": 256,
+      "index_type": "IndexIVFPQ",
+      "is_trained": true,
+      "memory_usage_mb": 0,
+      "search_test": {
+        "search_time_ms": 0.2593994140625,
+        "returned_results": 10,
+        "valid_indices": true
+      }
+    },
+    "faiss_12h_flatip.faiss": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 6.419964790344238,
+      "modified": 1762278094.3877466,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 0.5991458892822266,
+      "total_vectors": 6574,
+      "vector_dimension": 256,
+      "index_type": "IndexFlatIP",
+      "is_trained": true,
+      "memory_usage_mb": 0,
+      "search_test": {
+        "search_time_ms": 0.09131431579589844,
+        "returned_results": 10,
+        "valid_indices": true
+      }
+    },
+    "faiss_24h_ivfpq.faiss": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.8030586242675781,
+      "modified": 1762278095.5317485,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 0.14090538024902344,
+      "total_vectors": 13148,
+      "vector_dimension": 256,
+      "index_type": "IndexIVFPQ",
+      "is_trained": true,
+      "memory_usage_mb": 0,
+      "search_test": {
+        "search_time_ms": 0.2357959747314453,
+        "returned_results": 10,
+        "valid_indices": true
+      }
+    },
+    "faiss_12h_ivfpq.faiss": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.5659828186035156,
+      "modified": 1762278094.6877472,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 0.08296966552734375,
+      "total_vectors": 6574,
+      "vector_dimension": 256,
+      "index_type": "IndexIVFPQ",
+      "is_trained": true,
+      "memory_usage_mb": 0,
+      "search_test": {
+        "search_time_ms": 0.25725364685058594,
+        "returned_results": 10,
+        "valid_indices": true
+      }
+    },
+    "faiss_48h_ivfpq.faiss": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.8030586242675781,
+      "modified": 1762278096.3517501,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 0.1392364501953125,
+      "total_vectors": 13148,
+      "vector_dimension": 256,
+      "index_type": "IndexIVFPQ",
+      "is_trained": true,
+      "memory_usage_mb": 0,
+      "search_test": {
+        "search_time_ms": 0.23746490478515625,
+        "returned_results": 10,
+        "valid_indices": true
+      }
+    }
+  },
+  "embeddings": {
+    "embeddings_24h.npy": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 12.8399658203125,
+      "modified": 1762278094.7517474,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 1.4824867248535156,
+      "shape": [
+        13148,
+        256
+      ],
+      "dtype": "float32",
+      "memory_usage_mb": 12.83984375,
+      "has_nan": "skipped_large_array",
+      "has_inf": "skipped_large_array",
+      "min_value": "skipped_large_array",
+      "max_value": "skipped_large_array"
+    },
+    "embeddings_48h.npy": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 12.8399658203125,
+      "modified": 1762278095.5957487,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 1.4972686767578125,
+      "shape": [
+        13148,
+        256
+      ],
+      "dtype": "float32",
+      "memory_usage_mb": 12.83984375,
+      "has_nan": "skipped_large_array",
+      "has_inf": "skipped_large_array",
+      "min_value": "skipped_large_array",
+      "max_value": "skipped_large_array"
+    },
+    "embeddings_6h.npy": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 6.4200439453125,
+      "modified": 1762278093.9157457,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 0.8585453033447266,
+      "shape": [
+        6574,
+        256
+      ],
+      "dtype": "float32",
+      "memory_usage_mb": 6.419921875,
+      "has_nan": "skipped_large_array",
+      "has_inf": "skipped_large_array",
+      "min_value": "skipped_large_array",
+      "max_value": "skipped_large_array"
+    },
+    "embeddings_12h.npy": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 6.4200439453125,
+      "modified": 1762278094.3557465,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 0.5323886871337891,
+      "shape": [
+        6574,
+        256
+      ],
+      "dtype": "float32",
+      "memory_usage_mb": 6.419921875,
+      "has_nan": "skipped_large_array",
+      "has_inf": "skipped_large_array",
+      "min_value": "skipped_large_array",
+      "max_value": "skipped_large_array"
+    },
+    "metadata_48h.parquet": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.19051361083984375,
+      "modified": 1762278095.6557488,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 16.091346740722656,
+      "shape": [
+        13148,
+        3
+      ],
+      "columns": [
+        "init_time",
+        "horizon",
+        "embedding_idx"
+      ],
+      "memory_usage_mb": 0.3010597229003906,
+      "has_null": false,
+      "dtypes": {
+        "init_time": "datetime64[ns]",
+        "horizon": "int64",
+        "embedding_idx": "int64"
+      }
+    },
+    "metadata_24h.parquet": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.19051361083984375,
+      "modified": 1762278094.8077474,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 1.9354820251464844,
+      "shape": [
+        13148,
+        3
+      ],
+      "columns": [
+        "init_time",
+        "horizon",
+        "embedding_idx"
+      ],
+      "memory_usage_mb": 0.3010597229003906,
+      "has_null": false,
+      "dtypes": {
+        "init_time": "datetime64[ns]",
+        "horizon": "int64",
+        "embedding_idx": "int64"
+      }
+    },
+    "metadata_12h.parquet": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.09523391723632812,
+      "modified": 1762278094.3837466,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 1.6181468963623047,
+      "shape": [
+        6574,
+        3
+      ],
+      "columns": [
+        "init_time",
+        "horizon",
+        "embedding_idx"
+      ],
+      "memory_usage_mb": 0.15059280395507812,
+      "has_null": false,
+      "dtypes": {
+        "init_time": "datetime64[ns]",
+        "horizon": "int64",
+        "embedding_idx": "int64"
+      }
+    },
+    "metadata_6h.parquet": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.09523391723632812,
+      "modified": 1762278093.975746,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 1.3751983642578125,
+      "shape": [
+        6574,
+        3
+      ],
+      "columns": [
+        "init_time",
+        "horizon",
+        "embedding_idx"
+      ],
+      "memory_usage_mb": 0.15059280395507812,
+      "has_null": false,
+      "dtypes": {
+        "init_time": "datetime64[ns]",
+        "horizon": "int64",
+        "embedding_idx": "int64"
+      }
+    }
+  },
+  "outcomes": {
+    "outcomes_12h.npy": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.2462158203125,
+      "modified": 1761651286.4802532,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 0.14328956604003906,
+      "shape": [
+        7168,
+        9
+      ],
+      "dtype": "float32",
+      "memory_usage_mb": 0.24609375,
+      "has_nan": false,
+      "has_inf": false,
+      "min_value": -33.22993469238281,
+      "max_value": 5967.76904296875
+    },
+    "outcomes_48h.npy": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.4923095703125,
+      "modified": 1761645632.209758,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 0.14472007751464844,
+      "shape": [
+        14336,
+        9
+      ],
+      "dtype": "float32",
+      "memory_usage_mb": 0.4921875,
+      "has_nan": false,
+      "has_inf": false,
+      "min_value": -33.86381530761719,
+      "max_value": 5967.76904296875
+    },
+    "outcomes_6h.npy": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.2462158203125,
+      "modified": 1761650935.1448207,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 0.13065338134765625,
+      "shape": [
+        7168,
+        9
+      ],
+      "dtype": "float32",
+      "memory_usage_mb": 0.24609375,
+      "has_nan": false,
+      "has_inf": false,
+      "min_value": -33.86381530761719,
+      "max_value": 5957.75830078125
+    },
+    "outcomes_24h.npy": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.4923095703125,
+      "modified": 1761645372.008566,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 0.11372566223144531,
+      "shape": [
+        14336,
+        9
+      ],
+      "dtype": "float32",
+      "memory_usage_mb": 0.4921875,
+      "has_nan": false,
+      "has_inf": false,
+      "min_value": -33.86381530761719,
+      "max_value": 5967.76904296875
+    },
+    "metadata_24h_clean.parquet": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.2624530792236328,
+      "modified": 1761645372.015899,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 2.432107925415039,
+      "shape": [
+        14336,
+        7
+      ],
+      "columns": [
+        "init_time",
+        "month",
+        "hour",
+        "day_of_year",
+        "season",
+        "lead_time",
+        "valid_time"
+      ],
+      "memory_usage_mb": 0.7657508850097656,
+      "has_null": false,
+      "dtypes": {
+        "init_time": "datetime64[ns]",
+        "month": "int64",
+        "hour": "int64",
+        "day_of_year": "int64",
+        "season": "int64",
+        "lead_time": "int64",
+        "valid_time": "datetime64[ns]"
+      }
+    },
+    "metadata_6h_clean.parquet": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.13335227966308594,
+      "modified": 1761650935.152154,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 1.8498897552490234,
+      "shape": [
+        7168,
+        7
+      ],
+      "columns": [
+        "init_time",
+        "month",
+        "hour",
+        "day_of_year",
+        "season",
+        "lead_time",
+        "valid_time"
+      ],
+      "memory_usage_mb": 0.3829383850097656,
+      "has_null": false,
+      "dtypes": {
+        "init_time": "datetime64[ns]",
+        "month": "int64",
+        "hour": "int64",
+        "day_of_year": "int64",
+        "season": "int64",
+        "lead_time": "int64",
+        "valid_time": "datetime64[ns]"
+      }
+    },
+    "metadata_12h_clean.parquet": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.15170669555664062,
+      "modified": 1761651286.4875867,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 1.8191337585449219,
+      "shape": [
+        7168,
+        7
+      ],
+      "columns": [
+        "init_time",
+        "month",
+        "hour",
+        "day_of_year",
+        "season",
+        "lead_time",
+        "valid_time"
+      ],
+      "memory_usage_mb": 0.3829383850097656,
+      "has_null": false,
+      "dtypes": {
+        "init_time": "datetime64[ns]",
+        "month": "int64",
+        "hour": "int64",
+        "day_of_year": "int64",
+        "season": "int64",
+        "lead_time": "int64",
+        "valid_time": "datetime64[ns]"
+      }
+    },
+    "metadata_48h_clean.parquet": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.2624521255493164,
+      "modified": 1761645632.217091,
+      "permissions": "644",
+      "loaded_successfully": true,
+      "load_time_ms": 1.9762516021728516,
+      "shape": [
+        14336,
+        7
+      ],
+      "columns": [
+        "init_time",
+        "month",
+        "hour",
+        "day_of_year",
+        "season",
+        "lead_time",
+        "valid_time"
+      ],
+      "memory_usage_mb": 0.7657508850097656,
+      "has_null": false,
+      "dtypes": {
+        "init_time": "datetime64[ns]",
+        "month": "int64",
+        "hour": "int64",
+        "day_of_year": "int64",
+        "season": "int64",
+        "lead_time": "int64",
+        "valid_time": "datetime64[ns]"
+      }
+    }
+  },
+  "configuration": {
+    "configs/data.yaml": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.0018825531005859375,
+      "modified": 1761044975.4154434,
+      "permissions": "644"
+    },
+    "configs/model.yaml": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.0033464431762695312,
+      "modified": 1761063618.8833897,
+      "permissions": "644"
+    },
+    "configs/training.yaml": {
+      "exists": true,
+      "readable": true,
+      "size_mb": 0.0034627914428710938,
+      "modified": 1761044975.4154434,
+      "permissions": "644"
+    }
+  },
+  "performance_metrics": {
+    "total_data_size_mb": 82.63631534576416,
+    "total_load_time_ms": 48.05707931518555,
+    "successful_loads": 24,
+    "average_load_speed_mb_per_sec": 1719.545101852495
+  },
+  "memory_analysis": {
+    "initial": {
+      "rss_mb": 0.0,
+      "vms_mb": 0.0,
+      "percent": 0.0,
+      "note": "psutil not available"
+    },
+    "final": {
+      "rss_mb": 0.0,
+      "vms_mb": 0.0,
+      "percent": 0.0,
+      "note": "psutil not available"
+    }
+  }
+}

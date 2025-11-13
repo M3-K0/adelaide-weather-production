@@ -1,0 +1,4 @@
+user,request,endpoint,status_code,response_time_ms,timestamp
+3,1,delay/1,200,10357,2025-11-12T17:18:28Z
+3,2,delay/1,200,3334,2025-11-12T17:18:41Z
+3,3,delay/1,200,14966,2025-11-12T17:18:49Z

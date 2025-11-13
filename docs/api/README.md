@@ -60,6 +60,8 @@ docs/api/
 ├── integration-guide.md        # Production integration patterns
 ├── rate-limiting.md            # Rate limiting policies and handling
 ├── error-codes.md              # Error codes and troubleshooting
+├── analogs-integration-guide.md # Comprehensive analog patterns integration guide
+├── analogs-quick-reference.md  # Quick reference for analog search endpoint
 └── examples/
     ├── python-client.py        # Production Python client
     └── javascript-client.js    # Browser/Node.js client
@@ -79,7 +81,7 @@ docs/api/
 | `GET /health/performance` | Performance metrics and baselines | No |
 | `GET /health/status` | Simple UP/DOWN status check | No |
 | `GET /metrics` | Prometheus metrics including FAISS monitoring | Yes |
-| `GET /analogs` | Historical analog pattern analysis | Yes |
+| `GET /api/analogs` | Comprehensive analog weather pattern search with FAISS | Yes |
 
 ## 🔧 Configuration
 

@@ -1,5 +1,5 @@
 {
-  "report_generated_at": "2025-11-05T11:41:13.381398",
+  "report_generated_at": "2025-11-13T04:24:06.140422",
   "monitoring_status": {
     "active": true,
     "baseline_available": true,
@@ -7,55 +7,18 @@
     "snapshots_count": 1
   },
   "drift_summary": {
-    "total_events": 1,
-    "unresolved_events": 1,
-    "critical_events": 1,
+    "total_events": 0,
+    "unresolved_events": 0,
+    "critical_events": 0,
     "high_events": 0,
     "medium_events": 0,
     "low_events": 0
   },
-  "drift_types": {
-    "security_drift": 1
-  },
-  "affected_sources": {
-    "ENV:API_TOKEN": 1
-  },
-  "recent_events": [
-    {
-      "event_id": "security_drift_1762305073_9927",
-      "drift_type": "security_drift",
-      "severity": "critical",
-      "source_path": "ENV:API_TOKEN",
-      "description": "Potentially insecure value detected in API_TOKEN",
-      "detected_at": "2025-11-05T11:41:13.381117",
-      "old_value": null,
-      "new_value": null,
-      "metadata": {
-        "security_concern": true
-      },
-      "resolved": false,
-      "resolution_notes": null
-    }
-  ],
-  "critical_issues": [
-    {
-      "event_id": "security_drift_1762305073_9927",
-      "drift_type": "security_drift",
-      "severity": "critical",
-      "source_path": "ENV:API_TOKEN",
-      "description": "Potentially insecure value detected in API_TOKEN",
-      "detected_at": "2025-11-05T11:41:13.381117",
-      "old_value": null,
-      "new_value": null,
-      "metadata": {
-        "security_concern": true
-      },
-      "resolved": false,
-      "resolution_notes": null
-    }
-  ],
+  "drift_types": {},
+  "affected_sources": {},
+  "recent_events": [],
+  "critical_issues": [],
   "recommendations": [
-    "\ud83d\udea8 Immediate action required: 1 critical configuration issues need resolution",
-    "\ud83d\udd10 Security review required: Configuration changes may impact system security"
+    "\u2705 Configuration drift within acceptable parameters"
   ]
 }

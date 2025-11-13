@@ -4,10 +4,10 @@
       "name": "Development Environment",
       "description": "Local development setup for testing load testing framework",
       "endpoints": {
-        "api_base": "http://localhost:8000",
+        "api_base": "http://localhost:8002",
         "frontend_base": "http://localhost:3000",
-        "metrics_endpoint": "http://localhost:8000/metrics",
-        "health_endpoint": "http://localhost:8000/health"
+        "metrics_endpoint": "http://localhost:8002/metrics",
+        "health_endpoint": "http://localhost:8002/health"
       },
       "authentication": {
         "api_token": "dev-token-change-in-production",

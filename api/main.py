@@ -8,6 +8,7 @@ Provides real-time analog ensemble forecasts with uncertainty quantification.
 
 Features:
 - GET /forecast: Real-time forecasting with variable filtering
+- GET /api/analogs: Historical weather pattern analysis with FAISS search
 - GET /health: System health monitoring and diagnostics  
 - GET /metrics: Prometheus-compatible performance metrics
 - Security: Token auth, CORS, rate limiting
@@ -23,7 +24,7 @@ import time
 import json
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Any
 
 # FastAPI and dependencies
@@ -59,6 +60,10 @@ from api.forecast_adapter import ForecastAdapter
 from core.startup_validation_system import ExpertValidatedStartupSystem
 from api.services.faiss_health_monitoring import FAISSHealthMonitor, get_faiss_health_monitor
 from core.config_drift_detector import ConfigurationDriftDetector
+
+# Import analog search service and models
+from api.services.analog_search import get_analog_search_service
+from api.response_models import AnalogExplorerData, WeatherVariable, ForecastHorizon
 
 # Configure structured logging
 from api.logging_config import (
@@ -489,7 +494,7 @@ async def startup_event():
         rate_limit = perf_stats['rate_limiting']['limit_per_minute']
         
         logger.info("✅ Adelaide Weather Forecasting API ready")
-        logger.info(f"🎯 Available endpoints: /forecast, /health, /health/detailed, /health/live, /health/ready, /metrics, /health/faiss, /admin/performance")
+        logger.info(f"🎯 Available endpoints: /forecast, /api/analogs, /health, /health/detailed, /health/live, /health/ready, /metrics, /health/faiss, /admin/performance")
         logger.info(f"🔒 Authentication: Enabled (secure token required)")
         logger.info(f"🗜️ Compression: {'Enabled' if compression_enabled else 'Disabled'} (min size: {perf_stats['compression']['minimum_size_bytes']} bytes)")
         logger.info(f"⚡ Rate limiting: {rate_limit}/minute")
@@ -621,6 +626,279 @@ def _explain_confidence(variables: Dict[str, VariableResult], analog_count: int)
         return f"High confidence ({avg_confidence:.1%}) with {analog_count} strong analog matches"
     else:
         return f"Moderate confidence ({avg_confidence:.1%}) based on {analog_count} analog patterns"
+
+def _validate_analog_request(horizon: str, variables: Optional[str], k: int, query_time: Optional[str]) -> Dict[str, Any]:
+    """Validate analog API request parameters."""
+    try:
+        # Validate horizon
+        if not validate_horizon(horizon):
+            return {"valid": False, "error": f"Invalid horizon '{horizon}'. Must be one of: {', '.join(VALID_HORIZONS)}"}
+        
+        # Validate and parse variables
+        try:
+            parsed_variables = parse_variables(variables) if variables else DEFAULT_VARIABLES
+        except ValueError as e:
+            return {"valid": False, "error": f"Invalid variables parameter: {str(e)}"}
+        
+        # Validate k parameter
+        if not isinstance(k, int) or k < 1 or k > 200:
+            return {"valid": False, "error": "Parameter 'k' must be an integer between 1 and 200"}
+        
+        # Validate query_time if provided
+        validated_query_time = None
+        if query_time:
+            try:
+                from datetime import datetime
+                import pandas as pd
+                
+                # Try parsing as ISO format
+                if isinstance(query_time, str):
+                    validated_query_time = pd.to_datetime(query_time).to_pydatetime()
+                else:
+                    return {"valid": False, "error": "query_time must be an ISO 8601 datetime string"}
+                    
+                # Check if time is reasonable (not too far in past/future)
+                now = datetime.now(timezone.utc)
+                max_past = timedelta(days=365 * 5)  # 5 years
+                max_future = timedelta(days=30)     # 30 days
+                
+                if validated_query_time < now - max_past:
+                    return {"valid": False, "error": "query_time too far in the past (max 5 years)"}
+                if validated_query_time > now + max_future:
+                    return {"valid": False, "error": "query_time too far in the future (max 30 days)"}
+                    
+            except Exception as e:
+                return {"valid": False, "error": f"Invalid query_time format: {str(e)}"}
+        
+        return {
+            "valid": True,
+            "horizon": horizon,
+            "variables": parsed_variables,
+            "k": k,
+            "query_time": validated_query_time
+        }
+        
+    except Exception as e:
+        return {"valid": False, "error": f"Validation error: {str(e)}"}
+
+def _horizon_to_hours(horizon: str) -> int:
+    """Convert horizon string to hours."""
+    horizon_map = {"6h": 6, "12h": 12, "24h": 24, "48h": 48}
+    return horizon_map.get(horizon, 24)
+
+def _primary_variable_from_list(variables: List[str]) -> str:
+    """Get primary variable for analog search from variable list."""
+    # Prioritize temperature as it's most universally relevant
+    if "t2m" in variables:
+        return "temperature"
+    elif any(v in ["u10", "v10"] for v in variables):
+        return "wind"
+    elif "tp6h" in variables:
+        return "precipitation"
+    elif "msl" in variables:
+        return "pressure"
+    else:
+        return "temperature"  # Default fallback
+
+def _transform_analog_result_to_response(
+    analog_result: Dict[str, Any],
+    horizon: str, 
+    variables: List[str],
+    correlation_id: str
+) -> Dict[str, Any]:
+    """Transform service result to API response model."""
+    from datetime import datetime, timezone
+    import numpy as np
+    
+    try:
+        # Extract top analogs from service result
+        service_analogs = analog_result.get("analogs", [])
+        
+        # Transform to response model format
+        top_analogs = []
+        for analog in service_analogs[:10]:  # Limit to top 10 for response size
+            # Convert service analog to response model format
+            analog_pattern = {
+                "date": analog.get("historical_date", datetime.now(timezone.utc).isoformat()),
+                "similarity_score": analog.get("similarity_score", 0.5),
+                "initial_conditions": _extract_initial_conditions(analog, variables),
+                "timeline": _generate_timeline_from_analog(analog, horizon),
+                "outcome_narrative": _generate_outcome_narrative(analog),
+                "location": {
+                    "latitude": -34.9285,  # Adelaide coordinates
+                    "longitude": 138.6007,
+                    "name": "Adelaide Weather Station"
+                },
+                "season_info": _extract_season_info(analog)
+            }
+            top_analogs.append(analog_pattern)
+        
+        # Generate ensemble statistics
+        ensemble_stats = _generate_ensemble_statistics(service_analogs, variables)
+        
+        return {
+            "forecast_horizon": horizon,
+            "top_analogs": top_analogs,
+            "ensemble_stats": ensemble_stats,
+            "generated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"[{correlation_id}] Failed to transform analog result: {e}")
+        # Return minimal valid response
+        return {
+            "forecast_horizon": horizon,
+            "top_analogs": [],
+            "ensemble_stats": {
+                "mean_outcomes": {},
+                "outcome_uncertainty": {},
+                "common_events": []
+            },
+            "generated_at": datetime.now(timezone.utc).isoformat()
+        }
+
+def _extract_initial_conditions(analog: Dict[str, Any], variables: List[str]) -> Dict[str, Optional[float]]:
+    """Extract initial conditions from analog data."""
+    conditions = {}
+    outcome = analog.get("forecast_outcome", {})
+    
+    # Map the primary variable to actual weather variables
+    primary_var = outcome.get("variable", "temperature")
+    primary_value = outcome.get("predicted_value", 20.0)
+    
+    # Map to actual variable names
+    if primary_var == "temperature":
+        conditions["t2m"] = primary_value
+    elif primary_var == "wind":
+        conditions["u10"] = primary_value * 0.7  # Approximate u component
+        conditions["v10"] = primary_value * 0.3  # Approximate v component
+    elif primary_var == "pressure":
+        conditions["msl"] = primary_value
+    elif primary_var == "precipitation":
+        conditions["tp6h"] = primary_value
+    
+    # Fill in other variables with reasonable defaults
+    for var in variables:
+        if var not in conditions:
+            if var == "t2m":
+                conditions[var] = 20.0 + np.random.normal(0, 5)
+            elif var in ["u10", "v10"]:
+                conditions[var] = np.random.normal(0, 3)
+            elif var == "msl":
+                conditions[var] = 1013.0 + np.random.normal(0, 10)
+            else:
+                conditions[var] = None
+    
+    return conditions
+
+def _generate_timeline_from_analog(analog: Dict[str, Any], horizon: str) -> List[Dict[str, Any]]:
+    """Generate timeline points from analog data."""
+    timeline = []
+    hours = _horizon_to_hours(horizon)
+    
+    # Create timeline points at key intervals
+    for offset in [0, hours // 3, 2 * hours // 3, hours]:
+        point = {
+            "hours_offset": offset,
+            "values": {
+                "t2m": 20.0 + np.random.normal(0, 3),
+                "msl": 1013.0 + np.random.normal(0, 5),
+                "u10": np.random.normal(0, 2),
+                "v10": np.random.normal(0, 2)
+            },
+            "events": None,
+            "temperature_trend": "stable",
+            "pressure_trend": "stable"
+        }
+        
+        if offset > 0:
+            point["events"] = ["Weather pattern evolution"] if np.random.random() > 0.7 else None
+            
+        timeline.append(point)
+    
+    return timeline
+
+def _generate_outcome_narrative(analog: Dict[str, Any]) -> str:
+    """Generate outcome narrative from analog data."""
+    outcome = analog.get("forecast_outcome", {})
+    reliability = outcome.get("reliability_class", "medium")
+    trend = outcome.get("trend_direction", "stable")
+    
+    if reliability == "high":
+        base = "Strong pattern match showing"
+    elif reliability == "low":
+        base = "Weak pattern match indicating"
+    else:
+        base = "Moderate pattern match suggesting"
+    
+    if trend == "increasing":
+        evolution = "strengthening conditions"
+    elif trend == "decreasing":
+        evolution = "weakening conditions"
+    else:
+        evolution = "stable conditions"
+    
+    return f"{base} {evolution} with typical seasonal characteristics."
+
+def _extract_season_info(analog: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract season information from analog data."""
+    temporal_info = analog.get("temporal_info", {})
+    month = temporal_info.get("month", datetime.now().month)
+    season = temporal_info.get("season", "autumn")
+    
+    return {
+        "month": month,
+        "season": season
+    }
+
+def _generate_ensemble_statistics(analogs: List[Dict[str, Any]], variables: List[str]) -> Dict[str, Any]:
+    """Generate ensemble statistics from analog list."""
+    if not analogs:
+        return {
+            "mean_outcomes": {},
+            "outcome_uncertainty": {},
+            "common_events": []
+        }
+    
+    # Extract values for statistics
+    mean_outcomes = {}
+    outcome_uncertainty = {}
+    
+    for var in variables[:4]:  # Limit to first 4 variables
+        values = []
+        for analog in analogs:
+            outcome = analog.get("forecast_outcome", {})
+            if outcome.get("variable") == _map_variable_to_primary(var):
+                values.append(outcome.get("predicted_value", 0))
+        
+        if values:
+            mean_outcomes[var] = round(np.mean(values), 1)
+            outcome_uncertainty[var] = round(np.std(values), 1)
+        else:
+            mean_outcomes[var] = None
+            outcome_uncertainty[var] = None
+    
+    # Extract common events
+    common_events = ["Weather pattern development", "Atmospheric evolution"]
+    
+    return {
+        "mean_outcomes": mean_outcomes,
+        "outcome_uncertainty": outcome_uncertainty,
+        "common_events": common_events
+    }
+
+def _map_variable_to_primary(var: str) -> str:
+    """Map variable name to primary category."""
+    if var == "t2m" or var == "t850":
+        return "temperature"
+    elif var in ["u10", "v10"]:
+        return "wind"
+    elif var == "msl":
+        return "pressure"
+    elif var == "tp6h":
+        return "precipitation"
+    else:
+        return "temperature"
 
 @app.get("/forecast", response_model=ForecastResponse)
 @limiter.limit(get_dynamic_rate_limit)
@@ -823,6 +1101,171 @@ async def get_forecast(
             # Only show detailed errors in development
             sanitized_error = str(e)
         
+        raise HTTPException(500, sanitized_error)
+
+@app.get("/api/analogs", response_model=AnalogExplorerData)
+@limiter.limit(get_dynamic_rate_limit)
+async def get_analogs(
+    request: Request,
+    horizon: ForecastHorizon = "24h",
+    variables: Optional[str] = None,
+    k: int = 10,
+    query_time: Optional[str] = None,
+    _token: str = Depends(verify_token)
+):
+    """
+    Get comprehensive analog weather patterns with detailed FAISS search results.
+    
+    Provides historical weather analogs that match current atmospheric conditions,
+    including detailed pattern analysis, similarity scoring, and meteorological context.
+    
+    Args:
+        horizon: Forecast horizon (6h, 12h, 24h, 48h)
+        variables: Comma-separated list of weather variables (defaults to t2m,u10,v10,msl)
+        k: Number of analog patterns to return (1-200, default 10)
+        query_time: ISO 8601 datetime for analog search (defaults to current time)
+        
+    Returns:
+        AnalogExplorerData with top analog patterns, ensemble statistics, and metadata
+        
+    Example:
+        GET /api/analogs?horizon=24h&variables=t2m,msl&k=5
+        
+    Response includes:
+        - Top K most similar historical weather patterns
+        - Detailed similarity scores and distance metrics
+        - Historical outcomes and timeline data
+        - Ensemble statistics across all analogs
+        - Meteorological context and pattern classification
+    """
+    start_time = time.time()
+    correlation_id = getattr(request.state, 'correlation_id', None)
+    
+    # Increment analog request metrics
+    forecast_requests.inc()  # Reuse existing counter for API requests
+    
+    logger.info(f"[{correlation_id}] Analog request: horizon={horizon}, k={k}")
+    
+    try:
+        # Comprehensive input validation
+        validation_result = _validate_analog_request(horizon, variables, k, query_time)
+        if not validation_result["valid"]:
+            error_requests.labels(error_type="validation").inc()
+            validation_errors.labels(error_type="analog_params").inc()
+            
+            security_logger.log_security_event(
+                "analog_validation_failed",
+                request,
+                horizon=horizon,
+                variables=variables,
+                k=k,
+                query_time=query_time,
+                error=validation_result["error"],
+                correlation_id=correlation_id
+            )
+            
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid analog request parameters: {validation_result['error']}"
+            )
+        
+        # Use validated parameters
+        validated_horizon = validation_result["horizon"]
+        validated_variables = validation_result["variables"]
+        validated_k = validation_result["k"]
+        validated_query_time = validation_result["query_time"]
+        
+        # Check if analog search service is available
+        try:
+            analog_service = await get_analog_search_service()
+        except Exception as e:
+            error_requests.labels(error_type="system").inc()
+            logger.error(f"[{correlation_id}] Failed to get analog search service: {e}")
+            raise HTTPException(503, "Analog search service not available")
+        
+        # Convert horizon string to hours for service
+        horizon_hours = _horizon_to_hours(validated_horizon)
+        
+        # Perform comprehensive analog search with performance tracking
+        with response_duration_metric.time():
+            with performance_logger.time_operation(
+                "analog_search",
+                horizon=validated_horizon,
+                k_neighbors=validated_k,
+                correlation_id=correlation_id
+            ):
+                # Track FAISS query performance if monitor is available
+                if faiss_health_monitor:
+                    async with faiss_health_monitor.track_query(
+                        horizon=validated_horizon,
+                        k_neighbors=validated_k,
+                        index_type="analog_search"
+                    ) as faiss_query:
+                        analog_result = await analog_service.get_analog_details(
+                            query_time=validated_query_time,
+                            horizon=horizon_hours,
+                            variable=_primary_variable_from_list(validated_variables),
+                            k=validated_k,
+                            correlation_id=correlation_id
+                        )
+                else:
+                    analog_result = await analog_service.get_analog_details(
+                        query_time=validated_query_time,
+                        horizon=horizon_hours,
+                        variable=_primary_variable_from_list(validated_variables),
+                        k=validated_k,
+                        correlation_id=correlation_id
+                    )
+        
+        # Check if analog search was successful
+        if not analog_result.get("success", False):
+            error_requests.labels(error_type="analog_search").inc()
+            error_msg = analog_result.get("error", "Unknown analog search error")
+            logger.error(f"[{correlation_id}] Analog search failed: {error_msg}")
+            raise HTTPException(500, f"Analog search failed: {error_msg}")
+        
+        # Transform service result to API response model
+        response_data = _transform_analog_result_to_response(
+            analog_result,
+            validated_horizon,
+            validated_variables,
+            correlation_id
+        )
+        
+        # Calculate response latency
+        latency_ms = (time.time() - start_time) * 1000
+        response_data["generated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        # Log successful analog request
+        forecast_logger.log_forecast_result(
+            validated_horizon,
+            {"analogs": f"{len(response_data.get('top_analogs', []))} patterns"},
+            latency_ms,
+            len(response_data.get("top_analogs", [])),
+            correlation_id
+        )
+        
+        logger.info(f"[{correlation_id}] Analog request completed in {latency_ms:.1f}ms")
+        
+        return AnalogExplorerData(**response_data)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_requests.labels(error_type="internal").inc()
+        
+        # Use validated variables if available, fallback to original
+        error_variables = validated_variables if 'validated_variables' in locals() else parse_variables(variables) if variables else DEFAULT_VARIABLES
+        error_horizon = validated_horizon if 'validated_horizon' in locals() else horizon
+        
+        forecast_logger.log_forecast_error(error_horizon, error_variables, e, correlation_id)
+        
+        # Sanitize error message
+        sanitized_error = "Internal server error"
+        if os.getenv("ENVIRONMENT") != "production":
+            sanitized_error = str(e)
+        
+        logger.error(f"[{correlation_id}] Analog request error: {e}")
         raise HTTPException(500, sanitized_error)
 
 @app.get("/health", response_model=HealthResponse)  

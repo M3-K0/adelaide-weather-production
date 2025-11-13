@@ -1,0 +1,5 @@
+user,request,endpoint,status_code,response_time_ms,timestamp
+2,1,get?horizon=12h&vars=t2m,u10,v10,503,3901,2025-11-12T17:17:32Z
+2,2,get?horizon=24h&vars=t2m,u10,v10,msl,503,1000,2025-11-12T17:17:39Z
+2,3,get?horizon=48h&vars=t2m,u10,v10,msl,cape,503,1019,2025-11-12T17:17:44Z
+2,4,get?horizon=6h&vars=t2m,503,920,2025-11-12T17:17:49Z

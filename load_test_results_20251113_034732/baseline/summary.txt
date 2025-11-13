@@ -1,0 +1,17 @@
+📊 baseline Load Test Results
+================================
+
+📈 Performance Metrics:
+   Total Requests: 20
+   Success Rate: 0.0%
+   Error Rate: 100.0%
+
+⏱️  Response Times:
+   Average: 192.8 ms
+   P50 (Median): 0 ms
+   P95: 0 ms
+   P99: 0 ms
+
+🚀 Throughput:
+   0.87 req/s
+   52.2 req/min

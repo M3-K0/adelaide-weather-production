@@ -1,0 +1,23 @@
+{
+  "scenario": "baseline",
+  "total_requests": 20,
+  "successful_requests": 0,
+  "error_requests": 20,
+  "timeout_requests": 0,
+  "success_rate": 0.00,
+  "error_rate": 100.00,
+  "response_time": {
+    "min_ms": 920,
+    "max_ms": 0,
+    "avg_ms": 192.85,
+    "std_dev_ms": 386.11,
+    "p50_ms": 0,
+    "p95_ms": 0,
+    "p99_ms": 0
+  },
+  "throughput": {
+    "requests_per_second": 0.87,
+    "requests_per_minute": 52.17
+  },
+  "duration_seconds": 23
+}
