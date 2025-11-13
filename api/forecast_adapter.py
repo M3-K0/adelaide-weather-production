@@ -150,6 +150,10 @@ class ForecastAdapter:
             
         except Exception as e:
             logger.error(f"Forecast generation failed: {e}")
+            # Respect global fallback gate
+            allow_fallback = os.getenv("ALLOW_ANALOG_FALLBACK", "false") == "true"
+            if not allow_fallback:
+                raise
             return self._generate_fallback_response(variables)
     
     async def _generate_analog_results(self, horizon_hours: int) -> Dict[str, Any]:

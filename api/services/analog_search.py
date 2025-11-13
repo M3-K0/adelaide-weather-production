@@ -216,6 +216,8 @@ class AnalogSearchService:
         """Initialize analog search service."""
         self.config = config or AnalogSearchConfig()
         self.pool = AnalogSearchPool(self.config)
+        # Fallback is explicitly gated via environment variable
+        self._allow_fallback = os.getenv("ALLOW_ANALOG_FALLBACK", "false").lower() == "true"
         self.core_forecaster = RealTimeAnalogForecaster()
         self.executor = ThreadPoolExecutor(max_workers=self.config.max_workers)
         
@@ -446,24 +448,24 @@ class AnalogSearchService:
                     logger.warning(f"FAISS search validation failed: {validation_result['reason']}")
                     await self._track_degradation_event("validation_failed", validation_result['reason'])
             
-            # Fallback to high-quality mock if FAISS fails
+            # Fallback to high-quality mock if FAISS fails (only if allowed)
+            if not self._allow_fallback:
+                raise RuntimeError("FAISS search unavailable and fallback disabled")
             logger.info(f"Using fallback mock search for {horizon}h (FAISS unavailable)")
             fallback_result = self._generate_fallback_search_result(horizon, k, search_start)
-            
             # Track fallback usage in execution path
-            if METRICS_AVAILABLE:
+            if METRICS_AVAILABLE and analog_fallback_total is not None:
                 analog_fallback_total.inc()
-            
             return fallback_result
             
         except Exception as e:
             logger.error(f"Analog search execution failed: {e}")
+            if not self._allow_fallback:
+                raise
             fallback_result = self._generate_fallback_search_result(horizon, k, search_start)
-            
             # Track fallback usage due to error
-            if METRICS_AVAILABLE:
+            if METRICS_AVAILABLE and analog_fallback_total is not None:
                 analog_fallback_total.inc()
-            
             return fallback_result
     
     def _perform_real_faiss_search(
@@ -1058,6 +1060,8 @@ class AnalogSearchService:
             
             if metadata is None:
                 # Generate mock analog details if metadata unavailable
+                if not self._allow_fallback:
+                    raise RuntimeError("Metadata unavailable and fallback disabled")
                 return self._generate_mock_analog_details(search_result, variable)
             
             # Extract details for each analog
@@ -1114,6 +1118,8 @@ class AnalogSearchService:
             
         except Exception as e:
             logger.error(f"[{correlation_id}] Failed to extract analog details: {e}")
+            if not self._allow_fallback:
+                raise
             return self._generate_mock_analog_details(search_result, variable)
     
     def _generate_variable_outcome(

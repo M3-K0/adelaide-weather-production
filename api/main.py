@@ -770,27 +770,39 @@ OUTCOMES_VARIABLE_MAP = {
 _data_cache = {}
 
 def _load_outcomes_data(horizon: str):
-    """Load and cache outcomes and metadata for a given horizon."""
+    """Load and cache outcomes and metadata for a given horizon.
+
+    Uses OUTCOMES_DIR env var if provided; otherwise resolves repo-relative
+    paths to support different environments (WSL, CI, containers).
+    """
     if horizon in _data_cache:
         return _data_cache[horizon]
-    
+
     try:
         import numpy as np
         import pandas as pd
+        from pathlib import Path
         
-        outcomes_path = f"/home/micha/adelaide-weather-final/outcomes/outcomes_{horizon}.npy"
-        metadata_path = f"/home/micha/adelaide-weather-final/outcomes/metadata_{horizon}_clean.parquet"
-        
-        outcomes = np.load(outcomes_path)
-        metadata = pd.read_parquet(metadata_path)
-        
+        base_dir_env = os.getenv("OUTCOMES_DIR")
+        if base_dir_env:
+            base = Path(base_dir_env)
+        else:
+            # Resolve repo root: api/main.py -> repo_root
+            base = Path(__file__).resolve().parents[1] / "outcomes"
+
+        outcomes_path = base / f"outcomes_{horizon}.npy"
+        metadata_path = base / f"metadata_{horizon}_clean.parquet"
+
+        outcomes = np.load(str(outcomes_path))
+        metadata = pd.read_parquet(str(metadata_path))
+
         _data_cache[horizon] = {
             "outcomes": outcomes,
             "metadata": metadata
         }
-        
+
         return _data_cache[horizon]
-        
+
     except Exception as e:
         logger.error(f"Failed to load outcomes data for horizon {horizon}: {e}")
         return None
@@ -900,8 +912,8 @@ def _extract_initial_conditions(analog: Dict[str, Any], variables: List[str]) ->
     """Extract initial conditions from analog data using real outcomes data."""
     conditions = {}
     
-    # Get the analog index to extract from outcomes data
-    analog_index = analog.get("index")
+    # Get the analog index to extract from outcomes data (service uses 'analog_index')
+    analog_index = analog.get("analog_index", analog.get("index"))
     if analog_index is None:
         # Fallback to minimal conditions if no index available
         for var in variables:
@@ -960,7 +972,7 @@ def _generate_timeline_from_analog(analog: Dict[str, Any], horizon: str) -> List
     hours = _horizon_to_hours(horizon)
     
     # Get the analog index to extract from outcomes data
-    analog_index = analog.get("index")
+    analog_index = analog.get("analog_index", analog.get("index"))
     if analog_index is None:
         # Return empty timeline if no index available
         return timeline
@@ -1045,7 +1057,7 @@ def _generate_outcome_narrative(analog: Dict[str, Any]) -> str:
 def _extract_season_info(analog: Dict[str, Any]) -> Dict[str, Any]:
     """Extract season information from analog data using real metadata."""
     # Get the analog index to extract from metadata
-    analog_index = analog.get("index")
+    analog_index = analog.get("analog_index", analog.get("index"))
     horizon = analog.get("horizon", "24h")
     
     # Load the actual metadata
