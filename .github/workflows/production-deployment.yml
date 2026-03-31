@@ -89,26 +89,23 @@ jobs:
             exit 1
           fi
           
+      # TODO(I2): Security Validation — not implemented.
+      # When ready, integrate a container image scanner (e.g., Trivy, Grype) to
+      # check the target image tag for critical CVEs before allowing production deploy.
       - name: Security Validation
         id: security-validation
         run: |
-          # Run security checks on the specific image tag
-          echo "Running security validation for production deployment..."
-          
-          # Check for critical vulnerabilities
-          # In real implementation, integrate with your security scanning tools
-          echo "✅ Security validation passed"
-          echo "status=passed" >> $GITHUB_OUTPUT
-          
+          echo "WARNING: Security validation is not yet implemented. Passing by default."
+          echo "status=not-implemented" >> $GITHUB_OUTPUT
+
+      # TODO(I2): Performance Baseline Check — not implemented.
+      # When ready, query staging metrics (e.g., Prometheus, Datadog) to compare
+      # p95 latency and error rate against baseline thresholds before promoting.
       - name: Performance Baseline Check
         id: performance-check
         run: |
-          # Validate performance baselines
-          echo "Checking performance baselines..."
-          
-          # In real implementation, check performance metrics from staging
-          echo "✅ Performance baseline validation passed"
-          echo "status=passed" >> $GITHUB_OUTPUT
+          echo "WARNING: Performance baseline check is not yet implemented. Passing by default."
+          echo "status=not-implemented" >> $GITHUB_OUTPUT
           
       - name: Change Freeze Check
         id: change-freeze-check
@@ -178,17 +175,15 @@ jobs:
           echo "✅ Cluster health check passed"
           echo "status=healthy" >> $GITHUB_OUTPUT
           
+      # TODO(I2): Capacity and Resource Check — not implemented.
+      # When ready, query node allocatable CPU/memory and compare against the
+      # resource requests in production-values.yaml to confirm the cluster can
+      # run both blue and green deployments simultaneously.
       - name: Capacity and Resource Check
         id: capacity-check
         run: |
-          # Check available resources
-          kubectl top nodes || echo "Metrics server not available"
-          kubectl get nodes -o wide
-          
-          # Check for resource capacity
-          # In real implementation, validate sufficient CPU/memory for blue-green deployment
-          echo "✅ Sufficient capacity available"
-          echo "status=sufficient" >> $GITHUB_OUTPUT
+          echo "WARNING: Capacity check is not yet implemented. Passing by default."
+          echo "status=not-implemented" >> $GITHUB_OUTPUT
           
       - name: Dependencies Health Check
         id: dependencies-check
