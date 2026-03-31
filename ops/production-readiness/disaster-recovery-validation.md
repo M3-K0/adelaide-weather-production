@@ -1,15 +1,22 @@
 # Disaster Recovery & Business Continuity Validation
 
-**System:** Adelaide Weather Forecast Application  
-**Assessment Date:** 2025-10-29  
-**Assessment Type:** Pre-Production DR/BC Validation  
-**Recovery Objectives:** RTO: 4 hours, RPO: 1 hour  
+> **WARNING (I4, 2026-03-31):** This document has NOT been validated through
+> actual failover testing. The "PRODUCTION READY" status below is based on
+> design review only -- no RTO/RPO targets have been verified under real
+> failure conditions. Do not rely on the stated recovery times until a
+> tabletop exercise or live drill has been completed and the results
+> recorded here.
+
+**System:** Adelaide Weather Forecast Application
+**Assessment Date:** 2025-10-29
+**Assessment Type:** Pre-Production DR/BC Validation
+**Recovery Objectives:** RTO: 4 hours, RPO: 1 hour
 
 ---
 
 ## Executive Summary
 
-**DISASTER RECOVERY STATUS: ✅ PRODUCTION READY**
+**DISASTER RECOVERY STATUS: UNVALIDATED (see warning above)**
 
 The Adelaide Weather Forecast application implements a **comprehensive disaster recovery and business continuity framework** designed for rapid recovery from various failure scenarios. The DR strategy leverages cloud-native resilience patterns and automated recovery procedures.
 
