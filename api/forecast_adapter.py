@@ -142,13 +142,18 @@ class ForecastAdapter:
             
             # Convert forecaster output to API format
             api_response = {}
-            
+
             for api_var in variables:
                 api_response[api_var] = self._convert_variable_result(
                     api_var, forecast_result, analog_results
                 )
-            
-            logger.info(f"Successfully generated forecast for {len(variables)} variables")
+
+            # Surface fallback_mode flag so clients know when results are from mock data (M7)
+            is_fallback = analog_results.get('search_metadata', {}).get('fallback_mode', False)
+            api_response['_fallback_mode'] = is_fallback
+
+            logger.info(f"Successfully generated forecast for {len(variables)} variables"
+                        f"{' (FALLBACK MODE)' if is_fallback else ''}")
             return api_response
             
         except Exception as e:
@@ -682,9 +687,9 @@ class ForecastAdapter:
             Fallback response with mock data
         """
         logger.warning("Generating fallback response due to forecaster failure")
-        
+
         fallback_response = {}
-        
+
         for var in variables:
             # Generate reasonable mock values based on variable type
             if var == 't2m':
@@ -706,7 +711,7 @@ class ForecastAdapter:
                 # Generic fallback
                 value = 0.0
                 p05, p95 = -1.0, 1.0
-            
+
             fallback_response[var] = {
                 'value': value,
                 'p05': p05,
@@ -715,7 +720,10 @@ class ForecastAdapter:
                 'available': True,  # Mark as available even though it's mock data
                 'analog_count': 25  # Mock analog count
             }
-        
+
+        # Surface fallback flag so clients can detect mock data (M7)
+        fallback_response['_fallback_mode'] = True
+
         return fallback_response
     
     def prepare_forecast_response(self, horizon: str, variables: List[str], 

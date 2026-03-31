@@ -306,11 +306,11 @@ async def verify_token(
         error_requests.labels(error_type="auth").inc()
         security_violations.labels(violation_type="invalid_token_format").inc()
         
-        # Redacted token for logging (first 8 chars + "...")
-        token_hint = credentials.credentials[:8] + "..." if len(credentials.credentials) > 8 else credentials.credentials
+        # Hashed token hint for log correlation (M2: avoid leaking token prefix)
+        token_hint = hashlib.sha256(credentials.credentials.encode()).hexdigest()[:12]
         security_logger.log_auth_attempt(
-            request, 
-            success=False, 
+            request,
+            success=False,
             token_hint=token_hint
         )
         raise HTTPException(
@@ -318,16 +318,16 @@ async def verify_token(
             detail="Invalid authentication token format",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     # Check if this is the current API token
     if not token_manager.is_current_token(credentials.credentials):
         error_requests.labels(error_type="auth").inc()
         security_violations.labels(violation_type="wrong_token").inc()
-        # Redacted token for logging
-        token_hint = credentials.credentials[:8] + "..." if len(credentials.credentials) > 8 else credentials.credentials
+        # Hashed token hint for log correlation (M2: avoid leaking token prefix)
+        token_hint = hashlib.sha256(credentials.credentials.encode()).hexdigest()[:12]
         security_logger.log_auth_attempt(
-            request, 
-            success=False, 
+            request,
+            success=False,
             token_hint=token_hint
         )
         raise HTTPException(
@@ -335,9 +335,9 @@ async def verify_token(
             detail="Invalid authentication token",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # Log successful authentication with redacted token
-    token_hint = credentials.credentials[:8] + "..." if len(credentials.credentials) > 8 else credentials.credentials
+
+    # Log successful authentication with hashed token hint (M2: avoid leaking token prefix)
+    token_hint = hashlib.sha256(credentials.credentials.encode()).hexdigest()[:12]
     security_logger.log_auth_attempt(
         request, 
         success=True, 
@@ -462,6 +462,7 @@ class ForecastResponse(BaseModel):
     versions: VersionInfo = Field(..., description="System versions")
     hashes: HashInfo = Field(..., description="System hashes")
     latency_ms: float = Field(..., description="Response latency")
+    fallback_mode: bool = Field(False, description="True when FAISS was unavailable and results are from mock analog fallback")
 
 class HealthCheck(BaseModel):
     """Individual health check result."""
@@ -506,8 +507,8 @@ async def startup_event():
     """Initialize the forecasting system with health validation."""
     global forecast_adapter, faiss_health_monitor, config_drift_detector, system_health
     
-    logger.info("🚀 Starting Adelaide Weather Forecasting API")
-    logger.info("📋 Initializing forecast adapter with core system...")
+    logger.info("[STARTUP] Starting Adelaide Weather Forecasting API")
+    logger.info("[INIT] Initializing forecast adapter with core system...")
     
     try:
         # Run startup validation first
@@ -515,7 +516,7 @@ async def startup_event():
         validation_passed = validator.run_expert_startup_validation()
         
         if not validation_passed:
-            logger.error("❌ Startup validation failed - system not ready")
+            logger.error("[FAIL] Startup validation failed - system not ready")
             system_health = {"ready": False, "error": "Startup validation failed"}
             return
             
@@ -523,15 +524,15 @@ async def startup_event():
         forecast_adapter = ForecastAdapter()
         
         # Initialize enhanced health checker
-        logger.info("🏥 Initializing enhanced health checker...")
+        logger.info("[HEALTH] Initializing enhanced health checker...")
         initialize_health_checker(forecast_adapter)
         
         # Initialize FAISS health monitoring
-        logger.info("🔍 Initializing FAISS health monitoring...")
+        logger.info("[FAISS] Initializing FAISS health monitoring...")
         faiss_health_monitor = await get_faiss_health_monitor()
         
         # Initialize configuration drift monitoring
-        logger.info("📊 Initializing configuration drift monitoring...")
+        logger.info("[METRICS] Initializing configuration drift monitoring...")
         config_drift_detector = ConfigurationDriftDetector(
             enable_metrics=True,
             enable_webhooks=None,  # Use environment variable
@@ -541,9 +542,9 @@ async def startup_event():
         # Start drift monitoring in background
         drift_monitoring_started = config_drift_detector.start_monitoring()
         if drift_monitoring_started:
-            logger.info("✅ Configuration drift monitoring started")
+            logger.info("[OK] Configuration drift monitoring started")
         else:
-            logger.warning("⚠️ Configuration drift monitoring failed to start")
+            logger.warning("[WARN] Configuration drift monitoring failed to start")
         
         # Get adapter health status
         adapter_health = await forecast_adapter.get_system_health()
@@ -565,17 +566,17 @@ async def startup_event():
         compression_enabled = perf_stats['compression']['enabled']
         rate_limit = perf_stats['rate_limiting']['limit_per_minute']
         
-        logger.info("✅ Adelaide Weather Forecasting API ready")
-        logger.info(f"🎯 Available endpoints: /forecast, /api/analogs, /health, /health/detailed, /health/live, /health/ready, /metrics, /health/faiss, /admin/performance")
-        logger.info(f"🔒 Authentication: Enabled (secure token required)")
-        logger.info(f"🗜️ Compression: {'Enabled' if compression_enabled else 'Disabled'} (min size: {perf_stats['compression']['minimum_size_bytes']} bytes)")
-        logger.info(f"⚡ Rate limiting: {rate_limit}/minute")
-        logger.info(f"🔗 Adapter status: {adapter_health}")
-        logger.info(f"📊 FAISS monitoring: {faiss_health['status']}")
-        logger.info(f"🏥 Enhanced health endpoints available at /health/detailed")
+        logger.info("[OK] Adelaide Weather Forecasting API ready")
+        logger.info(f"[ENDPOINTS] Available endpoints: /forecast, /api/analogs, /health, /health/detailed, /health/live, /health/ready, /metrics, /health/faiss, /admin/performance")
+        logger.info(f"[AUTH] Authentication: Enabled (secure token required)")
+        logger.info(f"[COMPRESS] Compression: {'Enabled' if compression_enabled else 'Disabled'} (min size: {perf_stats['compression']['minimum_size_bytes']} bytes)")
+        logger.info(f"[RATELIMIT] Rate limiting: {rate_limit}/minute")
+        logger.info(f"[ADAPTER] Adapter status: {adapter_health}")
+        logger.info(f"[METRICS] FAISS monitoring: {faiss_health['status']}")
+        logger.info(f"[HEALTH] Enhanced health endpoints available at /health/detailed")
         
     except Exception as e:
-        logger.error(f"💥 Startup failed: {e}")
+        logger.error(f"[FATAL] Startup failed: {e}")
         system_health = {"ready": False, "error": str(e)}
 
 def _generate_forecast_narrative(horizon: str, variables: Dict[str, VariableResult], wind: Optional[WindResult]) -> str:
@@ -1309,6 +1310,9 @@ async def get_forecast(
                         variables=validated_variables
                     )
         
+        # Extract fallback_mode metadata before iterating over variable results (M7)
+        is_fallback_mode = forecast_result.pop('_fallback_mode', False)
+
         # Build response using validated variables
         # The adapter returns the results in the expected API format
         variable_results = {}
@@ -1403,11 +1407,12 @@ async def get_forecast(
                 index=hashlib.sha256(str(system_health.get("faiss_health", {})).encode()).hexdigest()[:7],
                 datasets=hashlib.sha256(str(forecast_result).encode()).hexdigest()[:7]
             ),
-            latency_ms=latency_ms
+            latency_ms=latency_ms,
+            fallback_mode=is_fallback_mode
         )
-        
+
         return response
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1709,7 +1714,7 @@ async def get_health(request: Request):
         return response
         
     except Exception as e:
-        logger.error(f"💥 Health check error: {e}")
+        logger.error(f"[ERROR] Health check error: {e}")
         # Sanitize error message to prevent information leakage
         sanitized_error = "Health check failed"
         if os.getenv("ENVIRONMENT") != "production":
@@ -1778,7 +1783,7 @@ async def get_metrics(request: Request, _token: str = Depends(verify_token)):
         return Response(content=combined_metrics, media_type=CONTENT_TYPE_LATEST)
         
     except Exception as e:
-        logger.error(f"💥 Metrics error: {e}")
+        logger.error(f"[ERROR] Metrics error: {e}")
         raise HTTPException(500, f"Metrics generation failed: {str(e)}")
 
 @app.get("/health/faiss")
@@ -1800,7 +1805,7 @@ async def get_faiss_health(request: Request, _token: str = Depends(verify_token)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"💥 FAISS health check error: {e}")
+        logger.error(f"[ERROR] FAISS health check error: {e}")
         raise HTTPException(500, f"FAISS health check failed: {str(e)}")
 
 @app.get("/admin/performance")
@@ -1835,7 +1840,7 @@ async def get_performance_metrics(request: Request, _token: str = Depends(verify
         return JSONResponse(content=perf_stats)
         
     except Exception as e:
-        logger.error(f"💥 Performance metrics error: {e}")
+        logger.error(f"[ERROR] Performance metrics error: {e}")
         raise HTTPException(500, f"Performance metrics failed: {str(e)}")
 
 @app.exception_handler(HTTPException)
@@ -1913,30 +1918,30 @@ async def shutdown_event():
     """Gracefully shutdown monitoring systems."""
     global faiss_health_monitor, config_drift_detector
     
-    logger.info("🛑 Shutting down Adelaide Weather Forecasting API")
+    logger.info("[SHUTDOWN] Shutting down Adelaide Weather Forecasting API")
     
     # Shutdown FAISS health monitoring
     if faiss_health_monitor:
-        logger.info("📊 Stopping FAISS health monitoring...")
+        logger.info("[METRICS] Stopping FAISS health monitoring...")
         await faiss_health_monitor.stop_monitoring()
         faiss_health_monitor = None
-    
+
     # Shutdown configuration drift monitoring
     if config_drift_detector:
-        logger.info("📊 Stopping configuration drift monitoring...")
+        logger.info("[METRICS] Stopping configuration drift monitoring...")
         config_drift_detector.stop_monitoring()
         config_drift_detector = None
     
-    logger.info("✅ Adelaide Weather API shutdown complete")
+    logger.info("[OK] Adelaide Weather API shutdown complete")
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     host = os.getenv("HOST", "0.0.0.0")
     
-    logger.info(f"🚀 Starting Adelaide Weather API on {host}:{port}")
-    logger.info(f"🗜️ Compression min size: {os.getenv('COMPRESSION_MIN_SIZE', '500')} bytes")
-    logger.info(f"⚡ Rate limit: {os.getenv('RATE_LIMIT_PER_MINUTE', '60')} requests/minute")
-    logger.info(f"🔧 Environment: {os.getenv('ENVIRONMENT', 'development')}")
+    logger.info(f"[STARTUP] Starting Adelaide Weather API on {host}:{port}")
+    logger.info(f"[COMPRESS] Compression min size: {os.getenv('COMPRESSION_MIN_SIZE', '500')} bytes")
+    logger.info(f"[RATELIMIT] Rate limit: {os.getenv('RATE_LIMIT_PER_MINUTE', '60')} requests/minute")
+    logger.info(f"[CONFIG] Environment: {os.getenv('ENVIRONMENT', 'development')}")
     
     uvicorn.run(
         "main:app",
