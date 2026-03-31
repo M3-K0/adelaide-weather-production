@@ -141,7 +141,7 @@ services:
 
   # Redis for caching and session management
   redis:
-    image: redis:7.0-alpine
+    image: redis:7-alpine
     container_name: adelaide-redis
     restart: unless-stopped
     ports:
@@ -156,6 +156,20 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # Redis Exporter for Prometheus metrics
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: adelaide-redis-exporter
+    restart: unless-stopped
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    networks:
+      - weather-network
+    depends_on:
+      - redis
 
   # Node Exporter for system metrics
   node-exporter:

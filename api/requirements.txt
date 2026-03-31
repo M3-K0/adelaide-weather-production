@@ -7,6 +7,8 @@ pydantic==2.5.0
 # Security and middleware
 python-multipart==0.0.6
 slowapi==0.1.9
+# TODO: python-jose 3.3.0 is from June 2020 and effectively unmaintained.
+# Consider migrating to PyJWT or authlib. Requires code changes — do not swap in-place.
 python-jose[cryptography]==3.3.0
 
 # Monitoring and metrics
@@ -29,8 +31,7 @@ pytest-asyncio==0.21.1
 pact-python==2.2.1
 
 # Performance monitoring
-psutil>=5.9.6
-prometheus-client==0.19.0
+psutil==5.9.6
 
 # Calibration monitoring and statistics
 scipy==1.10.1

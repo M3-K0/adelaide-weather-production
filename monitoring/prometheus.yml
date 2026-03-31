@@ -31,10 +31,10 @@ scrape_configs:
       - targets: ['localhost:9090']
     scrape_interval: 15s
     
-  # Redis monitoring
+  # Redis monitoring (via redis_exporter)
   - job_name: 'redis'
     static_configs:
-      - targets: ['redis:6379']
+      - targets: ['redis-exporter:9121']
     scrape_interval: 30s
 
 # Alertmanager configuration (if needed)
