@@ -10,6 +10,7 @@ Author: Web Service Layer
 Version: 1.0.0 - Production Web Service
 """
 
+import re
 from enum import Enum
 from typing import Dict, List, Optional, Union
 from pydantic import BaseModel
@@ -261,7 +262,7 @@ def parse_variables(vars_param: Optional[str]) -> List[str]:
     for var in variables:
         if len(var) > 20:
             raise ValueError(f"Variable name too long: {var}")
-        if not var.replace('_', '').replace('0', '').replace('1', '').replace('2', '').replace('3', '').replace('4', '').replace('5', '').replace('6', '').replace('7', '').replace('8', '').replace('9', '').isalpha():
+        if not re.match(r'^[a-zA-Z0-9_]{1,20}$', var):
             raise ValueError(f"Invalid variable name format: {var}")
         
     return variables

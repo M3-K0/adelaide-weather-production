@@ -47,11 +47,14 @@ class SecurityConfig:
     VARIABLE_PATTERN = re.compile(r'^[a-zA-Z0-9_]{1,20}$')
     TOKEN_PATTERN = re.compile(r'^[a-zA-Z0-9\-_.]{8,128}$')
     
-    # Dangerous patterns for injection detection
+    # Dangerous patterns for injection detection.
+    # NOTE: This is a basic heuristic defense-in-depth layer, not a WAF replacement.
+    # Word boundaries (\b) reduce false positives on benign inputs containing
+    # substrings like "select" or "update".
     SQL_INJECTION_PATTERNS = [
         re.compile(r'(\bunion\b|\bselect\b|\binsert\b|\bupdate\b|\bdelete\b|\bdrop\b)', re.IGNORECASE),
         re.compile(r'(\'|\"|\;|\-\-|\bor\b\s+\d+\s*=\s*\d+|\band\b\s+\d+\s*=\s*\d+)', re.IGNORECASE),
-        re.compile(r'(\bexec\b|\bexecute\b|\bsp_\b|\bxp_\b)', re.IGNORECASE),
+        re.compile(r'(\bexec\b|\bexecute\b|\bsp_\w+\b|\bxp_\w+\b)', re.IGNORECASE),
     ]
     
     XSS_PATTERNS = [
@@ -76,7 +79,7 @@ class SecurityConfig:
         'X-Frame-Options': 'DENY',
         'X-XSS-Protection': '1; mode=block',
         'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-        'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'",
+        'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'",
         'Referrer-Policy': 'strict-origin-when-cross-origin',
         'Permissions-Policy': 'geolocation=(), camera=(), microphone=()'
     }

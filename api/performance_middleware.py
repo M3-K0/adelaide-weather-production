@@ -22,9 +22,10 @@ class ForecastCache:
     In-memory cache for forecast requests with TTL and intelligent invalidation
     """
     
-    def __init__(self, default_ttl: int = 300):  # 5 minutes default
+    def __init__(self, default_ttl: int = 300, max_size: int = 1000):  # 5 minutes default
         self.cache: Dict[str, Dict[str, Any]] = {}
         self.default_ttl = default_ttl
+        self.max_size = max_size
         self.hit_count = 0
         self.miss_count = 0
         
@@ -53,17 +54,29 @@ class ForecastCache:
         logger.debug(f"Cache HIT for {cache_key}")
         return entry['data']
     
+    def _evict_oldest(self) -> None:
+        """Evict the oldest entry when cache is at max capacity."""
+        if not self.cache:
+            return
+        oldest_key = min(self.cache, key=lambda k: self.cache[k]['created_at'])
+        del self.cache[oldest_key]
+        logger.debug(f"Cache EVICT oldest entry {oldest_key}")
+
     def set(self, horizon: str, variables: str, data: Dict[str, Any], ttl: Optional[int] = None) -> None:
-        """Cache forecast data with TTL"""
+        """Cache forecast data with TTL. Evicts oldest entry if at max_size."""
         cache_key = self._generate_key(horizon, variables)
         expires_at = datetime.now() + timedelta(seconds=ttl or self.default_ttl)
-        
+
+        # Evict oldest entry if at capacity (skip if key already exists — it's an update)
+        if cache_key not in self.cache and len(self.cache) >= self.max_size:
+            self._evict_oldest()
+
         self.cache[cache_key] = {
             'data': data,
             'expires_at': expires_at,
             'created_at': datetime.now()
         }
-        
+
         logger.debug(f"Cache SET for {cache_key}, expires at {expires_at}")
     
     def invalidate_pattern(self, pattern: str) -> int:
