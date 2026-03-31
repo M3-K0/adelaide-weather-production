@@ -97,7 +97,35 @@ class RealTimeAnalogForecaster:
         self.min_analogs = 10      # Minimum analogs for reliable forecast
         self.max_analogs = 50      # Maximum analogs to consider
         self.confidence_threshold = 0.8  # Minimum confidence for "high confidence"
+
+        # Distance-based quality cutoff (M8): filter outlier analogs before weighting.
+        # Analogs with distance > mean + distance_cutoff_sigma * std are removed,
+        # but at least min_analogs are always retained.
+        self.distance_cutoff_sigma = 2.0  # Number of std deviations above mean
         
+    def filter_by_distance(self, distances: np.ndarray) -> np.ndarray:
+        """Return boolean mask removing outlier analogs by distance.
+
+        Analogs whose distance exceeds mean + distance_cutoff_sigma * std
+        are marked False, but at least self.min_analogs are always kept.
+        """
+        if len(distances) <= self.min_analogs:
+            return np.ones(len(distances), dtype=bool)
+
+        mean_d = np.mean(distances)
+        std_d = np.std(distances)
+        threshold = mean_d + self.distance_cutoff_sigma * std_d
+        mask = distances <= threshold
+
+        # Guarantee minimum analog count: if too many are filtered out,
+        # keep the closest min_analogs regardless of threshold.
+        if np.sum(mask) < self.min_analogs:
+            sorted_idx = np.argsort(distances)
+            mask[:] = False
+            mask[sorted_idx[:self.min_analogs]] = True
+
+        return mask
+
     def load_outcomes_for_horizon(self, horizon: int) -> bool:
         """Load outcomes and metadata for specified horizon."""
         if horizon in self.outcomes_cache:
@@ -180,16 +208,12 @@ class RealTimeAnalogForecaster:
             # Cumulative weights
             cumsum_weights = np.cumsum(sorted_weights)
             
-            # Find 5th and 95th percentiles
-            q05_idx = np.searchsorted(cumsum_weights, 0.05)
-            q95_idx = np.searchsorted(cumsum_weights, 0.95)
-            
-            # Ensure valid indices
-            q05_idx = max(0, min(q05_idx, len(sorted_values) - 1))
-            q95_idx = max(0, min(q95_idx, len(sorted_values) - 1))
-            
-            q05 = sorted_values[q05_idx]
-            q95 = sorted_values[q95_idx]
+            # Interpolated weighted quantiles (5th and 95th percentiles)
+            # Use midpoint cumulative weights for unbiased quantile estimation,
+            # then linearly interpolate between sorted values.
+            midpoint_cdf = cumsum_weights - sorted_weights / 2.0
+            q05 = float(np.interp(0.05, midpoint_cdf, sorted_values))
+            q95 = float(np.interp(0.95, midpoint_cdf, sorted_values))
             
             # Weighted standard deviation
             weighted_var = np.average((valid_values - weighted_mean)**2, weights=valid_weights)
@@ -267,7 +291,17 @@ class RealTimeAnalogForecaster:
             analog_outcomes = analog_outcomes[:max_analogs]
             distances = distances[:max_analogs]
             analog_indices = analog_indices[:max_analogs]
-            
+
+            # Distance-based quality cutoff (M8): remove outlier analogs
+            quality_mask = self.filter_by_distance(distances)
+            if np.sum(quality_mask) < len(quality_mask):
+                n_removed = len(quality_mask) - np.sum(quality_mask)
+                logger.info(f"Distance cutoff removed {n_removed} outlier analog(s) for {horizon}h forecast")
+                analog_outcomes = analog_outcomes[quality_mask]
+                distances = distances[quality_mask]
+                analog_indices = analog_indices[quality_mask]
+                max_analogs = len(analog_indices)
+
             # Compute adaptive weights
             weights = self.compute_analog_weights(distances, horizon)
             
