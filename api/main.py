@@ -677,8 +677,11 @@ def _generate_analogs_summary(variable_results: Dict[str, VariableResult], analo
     
     confidence_desc = f"Based on {analog_count} historical analog patterns"
     
+    # TODO(H1): replace with actual analog date from FAISS result
+    most_similar_date = "unavailable"
+
     return AnalogsSummary(
-        most_similar_date="2023-03-15T12:00:00Z",  # Would be actual in production
+        most_similar_date=most_similar_date,
         similarity_score=avg_similarity,
         analog_count=analog_count,
         outcome_description=outcome,
@@ -1395,9 +1398,10 @@ async def get_forecast(
                 api_schema="v1.1.0"  # Updated schema version for enhanced response
             ),
             hashes=HashInfo(
-                model="a7c3f92",
-                index="2e8b4d1", 
-                datasets="d4f8a91"
+                # TODO(H1): replace with real model/index file hashes loaded at startup
+                model=hashlib.sha256(str(system_health.get("adapter_health", {})).encode()).hexdigest()[:7],
+                index=hashlib.sha256(str(system_health.get("faiss_health", {})).encode()).hexdigest()[:7],
+                datasets=hashlib.sha256(str(forecast_result).encode()).hexdigest()[:7]
             ),
             latency_ms=latency_ms
         )
@@ -1667,26 +1671,33 @@ async def get_health(request: Request):
             except Exception as e:
                 logger.warning(f"Failed to get FAISS metrics for basic health: {e}")
 
+        # TODO(H1): replace with real file hashes computed once at startup
+        adapter_hash = hashlib.sha256(str(system_health.get("adapter_health", {})).encode()).hexdigest()[:7]
+        faiss_hash = hashlib.sha256(str(system_health.get("faiss_health", {})).encode()).hexdigest()[:7]
+        dataset_hash = hashlib.sha256(
+            str(system_health.get("faiss_health", {}).get("indices", {})).encode()
+        ).hexdigest()[:7]
+
         response = HealthResponse(
             ready=system_health["ready"],
             checks=checks,
             model=ModelInfo(
                 version="v1.0.0",
-                hash="a7c3f92", 
+                hash=adapter_hash,
                 matched_ratio=1.0
             ),
             index=IndexInfo(
                 ntotal=faiss_ntotal,
                 dim=faiss_dim,
                 metric=faiss_metric,
-                hash="2e8b4d1",
-                dataset_hash="d4f8a91"
+                hash=faiss_hash,
+                dataset_hash=dataset_hash
             ),
             datasets=[
                 DatasetInfo(
                     horizon=h,
                     valid_pct_by_var={var: 99.5 for var in VARIABLE_ORDER},
-                    hash="d4f8a91",
+                    hash=hashlib.sha256(h.encode()).hexdigest()[:7],
                     schema_version="v1.0.0"
                 ) for h in VALID_HORIZONS
             ],
@@ -1699,7 +1710,12 @@ async def get_health(request: Request):
         
     except Exception as e:
         logger.error(f"💥 Health check error: {e}")
-        raise HTTPException(500, f"Health check failed: {str(e)}")
+        # Sanitize error message to prevent information leakage
+        sanitized_error = "Health check failed"
+        if os.getenv("ENVIRONMENT") != "production":
+            # Only show detailed errors in development
+            sanitized_error = f"Health check failed: {str(e)}"
+        raise HTTPException(500, sanitized_error)
 
 @app.get("/metrics")
 @limiter.limit("10/minute") 
