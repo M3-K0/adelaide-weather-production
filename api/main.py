@@ -1296,12 +1296,12 @@ async def get_forecast(
                         k_neighbors=50,  # Default k for analog search
                         index_type="auto"
                     ) as faiss_query:
-                        forecast_result = forecast_adapter.forecast_with_uncertainty(
+                        forecast_result = await forecast_adapter.forecast_with_uncertainty(
                             horizon=validated_horizon,
                             variables=validated_variables
                         )
                 else:
-                    forecast_result = forecast_adapter.forecast_with_uncertainty(
+                    forecast_result = await forecast_adapter.forecast_with_uncertainty(
                         horizon=validated_horizon,
                         variables=validated_variables
                     )
@@ -1826,10 +1826,10 @@ async def get_performance_metrics(request: Request, _token: str = Depends(verify
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Custom HTTP exception handler with sanitized error messages."""
     # Sanitize error message to prevent information leakage
-    from security_middleware import SecurityMiddleware
+    from api.security_middleware import SecurityMiddleware
     security_middleware = SecurityMiddleware(None)
     sanitized_message = security_middleware._sanitize_error_message(str(exc.detail))
-    
+
     # Log the exception for monitoring
     correlation_id = getattr(request.state, 'correlation_id', None)
     logger.warning(
@@ -1876,7 +1876,7 @@ async def general_exception_handler(request: Request, exc: Exception):
         sanitized_message = "Internal server error"
     else:
         # Even in development, sanitize the message
-        from security_middleware import SecurityMiddleware
+        from api.security_middleware import SecurityMiddleware
         security_middleware = SecurityMiddleware(None)
         sanitized_message = security_middleware._sanitize_error_message(str(exc))
     
