@@ -29,9 +29,10 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Set thread control for performance
-os.environ['OMP_NUM_THREADS'] = '2'
-os.environ['TORCH_NUM_THREADS'] = '2'
+# Set thread control for performance (defaults only — respect container/deployment overrides)
+# L1: Use setdefault so pre-configured env vars (e.g. from Docker/K8s) are not overridden
+os.environ.setdefault('OMP_NUM_THREADS', '2')
+os.environ.setdefault('TORCH_NUM_THREADS', '2')
 
 class RealTimeEmbedder:
     """Compact real-time embedding generator with batched horizon processing."""
@@ -137,10 +138,16 @@ class RealTimeEmbedder:
                 logger.warning(f"Missing variables at indices: {missing_vars}")
                 return None
             
-            # Create spatial grid (simplified - single point expanded)
-            # Real implementation would use spatial interpolation
+            # M5: Spatial expansion limitation — each variable is a single scalar
+            # broadcast to a uniform 16x16 grid. The CNN was trained on spatially
+            # varying ERA5 fields, so uniform grids will produce degraded embeddings
+            # with reduced spatial feature discrimination.
+            # TODO(M5): If the input data source provides gridded fields (e.g. ERA5
+            # reanalysis on a lat/lon grid), implement spatial interpolation
+            # (e.g. scipy.interpolate.RegularGridInterpolator) to produce realistic
+            # spatial gradients instead of flat fills.
             weather_grid = np.zeros((self.num_variables, *self.spatial_shape))
-            
+
             for i, value in enumerate(variables):
                 if value is not None:
                     weather_grid[i, :, :] = float(value)
