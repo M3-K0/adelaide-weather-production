@@ -8,6 +8,7 @@ Handles checkpoint loading issues by extracting just the model weights.
 Implements the exact architecture from the trained model with robust loading.
 """
 
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -17,7 +18,6 @@ import hashlib
 from pathlib import Path
 from typing import Optional, Dict, Tuple
 import logging
-from typing import Dict, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +182,7 @@ class WeatherCNNEncoder(nn.Module):
     This matches the exact architecture from the training checkpoint.
     """
     
-    def __init__(self, embedding_dim=256, num_variables=11):
+    def __init__(self, embedding_dim=256, num_variables=9):
         super().__init__()
         
         self.embedding_dim = embedding_dim
@@ -320,7 +320,72 @@ def validate_weight_loading(model: nn.Module, checkpoint_dict: Dict[str, torch.T
     
     return success, stats
 
-def load_model_safe(model_path: Optional[str] = None, device: str = 'cpu', 
+
+def _load_checkpoint_safe(model_path: Path) -> Dict:
+    """Load a PyTorch checkpoint with safe-by-default loading.
+
+    Strategy:
+      1. Try ``weights_only=True`` (safe – only tensors and primitives).
+      2. If that fails (e.g. checkpoint contains pickled custom classes like
+         ``ProductionTrainingConfig``), fall back to ``weights_only=False``
+         **only** when the env var ``ALLOW_UNSAFE_MODEL_LOAD=true`` is set.
+
+    SECURITY NOTE: ``weights_only=False`` allows arbitrary code execution via
+    pickle deserialization.  It should only be enabled for **trusted**
+    checkpoints in controlled environments.
+
+    Args:
+        model_path: Path to the ``.pt`` checkpoint file.
+
+    Returns:
+        The loaded checkpoint dictionary.
+
+    Raises:
+        RuntimeError: If safe loading fails and unsafe loading is not permitted.
+    """
+    # --- Attempt 1: safe loading (weights_only=True) ---
+    safe_load_error = None
+    try:
+        checkpoint = torch.load(
+            model_path, map_location='cpu', weights_only=True
+        )
+        logger.info("Checkpoint loaded safely (weights_only=True)")
+        return checkpoint
+    except Exception as safe_err:
+        safe_load_error = safe_err
+        logger.warning(
+            f"Safe loading failed ({safe_err.__class__.__name__}), "
+            "checking for unsafe-load permission..."
+        )
+
+    # --- Attempt 2: unsafe loading, gated by env var ---
+    allow_unsafe = os.environ.get(
+        'ALLOW_UNSAFE_MODEL_LOAD', ''
+    ).strip().lower() == 'true'
+
+    if not allow_unsafe:
+        raise RuntimeError(
+            "Checkpoint cannot be loaded with weights_only=True and "
+            "unsafe loading is not permitted.  If you trust this "
+            "checkpoint, set the environment variable "
+            "ALLOW_UNSAFE_MODEL_LOAD=true and retry.  "
+            f"Original error: {safe_load_error}"
+        )
+
+    logger.warning(
+        "ALLOW_UNSAFE_MODEL_LOAD=true — loading checkpoint with "
+        "weights_only=False.  This permits arbitrary code execution; "
+        "only use with trusted checkpoints."
+    )
+    import sys
+    sys.modules['__main__'].ProductionTrainingConfig = ProductionTrainingConfig
+    checkpoint = torch.load(
+        model_path, map_location='cpu', weights_only=False
+    )
+    return checkpoint
+
+
+def load_model_safe(model_path: Optional[str] = None, device: str = 'cpu',
                    require_exact_match: bool = True) -> Optional[WeatherCNNEncoder]:
     """Safely load the trained model with robust validation.
     
@@ -351,19 +416,18 @@ def load_model_safe(model_path: Optional[str] = None, device: str = 'cpu',
     
     try:
         # Create model instance with correct architecture
-        model = WeatherCNNEncoder(embedding_dim=256, num_variables=11)
+        model = WeatherCNNEncoder(embedding_dim=256, num_variables=9)
         model_dict = model.state_dict()
         
         logger.info(f"Loading model from {model_path}")
         logger.info(f"Model expects {len(model_dict)} parameters")
         
-        # Add the dummy config class to handle pickle loading
-        import sys
-        sys.modules['__main__'].ProductionTrainingConfig = ProductionTrainingConfig
-        
-        # Load checkpoint
-        checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
-        
+        # Attempt safe loading first (weights_only=True), then fall back
+        # to unsafe loading only when explicitly permitted via env var.
+        # SECURITY: weights_only=False allows arbitrary code execution via
+        # pickle deserialization. Only enable for trusted checkpoints.
+        checkpoint = _load_checkpoint_safe(model_path)
+
         # Extract state dict
         if 'model_state_dict' in checkpoint:
             state_dict = checkpoint['model_state_dict']
@@ -453,7 +517,7 @@ def load_model_safe(model_path: Optional[str] = None, device: str = 'cpu',
         
         # Fallback: create dummy model for testing only
         logger.warning("Creating dummy model for testing (WEIGHTS ARE RANDOM!)")
-        model = WeatherCNNEncoder(embedding_dim=256, num_variables=11)
+        model = WeatherCNNEncoder(embedding_dim=256, num_variables=9)
         model.eval()
         model.to(device)
         model._checkpoint_info = {
@@ -530,10 +594,8 @@ def get_model_info(model_path: Optional[str] = None) -> Dict:
         return {'error': f'Model file not found: {model_path}'}
     
     try:
-        # Load checkpoint metadata
-        import sys
-        sys.modules['__main__'].ProductionTrainingConfig = ProductionTrainingConfig
-        checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
+        # Load checkpoint metadata using safe loading strategy
+        checkpoint = _load_checkpoint_safe(model_path)
         
         info = {
             'path': str(model_path),
