@@ -184,7 +184,7 @@ class BackwardCompatibleTokenManager:
                         info["source"] = "both"  # Available in both places
                 else:
                     info["source"] = "environment"
-            except:
+            except Exception:
                 info["source"] = "environment"
         else:
             info["source"] = "environment"
@@ -210,7 +210,7 @@ class BackwardCompatibleTokenManager:
             secure_token = self.enhanced_manager.get_current_token()
             env_token = os.getenv("API_TOKEN")
             return secure_token == env_token if (secure_token and env_token) else False
-        except:
+        except Exception:
             return False
     
     def _migrate_env_token_to_secure_storage(self, env_token: str) -> None:

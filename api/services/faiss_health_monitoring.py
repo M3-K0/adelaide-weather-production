@@ -486,34 +486,36 @@ class FAISSHealthMonitor:
             async with self._query_lock:
                 self._active_queries.pop(query_id, None)
                 self._completed_queries.append(query_metrics)
-    
+                if len(self._completed_queries) > self._max_samples:
+                    self._completed_queries = self._completed_queries[-self._max_samples:]
+
     def record_fallback(self, horizon: str, reason: str = "index_unavailable"):
         """Record a fallback event when FAISS search fails."""
         current_time = datetime.now(timezone.utc)
-        
+
         # Update counters
         self._fallback_counters["total"] += 1
         if horizon in self._fallback_counters["by_horizon"]:
             self._fallback_counters["by_horizon"][horizon] += 1
-        
+
         # Track by reason
         if reason not in self._fallback_counters["by_reason"]:
             self._fallback_counters["by_reason"][reason] = 0
         self._fallback_counters["by_reason"][reason] += 1
-        
+
         self._fallback_counters["last_fallback_time"] = current_time
-        
+
         # Update degraded mode status
         self._check_degraded_mode()
-        
+
         # Update Prometheus metrics
         self.degraded_mode_counter.labels(
             horizon=horizon,
             reason=reason
         ).inc()
-        
+
         logger.warning(f"FAISS fallback recorded for {horizon}: {reason}")
-    
+
     def set_degraded_mode(self, active: bool, reasons: List[str] = None):
         """Set degraded mode status."""
         if active and not self._degraded_mode_active:
@@ -526,37 +528,37 @@ class FAISSHealthMonitor:
             self._degraded_mode_start_time = None
             self._degraded_mode_reasons = []
             logger.info("FAISS exiting degraded mode")
-    
+
     def _check_degraded_mode(self):
         """Check if system should be in degraded mode based on metrics."""
         current_time = datetime.now(timezone.utc)
         degraded_reasons = []
-        
+
         # Check for recent fallbacks
         if self._fallback_counters["last_fallback_time"]:
             time_since_fallback = (current_time - self._fallback_counters["last_fallback_time"]).total_seconds()
             if time_since_fallback < 300:  # Last fallback within 5 minutes
                 degraded_reasons.append("recent_fallbacks")
-        
+
         # Check high fallback rate
         total_fallbacks = self._fallback_counters["total"]
         if total_fallbacks > 10:  # Arbitrary threshold
             degraded_reasons.append("high_fallback_rate")
-        
+
         # Check for missing indices
         available_indices = len(self._index_health_cache)
         expected_indices = 8  # 4 horizons × 2 index types
         if available_indices < expected_indices * 0.5:  # Less than 50% available
             degraded_reasons.append("missing_indices")
-        
+
         # Update degraded mode status
         should_be_degraded = len(degraded_reasons) > 0
         self.set_degraded_mode(should_be_degraded, degraded_reasons)
-    
+
     def get_last_successful_search(self, horizon: str) -> Optional[datetime]:
         """Get the timestamp of the last successful search for a horizon."""
         return self._last_successful_search.get(horizon)
-    
+
     def get_fallback_counters(self) -> Dict[str, Any]:
         """Get current fallback counter metrics."""
         return {
@@ -570,7 +572,7 @@ class FAISSHealthMonitor:
                 "reasons": list(self._degraded_mode_reasons)
             }
         }
-    
+
     async def _update_index_health(self):
         """Update index health metrics cache."""
         current_time = time.time()
