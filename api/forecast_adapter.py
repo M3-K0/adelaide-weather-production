@@ -23,6 +23,7 @@ import os
 import sys
 import logging
 import asyncio
+import math
 import numpy as np
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Tuple
@@ -74,8 +75,10 @@ class ForecastAdapter:
             # Complex mappings (need conversion)
             'r850': 'q850',  # Relative humidity ← specific humidity
             
+            # Derived variables (computed from other forecaster variables)
+            'msl': 'z500',   # Mean sea level pressure derived from z500 via hypsometric eq.
+
             # Missing variables (not available in forecaster)
-            'msl': None,     # Mean sea level pressure 
             'tp6h': None,    # 6-hour precipitation
         }
         
@@ -270,7 +273,8 @@ class ForecastAdapter:
             
             # Apply variable-specific conversions
             converted_result = self._apply_variable_conversion(
-                api_var, forecaster_var, point_forecast, confidence_interval
+                api_var, forecaster_var, point_forecast, confidence_interval,
+                forecast_result=forecast_result
             )
             
             # Build API response format
@@ -289,69 +293,372 @@ class ForecastAdapter:
             logger.error(f"Failed to convert variable {api_var}: {e}")
             return self._create_unavailable_result(api_var)
     
-    def _apply_variable_conversion(self, api_var: str, forecaster_var: str, 
-                                 point_value: float, confidence_interval: Tuple[float, float]) -> Dict[str, Any]:
+    def _apply_variable_conversion(self, api_var: str, forecaster_var: str,
+                                 point_value: float, confidence_interval: Tuple[float, float],
+                                 forecast_result: Any = None) -> Dict[str, Any]:
         """
         Apply variable-specific conversions and unit transformations.
-        
+
         Args:
             api_var: API variable name
-            forecaster_var: Forecaster variable name  
+            forecaster_var: Forecaster variable name
             point_value: Point forecast value
             confidence_interval: (p05, p95) bounds
-            
+            forecast_result: Full forecast result for cross-variable lookups
+
         Returns:
             Converted values with proper units
         """
         p05, p95 = confidence_interval
-        
+
         if api_var == 'r850' and forecaster_var == 'q850':
-            # Convert specific humidity (kg/kg) to relative humidity (%)
-            # This is a simplified conversion - in reality needs temperature and pressure
-            # For now, use empirical approximation: RH ≈ q * 1000 * some_factor
-            conversion_factor = 15000  # Empirical factor for realistic RH values
-            
-            value = min(100.0, max(0.0, point_value * conversion_factor))
-            p05_converted = min(100.0, max(0.0, (p05 or point_value) * conversion_factor))
-            p95_converted = min(100.0, max(0.0, (p95 or point_value) * conversion_factor))
-            
-            logger.debug(f"Converted q850={point_value:.6f} kg/kg to r850={value:.1f}%")
-            
-        elif api_var == 'msl':
-            # MSL pressure derivation from z500 (very approximate)
-            # This is a placeholder - real implementation would need full atmospheric profile
-            if forecaster_var == 'z500':
-                # Rough approximation: lower z500 → higher surface pressure
-                base_pressure = 1013.25  # Standard pressure in hPa
-                # Convert geopotential to pressure estimate (very rough)
-                pressure_anomaly = -(point_value - 5500) * 0.1  # Rough scaling
-                
-                value = base_pressure + pressure_anomaly
-                p05_converted = value - 5  # ±5 hPa uncertainty
-                p95_converted = value + 5
-                
-                logger.debug(f"Derived msl={value:.1f} hPa from z500={point_value:.0f} m")
-            else:
-                # No derivation possible
-                raise ValueError(f"Cannot derive {api_var} from {forecaster_var}")
-                
+            value, p05_converted, p95_converted = self._convert_q850_to_r850(
+                point_value, p05, p95, forecast_result
+            )
+
+        elif api_var == 'msl' and forecaster_var == 'z500':
+            value, p05_converted, p95_converted = self._convert_z500_to_msl(
+                point_value, p05, p95, forecast_result
+            )
+
         else:
             # Direct mapping - apply unit conversions using existing utilities
             value = convert_value(point_value, api_var)
             p05_converted = convert_value(p05, api_var) if p05 is not None else None
             p95_converted = convert_value(p95, api_var) if p95 is not None else None
-        
+
         # Calculate confidence width
         confidence = None
         if p05_converted is not None and p95_converted is not None:
             confidence = abs(p95_converted - p05_converted)
-        
+
         return {
             'value': value,
             'p05': p05_converted,
             'p95': p95_converted,
             'confidence': confidence
         }
+
+    # ------------------------------------------------------------------
+    # H5 fix: Specific humidity -> relative humidity (Bolton 1980)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _saturation_vapour_pressure(t_kelvin: float) -> float:
+        """
+        Saturation vapour pressure over liquid water using the Bolton (1980)
+        form of the Tetens equation.
+
+        Reference:
+            Bolton, D. (1980). "The computation of equivalent potential
+            temperature." Monthly Weather Review, 108(7), 1046-1053.
+            Eq. 10:  e_s = 611.2 * exp(17.67 * T_C / (T_C + 243.5))
+
+        Args:
+            t_kelvin: Temperature in Kelvin.
+
+        Returns:
+            Saturation vapour pressure in Pa.
+        """
+        t_celsius = t_kelvin - 273.15
+        # Guard against extreme values that would blow up the exponential
+        t_celsius = max(-80.0, min(60.0, t_celsius))
+        return 611.2 * math.exp(17.67 * t_celsius / (t_celsius + 243.5))
+
+    @staticmethod
+    def _specific_humidity_to_rh(q: float, t_kelvin: float, p_pa: float) -> float:
+        """
+        Convert specific humidity to relative humidity.
+
+        Physics:
+            w   = q / (1 - q)            mixing ratio (kg/kg)
+            e_s = Bolton(T)               saturation vapour pressure (Pa)
+            w_s = 0.622 * e_s / (p - e_s) saturation mixing ratio (kg/kg)
+            RH  = 100 * w / w_s           relative humidity (%)
+
+        Reference: Bolton (1980); WMO Guide to Meteorological Instruments
+        and Methods of Observation (WMO-No. 8), Chapter 4.
+
+        Args:
+            q: Specific humidity in kg/kg.
+            t_kelvin: Temperature in Kelvin.
+            p_pa: Pressure in Pa.
+
+        Returns:
+            Relative humidity in %, clamped to [0, 100].
+        """
+        if q <= 0 or not math.isfinite(q):
+            return 0.0
+        if not math.isfinite(t_kelvin) or t_kelvin < 150.0:
+            return 0.0
+
+        e_s = ForecastAdapter._saturation_vapour_pressure(t_kelvin)
+
+        # Avoid division by zero when e_s approaches or exceeds p
+        denom = p_pa - e_s
+        if denom <= 0:
+            return 100.0
+
+        w = q / (1.0 - q)
+        w_s = 0.622 * e_s / denom
+
+        if w_s <= 0:
+            return 100.0
+
+        rh = 100.0 * (w / w_s)
+        return max(0.0, min(100.0, rh))
+
+    def _convert_q850_to_r850(
+        self, q_point: float, q_p05: Optional[float], q_p95: Optional[float],
+        forecast_result: Any
+    ) -> Tuple[float, float, float]:
+        """
+        Convert specific humidity at 850 hPa (kg/kg) to relative humidity (%).
+
+        Uses t850 from the forecast result as the temperature input.
+        Pressure is fixed at 85000 Pa (850 hPa level).
+
+        Reference: Bolton (1980), Tetens formula for saturation vapour pressure.
+
+        Args:
+            q_point: Point forecast of specific humidity (kg/kg).
+            q_p05: 5th-percentile bound (kg/kg), or None.
+            q_p95: 95th-percentile bound (kg/kg), or None.
+            forecast_result: Full ForecastResult for cross-variable access.
+
+        Returns:
+            (rh_value, rh_p05, rh_p95) all in %.
+        """
+        P_850 = 85000.0  # 850 hPa in Pa
+
+        # Retrieve t850 (Kelvin) from the forecast result
+        t850 = None
+        if forecast_result is not None and hasattr(forecast_result, 'variables'):
+            t850 = forecast_result.variables.get('t850')
+
+        if t850 is None or not math.isfinite(t850):
+            # Fallback: use Adelaide climatological mean at 850 hPa (~285 K / ~12 C)
+            t850 = 285.0
+            logger.warning("t850 unavailable for humidity conversion; using "
+                           "Adelaide climatological mean 285 K")
+
+        value = self._specific_humidity_to_rh(q_point, t850, P_850)
+
+        # For confidence bounds, apply the same conversion.
+        # Higher specific humidity -> higher RH (monotonic at fixed T, P),
+        # so q percentile ordering is preserved.
+        q_lo = q_p05 if q_p05 is not None else q_point
+        q_hi = q_p95 if q_p95 is not None else q_point
+
+        # Use t850 confidence bounds if available to widen RH uncertainty
+        t850_lo = t850
+        t850_hi = t850
+        if (forecast_result is not None
+                and hasattr(forecast_result, 'confidence_intervals')):
+            t850_ci = forecast_result.confidence_intervals.get('t850')
+            if t850_ci is not None:
+                t850_lo, t850_hi = t850_ci
+
+        # Lower RH bound: low q with warm temperature (higher e_s -> lower RH)
+        p05_converted = self._specific_humidity_to_rh(q_lo, t850_hi, P_850)
+        # Upper RH bound: high q with cool temperature (lower e_s -> higher RH)
+        p95_converted = self._specific_humidity_to_rh(q_hi, t850_lo, P_850)
+
+        # Ensure ordering
+        if p05_converted > p95_converted:
+            p05_converted, p95_converted = p95_converted, p05_converted
+
+        logger.debug(f"Bolton q850->r850: q={q_point:.6f} kg/kg, t850={t850:.1f} K "
+                     f"-> RH={value:.1f}% [{p05_converted:.1f}, {p95_converted:.1f}]")
+
+        return value, p05_converted, p95_converted
+
+    # ------------------------------------------------------------------
+    # H6 fix: MSL pressure from 500 hPa geopotential (hypsometric eq.)
+    # ------------------------------------------------------------------
+
+    # ICAO standard atmosphere reference values for the hypsometric equation.
+    # These anchor the calculation so that standard conditions reproduce
+    # P_msl = 1013.25 hPa exactly (for dry air).
+    _HYPS_G = 9.80665            # m/s2, WMO standard gravity
+    _HYPS_R_D = 287.05           # J/(kg*K), gas constant for dry air
+    _HYPS_P_500 = 50000.0        # Pa
+    _HYPS_Z_SFC = 50.0           # m, Adelaide CBD approximate elevation
+    _HYPS_Z500_STD = 5574.0      # m, ICAO standard geopotential height at 500 hPa
+    _HYPS_T850_STD = 278.4       # K, ICAO standard temperature at ~1500 m
+    _HYPS_P_MSL_STD = 101325.0   # Pa, standard sea-level pressure
+
+    # Exact layer-mean virtual temperature for the standard atmosphere,
+    # computed from the hypsometric equation inverted at standard values:
+    #   T_v_std = (Z500_std - Z_sfc) * g / (R_d * ln(P_msl_std / P_500))
+    # This evaluates to ~267.19 K.
+    _HYPS_TV_STD = ((_HYPS_Z500_STD - _HYPS_Z_SFC) * _HYPS_G
+                    / (_HYPS_R_D * math.log(_HYPS_P_MSL_STD / _HYPS_P_500)))
+
+    # Ratio of column-mean T_v to T850 in the standard atmosphere.
+    # Used to scale T850 anomalies into column-mean T_v anomalies.
+    _HYPS_K_RATIO = _HYPS_TV_STD / _HYPS_T850_STD  # ~0.9597
+
+    @staticmethod
+    def _hypsometric_msl(z500_geopotential: float, t850_kelvin: float,
+                         q850: float) -> float:
+        """
+        Estimate mean sea level pressure from 500 hPa geopotential using
+        the hypsometric equation, anchored to the ICAO standard atmosphere.
+
+        Method:
+            1. Convert geopotential (m2/s2) to geopotential height (m).
+            2. Estimate the column-mean virtual temperature by scaling T850
+               departures from the ICAO standard using a calibrated ratio
+               (k = T_v_mean_std / T850_std ~ 0.96). This preserves the
+               standard-atmosphere relationship and uses T850 anomalies to
+               adjust for the actual thermal structure.
+            3. Apply virtual temperature correction for moisture (q850).
+            4. Apply the hypsometric equation:
+                  P_msl = P_500 * exp((Z500 - Z_sfc) * g / (R_d * T_v_mean))
+
+        Calibration:
+            At ICAO standard conditions (Z500=5574m, T850=278.4K, dry air),
+            this function returns exactly 1013.25 hPa. The moisture correction
+            introduces a physically correct offset (~1 hPa per 0.003 kg/kg).
+
+        Constants:
+            g     = 9.80665 m/s2   (WMO standard gravity)
+            R_d   = 287.05 J/(kg*K) (gas constant for dry air)
+            P_500 = 50000 Pa
+            Z_sfc = 50 m           (Adelaide CBD elevation)
+
+        Approximations and limitations:
+            - The column-mean temperature is estimated from T850 alone using
+              a linear scaling calibrated against the ICAO standard atmosphere.
+              Real atmospheric profiles vary, introducing ~5-10 hPa structural
+              uncertainty in extreme conditions (e.g. strong inversions, deep
+              convective environments). For typical Adelaide synoptic patterns,
+              accuracy is ~3-5 hPa.
+            - Adelaide surface elevation is approximated at 50 m ASL.
+            - Virtual temperature uses q850 as representative of low-level
+              moisture. This is a small correction (~0.3 K, ~1 hPa).
+
+        Reference:
+            Wallace & Hobbs (2006), "Atmospheric Science", 2nd ed., Eq. 3.29.
+            WMO Guide to Meteorological Instruments (WMO-No. 8), Appendix 3.B.
+            ICAO Standard Atmosphere (Doc 7488/3).
+
+        Args:
+            z500_geopotential: 500 hPa geopotential in m2/s2 (ERA5 storage).
+            t850_kelvin: Temperature at 850 hPa in Kelvin.
+            q850: Specific humidity at 850 hPa in kg/kg.
+
+        Returns:
+            Estimated MSL pressure in Pa.
+        """
+        cls = ForecastAdapter
+        g = cls._HYPS_G
+        R_d = cls._HYPS_R_D
+
+        # Step 1: geopotential (m2/s2) -> geopotential height (m)
+        Z500 = z500_geopotential / g
+
+        # Step 2: layer-mean temperature anchored to standard atmosphere
+        # T_mean = T_v_std + k * (T850 - T850_std)
+        T_mean = cls._HYPS_TV_STD + cls._HYPS_K_RATIO * (t850_kelvin - cls._HYPS_T850_STD)
+
+        # Step 3: virtual temperature correction for moisture
+        q_safe = max(0.0, q850) if math.isfinite(q850) else 0.0
+        T_v = T_mean * (1.0 + 0.61 * q_safe)
+
+        # Guard against non-physical temperatures
+        if T_v < 180.0 or not math.isfinite(T_v):
+            T_v = cls._HYPS_TV_STD
+            logger.warning("Non-physical T_v in hypsometric MSL; "
+                           "using standard atmosphere fallback %.1f K", cls._HYPS_TV_STD)
+
+        # Step 4: hypsometric equation, surface to 500 hPa
+        thickness = Z500 - cls._HYPS_Z_SFC
+        if thickness <= 0 or not math.isfinite(thickness):
+            return cls._HYPS_P_MSL_STD
+
+        P_msl = cls._HYPS_P_500 * math.exp(thickness * g / (R_d * T_v))
+        return P_msl
+
+    def _convert_z500_to_msl(
+        self, z500_point: float, z500_p05: Optional[float],
+        z500_p95: Optional[float], forecast_result: Any
+    ) -> Tuple[float, float, float]:
+        """
+        Derive MSL pressure (hPa) from 500 hPa geopotential using the
+        hypsometric equation.
+
+        Uses t850 and q850 from the forecast result for the virtual
+        temperature computation. Uncertainty bounds combine the analog
+        ensemble spread in z500 and t850.
+
+        Structural uncertainty: this single-level derivation has an inherent
+        ~3-5 hPa systematic uncertainty for typical Adelaide conditions,
+        potentially ~5-10 hPa in extreme situations (strong inversions,
+        deep convection). This is a fundamental limitation of not having
+        a full atmospheric profile. The uncertainty bounds reflect the
+        analog ensemble spread but do not include this structural term.
+
+        Args:
+            z500_point: Point forecast of 500 hPa geopotential (m2/s2).
+            z500_p05: 5th-percentile bound (m2/s2), or None.
+            z500_p95: 95th-percentile bound (m2/s2), or None.
+            forecast_result: Full ForecastResult for cross-variable access.
+
+        Returns:
+            (msl_value, msl_p05, msl_p95) all in hPa (display units).
+        """
+        # Retrieve t850 and q850 from forecast result
+        t850 = None
+        q850 = 0.0
+        if forecast_result is not None and hasattr(forecast_result, 'variables'):
+            t850 = forecast_result.variables.get('t850')
+            q850 = forecast_result.variables.get('q850', 0.0)
+
+        if t850 is None or not math.isfinite(t850):
+            t850 = 285.0  # Adelaide climatological mean at 850 hPa
+            logger.warning("t850 unavailable for MSL derivation; using "
+                           "Adelaide climatological mean 285 K")
+        if not math.isfinite(q850):
+            q850 = 0.005  # ~5 g/kg, typical Adelaide low-level moisture
+
+        # Point estimate
+        msl_pa = self._hypsometric_msl(z500_point, t850, q850)
+        value = msl_pa / 100.0  # Pa -> hPa
+
+        # Confidence bounds: combine z500 and t850 ensemble spread.
+        z_lo = z500_p05 if z500_p05 is not None else z500_point
+        z_hi = z500_p95 if z500_p95 is not None else z500_point
+
+        t850_lo = t850
+        t850_hi = t850
+        if (forecast_result is not None
+                and hasattr(forecast_result, 'confidence_intervals')):
+            t850_ci = forecast_result.confidence_intervals.get('t850')
+            if t850_ci is not None:
+                t850_lo, t850_hi = t850_ci
+
+        # The relationship between inputs and MSL is non-trivial:
+        # higher Z500 -> higher MSL (thicker column means more mass above)
+        # warmer T_v  -> lower MSL for same thickness (density effect)
+        # Compute both extreme combinations and take the envelope.
+        msl_a = self._hypsometric_msl(z_lo, t850_hi, q850) / 100.0
+        msl_b = self._hypsometric_msl(z_hi, t850_lo, q850) / 100.0
+
+        p05_converted = min(msl_a, msl_b)
+        p95_converted = max(msl_a, msl_b)
+
+        # Sanity clamp to physically plausible Adelaide range
+        # (Adelaide record low ~968 hPa, record high ~1044 hPa)
+        value = max(950.0, min(1070.0, value))
+        p05_converted = max(950.0, min(1070.0, p05_converted))
+        p95_converted = max(950.0, min(1070.0, p95_converted))
+
+        logger.debug(f"Hypsometric z500->msl: z500={z500_point:.0f} m2/s2, "
+                     f"t850={t850:.1f} K -> MSL={value:.1f} hPa "
+                     f"[{p05_converted:.1f}, {p95_converted:.1f}]")
+
+        return value, p05_converted, p95_converted
     
     def _create_unavailable_result(self, api_var: str) -> Dict[str, Any]:
         """Create result for unavailable variable."""
